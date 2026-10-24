@@ -48,7 +48,9 @@ docker-compose.override.yml
 cache/
 out/
 broadcast/
-lib/
+# Note: contracts/lib/ contains git submodules (forge-std, openzeppelin-contracts)
+# and is NOT ignored - only other lib/ directories are ignored
+!contracts/lib/
 
 # Keystore (never commit!)
 *.keystore

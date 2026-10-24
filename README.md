@@ -227,15 +227,16 @@ This project was built to learn and demonstrate:
 
 ## AI Assistance
 
-**Transparency:** This project was built with assistance from AI coding tools (Claude, Cursor). Key areas where AI was used:
+**Transparency:** This project was built with AI assistance using Cursor Agent (Claude). The codebase is **AI-generated and currently under owner review**.
 
-- Initial project structure and boilerplate
-- OpenZeppelin contract integration patterns
-- TypeScript type definitions
-- Test case generation
-- Documentation structure
+**AI-Generated:**
+- Smart contract implementation (MockUSDC, SimpleVault)
+- Test suite (unit, fuzz, invariant tests)
+- Project structure and configuration
+- OpenZeppelin and Foundry integration
+- Documentation and guides
 
-**Human Review:** All code was reviewed, tested, and understood by the developer. Security-critical sections (smart contracts, input validation, LLM integration) were written or significantly modified by hand.
+**Owner Status:** The repository owner has not yet completed a full review. This is a portfolio/learning project demonstrating AI-assisted development capabilities. All code should be considered AI-generated until the owner confirms review and understanding.
 
 ## Contributing
 

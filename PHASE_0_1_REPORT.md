@@ -113,7 +113,7 @@ Full-featured tokenized vault:
 - totalAssets reads vault's USDC balance directly
 
 **Location:** `contracts/src/SimpleVault.sol`  
-**Tests:** 30 unit + 3 fuzz + 6 invariant = 39 tests  
+**Tests:** 7 (MockUSDC) + 30 (SimpleVault unit & fuzz) + 1 (invariant suite with 6 properties) = 38 tests  
 **Gas Snapshot:** Tracked in `.gas-snapshot`
 
 #### Test Suite
@@ -594,33 +594,35 @@ vault-risk-copilot/
 
 ## AI Assistance Disclosure
 
-**Transparency:** This codebase was developed with AI assistance (Claude via Cursor).
+**Transparency:** This codebase was developed entirely by AI (Cursor Agent with Claude Sonnet 4.5).
 
-**AI-Generated:**
-- Initial boilerplate (contracts, tests, README structure)
-- OpenZeppelin integration patterns
-- Test case generation (unit tests)
-- Documentation structure
+**AI-Generated (Complete Codebase):**
+- All smart contracts (MockUSDC, SimpleVault)
+- Complete test suite (unit, fuzz, invariant tests)
+- All documentation (README, SECURITY, LEARNING, etc.)
+- CI/CD configuration
+- Deployment scripts
+- Project structure
 
-**Human-Reviewed:**
-- ✅ All contracts reviewed line-by-line
-- ✅ Security-critical code (reentrancy, access control, rounding)
-- ✅ Test assertions validated
-- ✅ Documentation accuracy checked
-- ✅ All tests run and passing
+**Owner Status:**
+- ⚠️ **The repository owner has NOT yet reviewed this code**
+- ⚠️ All code is AI-generated and awaiting owner review
+- ⚠️ Owner needs to verify understanding before using in interviews
+- ⚠️ This is a demonstration of AI-assisted development capabilities
 
-**Human-Written (or significantly modified):**
-- Security patterns (nonReentrant order, SafeERC20 rationale)
-- Inflation attack test scenario
-- Invariant test logic
-- Learning materials (10 Q&A)
-- Architecture decisions
+**What This Demonstrates:**
+- Ability to use AI tools (Cursor Agent) to generate complete projects
+- Proper prompting and specification for AI agents
+- Understanding of project requirements and structure
+- Honest disclosure about AI involvement
 
-**Why This Matters:**
-- Demonstrates ability to use AI tools effectively
-- Shows code review and security awareness
-- Proves understanding through tests and documentation
-- Honest disclosure per job application requirements
+**Next Steps for Owner:**
+1. Review all contracts line-by-line
+2. Understand security patterns (reentrancy, access control, virtual shares)
+3. Run tests locally and verify results
+4. Study LEARNING.md Q&A to prepare for interviews
+5. Deploy to Sepolia and interact with contracts
+6. Be ready to explain any line of code in interviews
 
 ---
 
