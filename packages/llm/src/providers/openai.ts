@@ -118,8 +118,12 @@ export class OpenAIProvider implements LLMProvider {
 
         if (!valid) {
           console.error('[LLM Number Fidelity Failed]', {
-            provider: 'openai',
+            provider: new URL(this.baseUrl).hostname,
             model: this.model,
+            pool_id: input.pool_id,
+            summary_snippet: parsed.summary.substring(0, 100),
+            factor_count: parsed.key_factors.length,
+            non_null_signals: Object.values(input.breakdown).filter(v => v !== null).length,
           });
           return this.getFallbackResponse(input, latencyMs, 'validation_failed');
         }
@@ -224,14 +228,14 @@ Risk Score: ${input.total_risk_score.toFixed(1)}/100
 Category: ${input.risk_category}
 
 === RISK BREAKDOWN ===
-TVL Score: ${input.breakdown.tvl_score.toFixed(1)}
-TVL Volatility: ${input.breakdown.tvl_volatility_score.toFixed(1)}
-APY Volatility: ${input.breakdown.apy_volatility_score.toFixed(1)}
-Reward Ratio: ${input.breakdown.reward_ratio_score.toFixed(1)}
-Stablecoin: ${input.breakdown.stablecoin_score.toFixed(1)}
-IL Risk: ${input.breakdown.il_score.toFixed(1)}
-Data Age: ${input.breakdown.data_age_score.toFixed(1)}
-Vault Score: ${input.breakdown.vault_score.toFixed(1)}
+TVL Score: ${input.breakdown.tvl_score !== null ? input.breakdown.tvl_score.toFixed(1) : 'N/A'}
+TVL Volatility: ${input.breakdown.tvl_volatility_score !== null ? input.breakdown.tvl_volatility_score.toFixed(1) : 'N/A'}
+APY Volatility: ${input.breakdown.apy_volatility_score !== null ? input.breakdown.apy_volatility_score.toFixed(1) : 'N/A'}
+Reward Ratio: ${input.breakdown.reward_ratio_score !== null ? input.breakdown.reward_ratio_score.toFixed(1) : 'N/A'}
+Stablecoin: ${input.breakdown.stablecoin_score !== null ? input.breakdown.stablecoin_score.toFixed(1) : 'N/A'}
+IL Risk: ${input.breakdown.il_score !== null ? input.breakdown.il_score.toFixed(1) : 'N/A'}
+Data Age: ${input.breakdown.data_age_score !== null ? input.breakdown.data_age_score.toFixed(1) : 'N/A'}
+Vault Score: ${input.breakdown.vault_score !== null ? input.breakdown.vault_score.toFixed(1) : 'N/A'}
 
 === POOL METRICS ===
 TVL: ${input.pool_metrics.tvl_usd !== null ? `$${input.pool_metrics.tvl_usd.toLocaleString()}` : 'N/A'}
@@ -244,7 +248,7 @@ IL Risk: ${input.pool_metrics.il_risk !== null ? input.pool_metrics.il_risk.toFi
 Stablecoin: ${input.pool_metrics.is_stablecoin ? 'Yes' : 'No'}
 Data Points: ${input.pool_metrics.count ?? 'N/A'}
 
-Explain this pool's risk in plain language using ONLY the numbers above.`;
+Explain this pool's risk in plain language using ONLY the numbers above. Include one key_factor for each signal that has a value (not N/A). Do not mention signals marked N/A.`;
   }
 
   private sanitizeInput(text: string): string {
@@ -354,10 +358,9 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
       }
 
       if (!found) {
-        // Debug logging
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn(`[Number Fidelity] Number ${num} not found in input. Input numbers:`, Array.from(inputNumbers).sort((a,b) => a-b));
-        }
+        // Always log for debugging validation failures
+        console.warn(`[Number Fidelity] Number ${num} not found in input. Input numbers:`, Array.from(inputNumbers).sort((a,b) => a-b));
+        console.warn(`[Number Fidelity] Output text sample:`, fullText.substring(0, 300));
         return false;
       }
     }
