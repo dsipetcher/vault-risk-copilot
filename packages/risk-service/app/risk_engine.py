@@ -1,10 +1,9 @@
 """Risk scoring engine with transparent, explainable signals."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 import numpy as np
 from sklearn.ensemble import IsolationForest
@@ -320,7 +319,7 @@ def detect_anomaly(
     predictions = iso_forest.fit_predict(features_array)
 
     # -1 = anomaly, 1 = normal
-    return {pool_id: (pred == -1) for pool_id, pred in zip(pool_ids, predictions)}
+    return {pool_id: (pred == -1) for pool_id, pred in zip(pool_ids, predictions, strict=False)}
 
 
 # === Aggregate Risk Score ===
@@ -415,7 +414,7 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
         "is_anomaly": False,  # Will be set by detect_anomaly
         "anomaly_reason": None,
         "model_version": settings.model_version,
-        "calculated_at": datetime.now(timezone.utc),
+        "calculated_at": datetime.now(UTC),
     }
 
 

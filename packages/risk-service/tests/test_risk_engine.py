@@ -1,7 +1,8 @@
 """Unit tests for risk engine signal functions."""
 
-import pytest
 from uuid import uuid4
+
+import pytest
 
 from app.risk_engine import (
     apy_volatility_signal,
@@ -15,7 +16,6 @@ from app.risk_engine import (
     tvl_drop_signal,
     tvl_size_signal,
 )
-
 
 # === TVL Size Signal Tests ===
 

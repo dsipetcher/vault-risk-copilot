@@ -2,9 +2,9 @@
 
 import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import AsyncIterator
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,7 +77,7 @@ async def health_check() -> HealthResponse:
         version="0.1.0",
         model_version=settings.model_version,
         database=db_status,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
 
@@ -154,7 +154,7 @@ async def list_risk_scores(
 
     except Exception as e:
         logger.error(f"Error listing risk scores: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") from e
 
 
 @app.get("/scores/{pool_id}", response_model=RiskScoreResponse)
@@ -214,7 +214,7 @@ async def get_risk_score(pool_id: str) -> RiskScoreResponse:
         raise
     except Exception as e:
         logger.error(f"Error fetching risk score for pool '{pool_id}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") from e
 
 
 @app.post("/recompute", response_model=RecomputeResponse)
@@ -281,7 +281,7 @@ async def recompute_risk_scores(request: RecomputeRequest) -> RecomputeResponse:
 
     except Exception as e:
         logger.error(f"Error during recompute: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") from e
 
 
 if __name__ == "__main__":

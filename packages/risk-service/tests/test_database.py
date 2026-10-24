@@ -1,12 +1,12 @@
 """Integration tests for database operations."""
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-import pytest
 import asyncpg
+import pytest
 
 from app.database import Database
 
@@ -63,7 +63,7 @@ async def sample_pool_snapshot(db_instance):
         Decimal("0.10"),
         50,
         "test",
-        datetime.now(timezone.utc),
+        datetime.now(UTC),
     )
 
     yield {"pool_id": pool_id, "snapshot_id": snapshot_id}
@@ -139,7 +139,7 @@ async def test_insert_risk_score(db_instance, sample_pool_snapshot):
         "is_anomaly": False,
         "anomaly_reason": None,
         "model_version": "1.0",
-        "calculated_at": datetime.now(timezone.utc),
+        "calculated_at": datetime.now(UTC),
     }
 
     risk_id = await db_instance.insert_risk_score(risk_score)
@@ -178,7 +178,7 @@ async def test_insert_risk_score_upsert(db_instance, sample_pool_snapshot):
         "risk_category": "medium",
         "is_anomaly": False,
         "model_version": "1.0",
-        "calculated_at": datetime.now(timezone.utc),
+        "calculated_at": datetime.now(UTC),
     }
 
     # Insert first time
@@ -222,7 +222,7 @@ async def test_fetch_risk_scores_with_filters(db_instance, sample_pool_snapshot)
         "is_anomaly": True,
         "anomaly_reason": "Test outlier",
         "model_version": "1.0",
-        "calculated_at": datetime.now(timezone.utc),
+        "calculated_at": datetime.now(UTC),
     }
 
     await db_instance.insert_risk_score(risk_score)

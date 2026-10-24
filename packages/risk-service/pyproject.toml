@@ -50,6 +50,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["B018"]
+"app/main.py" = ["B008"]  # FastAPI uses Query() in defaults
 
 [tool.mypy]
 python_version = "3.12"

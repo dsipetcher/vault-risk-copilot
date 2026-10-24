@@ -1,7 +1,8 @@
 """Database connection and queries for risk service."""
 
-import asyncpg
 from typing import Any
+
+import asyncpg
 
 from app.config import settings
 
