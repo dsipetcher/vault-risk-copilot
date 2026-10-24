@@ -25,6 +25,7 @@ describe('loadConfig', () => {
 
   it('should apply defaults for optional fields', () => {
     process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/test';
+    delete process.env.NODE_ENV;
 
     const config = loadConfig();
 

@@ -71,7 +71,13 @@ export async function insertVaultStateSnapshot(
   snapshot: VaultStateSnapshot
 ): Promise<void> {
   await sql`
-    INSERT INTO vault_state_snapshots ${sql(snapshot)}
+    INSERT INTO vault_state_snapshots ${sql({
+      ...snapshot,
+      total_assets: snapshot.total_assets.toString(),
+      total_supply: snapshot.total_supply.toString(),
+      deposit_cap: snapshot.deposit_cap?.toString(),
+      block_number: snapshot.block_number.toString(),
+    })}
     ON CONFLICT (vault_address, block_number) DO NOTHING
   `;
 }

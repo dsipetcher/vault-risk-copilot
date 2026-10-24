@@ -45,7 +45,7 @@ export class VaultReader {
   private client: PublicClient;
 
   constructor(
-    private rpcUrl: string,
+    rpcUrl: string,
     private vaultAddress: Address,
     private logger: Logger
   ) {

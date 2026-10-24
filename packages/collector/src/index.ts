@@ -34,7 +34,11 @@ async function collectData() {
     logger.info('✅ Pool snapshots inserted');
 
     if (config.VAULT_ADDRESS && config.RPC_URL) {
-      const vaultReader = new VaultReader(config.RPC_URL, config.VAULT_ADDRESS, logger);
+      const vaultReader = new VaultReader(
+        config.RPC_URL,
+        config.VAULT_ADDRESS as `0x${string}`,
+        logger
+      );
       const vaultState = await vaultReader.readVaultState();
       await insertVaultStateSnapshot(sql, vaultState);
       logger.info('✅ Vault state snapshot inserted');
