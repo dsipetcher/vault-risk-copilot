@@ -41,7 +41,7 @@ describe('Risk Factor Chart Rendering', () => {
     };
 
     // Mock fetch to return string scores
-    global.fetch = vi.fn((url: string | URL | Request) => {
+    const fetchMock = vi.fn((url: string | URL | Request): Promise<Response> => {
       const urlString = typeof url === 'string' ? url : url.toString();
       if (urlString.includes('/api/risk/test-pool-id')) {
         return Promise.resolve({
@@ -50,7 +50,8 @@ describe('Risk Factor Chart Rendering', () => {
         } as Response);
       }
       return Promise.reject(new Error('Not found'));
-    }) as any;
+    });
+    global.fetch = fetchMock as typeof fetch;
 
     const { container } = render(
       <BrowserRouter>
@@ -68,6 +69,7 @@ describe('Risk Factor Chart Rendering', () => {
     expect(bars.length).toBe(8);
 
     // Verify prepareChartData converts strings to numbers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chartData = prepareChartData(mockApiResponse as any);
     expect(chartData).toHaveLength(8);
     chartData.forEach(item => {
