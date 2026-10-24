@@ -143,6 +143,12 @@ export class OpenAIProvider implements LLMProvider {
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // Fail fast on rate_limited errors (don't retry)
+        if (lastError.message.includes('Rate limit exceeded')) {
+          break;
+        }
+        
         if (attempts < 2) {
           continue;
         }
