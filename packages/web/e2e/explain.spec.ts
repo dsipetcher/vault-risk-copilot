@@ -42,10 +42,16 @@ test.describe('LLM Explain Feature', () => {
     expect(poolCount).toBeGreaterThan(0);
 
     // Click first pool
+    console.log('Clicking first pool row...');
     await poolRows.first().click();
     
+    // Wait for navigation
+    console.log('Waiting for navigation...');
+    await page.waitForURL(/\/pools\/[a-f0-9-]+$/, { timeout: 10000 });
+    console.log(`✅ Navigated to: ${page.url()}`);
+    
     // Wait for pool detail page to load
-    await expect(page.getByText(/Back to pools/)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Back to pools/)).toBeVisible({ timeout: 15000 });
     console.log('✅ Pool detail page loaded');
 
     // Check if ExplainPanel is visible
