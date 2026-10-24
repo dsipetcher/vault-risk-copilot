@@ -1152,3 +1152,254 @@ pytest -m "unit and slow"   # Both markers
 - FastAPI lifecycle management (startup/shutdown with `lifespan`)
 - Explainable ML (deterministic formulas > black-box models)
 - PostgreSQL connection pooling and prepared statements
+# React 19 & wagmi Integration: Q&A
+
+## 1. What is React 19 and what are its main improvements?
+
+**Answer:** React 19 (released 2026) is the latest major version focusing on performance and developer experience:
+- **Automatic batching** for all state updates (not just event handlers)
+- **Improved TypeScript support** with better inference
+- **useOptimistic hook** for optimistic UI updates
+- **useFormState** and **useFormStatus** for form handling
+- **Server Components** maturity (though we use client-side only)
+
+In this project, we use React 19's improved TypeScript integration with strict typing.
+
+## 2. What is wagmi and how does it relate to viem?
+
+**Answer:** 
+- **wagmi** is a collection of React Hooks for Ethereum, built on top of viem
+- **viem** is a low-level TypeScript library for interacting with Ethereum (lightweight alternative to ethers.js)
+- wagmi provides:
+  - `useAccount` - get connected wallet address and chain
+  - `useConnect` / `useDisconnect` - wallet connection management
+  - `useReadContract` - read blockchain data with automatic caching
+  - `useWriteContract` - send transactions
+  - `useWaitForTransactionReceipt` - wait for tx confirmation
+
+Relationship: wagmi wraps viem with React hooks and adds caching, auto-refetch, and connection management.
+
+## 3. How do you configure wagmi for multiple chains (anvil local and Sepolia testnet)?
+
+**Answer:** In `src/lib/wagmi.ts`:
+
+```typescript
+import { createConfig, http } from 'wagmi';
+import { sepolia, foundry } from 'wagmi/chains';
+import { injected, walletConnect } from 'wagmi/connectors';
+
+export const config = createConfig({
+  chains: [foundry, sepolia],  // foundry = anvil (chainId 31337)
+  connectors: [
+    injected(),  // MetaMask, Rabby, etc.
+    walletConnect({ projectId: '...' })  // optional
+  ],
+  transports: {
+    [foundry.id]: http(),  // uses default http://localhost:8545
+    [sepolia.id]: http(),  // uses public Sepolia RPC
+  },
+});
+```
+
+The user's wallet determines which chain is active. We support both for local testing (anvil) and testnet deployment (Sepolia).
+
+## 4. What is the difference between `useReadContract` and `useWriteContract`?
+
+**Answer:**
+
+- **`useReadContract`**: 
+  - Calls view/pure functions (read-only, no gas)
+  - Returns data immediately
+  - Cached by TanStack Query
+  - Example: `balanceOf(address)`, `totalAssets()`
+
+- **`useWriteContract`**:
+  - Sends transactions (costs gas, requires wallet signature)
+  - Returns transaction hash
+  - Need to use `useWaitForTransactionReceipt` to wait for confirmation
+  - Example: `approve(spender, amount)`, `deposit(assets)`
+
+```typescript
+// Read example
+const { data: balance } = useReadContract({
+  address: USDC_ADDRESS,
+  abi: ERC20_ABI,
+  functionName: 'balanceOf',
+  args: [userAddress],
+});
+
+// Write example
+const { writeContract, data: txHash } = useWriteContract();
+const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash });
+
+writeContract({
+  address: USDC_ADDRESS,
+  abi: ERC20_ABI,
+  functionName: 'approve',
+  args: [VAULT_ADDRESS, amount],
+});
+```
+
+## 5. How do you handle transaction states (pending, confirmed, error)?
+
+**Answer:** Combine `useWriteContract` and `useWaitForTransactionReceipt`:
+
+```typescript
+const { writeContract, data: txHash, isPending, error } = useWriteContract();
+const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+  hash: txHash,
+});
+
+// States:
+// 1. User clicks → isPending = true (wallet popup)
+// 2. User signs → isPending = false, txHash available, isConfirming = true
+// 3. Block confirmed → isConfirming = false, isSuccess = true
+// 4. If error → error object populated
+```
+
+We show:
+- `isPending` → "Waiting for signature..."
+- `isConfirming` → "Transaction pending..."
+- `isSuccess` → "Success! Refetch balances"
+- `error` → Display error message
+
+## 6. What is the approve + deposit pattern and why is it needed?
+
+**Answer:** ERC-20 tokens require two-step pattern for third-party spending:
+
+1. **Approve**: User approves vault to spend their USDC
+   ```solidity
+   usdc.approve(vault, amount)
+   ```
+
+2. **Deposit**: Vault transfers USDC from user and mints shares
+   ```solidity
+   vault.deposit(amount, receiver)
+   ```
+
+Why? Security! Without approval, any contract could drain your tokens. The approval gives explicit permission for a specific amount.
+
+In our UI:
+- Check `allowance(user, vault)` with `useReadContract`
+- If `allowance < depositAmount`, show "Approve" button first
+- After approval success, show "Deposit" button
+
+## 7. How does TanStack Query (@tanstack/react-query) integrate with wagmi?
+
+**Answer:** wagmi uses TanStack Query under the hood for caching and auto-refetch:
+
+- **Automatic caching**: Same `useReadContract` call uses cached data
+- **Auto-refetch**: On window focus, network reconnect, or interval
+- **Stale-while-revalidate**: Shows cached data while fetching fresh data in background
+- **Query keys**: wagmi generates keys from contract address + function + args
+
+We also use TanStack Query directly for API calls:
+
+```typescript
+export function usePools() {
+  return useQuery({
+    queryKey: ['pools'],
+    queryFn: () => apiClient.getPools(),
+    refetchInterval: 60000,  // refetch every 60s
+  });
+}
+```
+
+Benefits:
+- Loading/error/success states automatic
+- Deduplication (multiple components calling same hook = 1 request)
+- Cache invalidation on mutation
+
+## 8. What is the difference between `parseUnits` and `formatUnits` in viem?
+
+**Answer:**
+
+- **`parseUnits(value, decimals)`**: Convert human-readable string to BigInt
+  ```typescript
+  parseUnits('100.5', 6)  // USDC has 6 decimals
+  // → 100500000n (BigInt)
+  ```
+
+- **`formatUnits(bigint, decimals)`**: Convert BigInt to human-readable string
+  ```typescript
+  formatUnits(100500000n, 6)
+  // → '100.5'
+  ```
+
+Why? Solidity uses integers for token amounts to avoid floating-point precision issues.
+
+- USDC: 6 decimals (1 USDC = 1,000,000 units)
+- Vault shares: 18 decimals (ERC-4626 standard)
+- ETH: 18 decimals (1 ETH = 10^18 wei)
+
+## 9. How do you handle wallet not connected state in the UI?
+
+**Answer:** Use `useAccount` hook:
+
+```typescript
+const { address, isConnected, chain } = useAccount();
+const { connect, connectors } = useConnect();
+const { disconnect } = useDisconnect();
+
+if (!isConnected) {
+  return (
+    <div>
+      {connectors.map((connector) => (
+        <button key={connector.id} onClick={() => connect({ connector })}>
+          Connect with {connector.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// User is connected, show main UI
+return <VaultUI address={address} chain={chain} />;
+```
+
+We:
+1. Check `isConnected` first
+2. Show connection buttons if false
+3. Display connected address with `shortenAddress(address)` helper
+4. Add "Disconnect" button in header
+
+## 10. How do you refetch on-chain data after a successful transaction?
+
+**Answer:** Two approaches:
+
+**Approach 1: Manual refetch (our implementation)**
+```typescript
+const { refetch: refetchBalance } = useReadContract({ ... });
+const { isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+
+if (isSuccess) {
+  setTimeout(() => {
+    refetchBalance();
+    refetchShares();
+    refetchAllowance();
+  }, 2000);  // wait 2s for indexing
+}
+```
+
+**Approach 2: Watch events (more advanced)**
+```typescript
+useWatchContractEvent({
+  address: VAULT_ADDRESS,
+  abi: VAULT_ABI,
+  eventName: 'Deposit',
+  onLogs(logs) {
+    refetchBalance();
+  }
+});
+```
+
+We use Approach 1 for simplicity. The `setTimeout` is a workaround because blocks may take 1-2 seconds to propagate.
+
+---
+
+## Additional Resources
+
+- [wagmi docs](https://wagmi.sh/)
+- [viem docs](https://viem.sh/)
+- [TanStack Query docs](https://tanstack.com/query/latest)
+- [ERC-4626 standard](https://eips.ethereum.org/EIPS/eip-4626)

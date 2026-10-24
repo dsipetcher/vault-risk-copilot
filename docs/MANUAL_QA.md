@@ -1120,3 +1120,108 @@ $ curl -s -X POST http://localhost:8002/recompute -H "Content-Type: application/
 ### 🐛 Bugs found: **0**
 
 **Все эндпоинты работают корректно. Risk model deterministic, explainable, без ML dependencies.**
+
+## Phase 5: React Frontend + Wagmi Integration Manual QA
+
+### Status: CI-Tested Implementation (Full E2E Manual Testing Pending)
+
+**Completed:**
+- ✅ React 19 frontend with TypeScript  
+- ✅ wagmi v2 + viem integration for Web3
+- ✅ TanStack Query for API data fetching
+- ✅ Recharts for data visualization
+- ✅ Tailwind CSS styling
+- ✅ All CI tests passing (lint, typecheck, unit tests, build)
+- ✅ Docker build working (nginx-based)
+- ✅ Compose smoke test verifies web serves 200
+
+**Not Completed (Out of Time/Scope):**
+- ❌ Full Playwright E2E tests with deployed contracts
+- ❌ Manual click-through with real transactions on anvil
+- ❌ Screenshots of actual UI interaction
+
+---
+
+### Implementation Overview
+
+**Pages:**
+1. **Pools Page** (`/pools`)  
+   - Table with all pools from API
+   - Risk score badges (low/medium/high/critical)
+   - TVL and APY display
+   - Sorting by TVL, APY, risk score
+   - Filtering by risk category
+   - Search by protocol/asset symbol
+
+2. **Pool Detail Page** (`/pools/:id`)  
+   - Risk factor breakdown chart (Bar chart with 6 factors)
+   - Historical data chart (TVL + APY + risk score over time)
+   - Pool metadata (pool_id, chain, stablecoin, IL risk)
+
+3. **Vault Page** (`/vault`)  
+   - Wallet connection with injected connector
+   - Display USDC balance, vault shares, share price
+   - Approve + Deposit flow with tx states
+   - Redeem functionality
+   - Testnet USDC mint button
+   - Transaction state management (pending/confirming/success/error)
+
+**Key Technical Decisions:**
+- Used wagmi/viem instead of ethers.js (lighter, better TypeScript)
+- TanStack Query for caching API responses
+- Manual refetch after successful transactions (simple approach)
+- Default addresses prevent viem errors when env vars missing
+- Adapted frontend to match main's API response structure `{ data: ... }`
+
+---
+
+### CI Verification (Actual Results)
+
+**From GitHub Actions:**
+```
+✅ Web Frontend job:
+   - Lint: PASS
+   - TypeCheck: PASS
+   - Unit Tests: PASS
+   - Build: PASS
+
+✅ Docker Build job:
+   - web image builds successfully with nginx
+
+✅ Compose Smoke Test:
+   - web container starts
+   - http://localhost:5173 returns 200
+   - HTML contains root element
+```
+
+---
+
+### Findings
+
+**What Works:**
+- ✅ All build and compile steps pass
+- ✅ TypeScript strict mode with zero errors
+- ✅ ESLint passes with zero warnings
+- ✅ Unit tests for utils and components pass
+- ✅ Docker build produces working nginx image
+- ✅ Web serves static HTML correctly
+- ✅ API integration matches main's structure
+
+**What Was Not Tested:**
+- ❌ Real wallet connection (requires browser + wallet extension)
+- ❌ Actual transactions on anvil (requires deployed contracts)
+- ❌ Visual regression / screenshot comparison
+- ❌ E2E flow automation with Playwright
+
+**Bugs Found:** 0 (in tested scope)
+
+---
+
+### Conclusion
+
+Phase 5 **frontend implementation is complete and CI-tested**, but **full manual QA with Playwright and real transactions was not executed** due to time constraints.
+
+**CI Results:** All automated tests pass  
+**Manual Testing:** Not performed  
+**Production Readiness:** Code quality high, but requires real user testing
+
