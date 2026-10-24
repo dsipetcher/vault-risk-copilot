@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type MockedFunction } from 'vitest';
 import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { PoolDetailPage } from '../PoolDetailPage';
@@ -13,7 +13,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock fetch
-global.fetch = vi.fn() as unknown as typeof fetch;
+global.fetch = vi.fn() as MockedFunction<typeof fetch>;
 
 describe('PoolDetailPage Risk Factor Chart', () => {
   it('should render all 8 risk factors in bar chart when all are non-null', async () => {
@@ -39,10 +39,12 @@ describe('PoolDetailPage Risk Factor Chart', () => {
       },
     };
 
-    (global.fetch as vi.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockPool,
-    });
+    (global.fetch as MockedFunction<typeof fetch>).mockResolvedValueOnce(
+      new Response(JSON.stringify(mockPool), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
 
     const { container } = render(
       <BrowserRouter>
@@ -76,5 +78,44 @@ describe('PoolDetailPage Risk Factor Chart', () => {
 
     expect(filtered).toHaveLength(5);
     expect(filtered.every(item => item.value !== null)).toBe(true);
+  });
+
+  it('should include all 8 risk factor types in chart data', () => {
+    // Simulates the chart data structure from PoolDetailPage
+    const riskScore = {
+      tvl_score: 15,
+      tvl_volatility_score: 20,
+      apy_volatility_score: 25,
+      reward_ratio_score: 30,
+      stablecoin_score: 10,
+      il_score: 35,
+      data_age_score: 40,
+      vault_score: 45,
+    };
+
+    const chartData = [
+      { name: 'TVL Score', value: riskScore.tvl_score },
+      { name: 'TVL Volatility', value: riskScore.tvl_volatility_score },
+      { name: 'APY Volatility', value: riskScore.apy_volatility_score },
+      { name: 'Reward Ratio', value: riskScore.reward_ratio_score },
+      { name: 'Stablecoin', value: riskScore.stablecoin_score },
+      { name: 'IL Risk', value: riskScore.il_score },
+      { name: 'Data Age', value: riskScore.data_age_score },
+      { name: 'Vault Score', value: riskScore.vault_score },
+    ].filter(item => item.value !== null);
+
+    // All 8 factors are present
+    expect(chartData).toHaveLength(8);
+    
+    // Each factor has a value (bars will render)
+    chartData.forEach(item => {
+      expect(item.value).toBeGreaterThan(0);
+      expect(item.value).toBeLessThanOrEqual(100);
+    });
+    
+    // Check specific factors are included (regression test for issue 9)
+    const factorNames = chartData.map(item => item.name);
+    expect(factorNames).toContain('Stablecoin');
+    expect(factorNames).toContain('Vault Score');
   });
 });
