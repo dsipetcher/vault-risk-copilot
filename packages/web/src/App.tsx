@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { WagmiProvider } from 'wagmi';
+import { WagmiProvider, useConnect, useAccount } from 'wagmi';
+import { useEffect } from 'react';
 import { config } from './lib/wagmi';
 import { Layout } from './components/Layout';
 import { PoolsPage } from './pages/PoolsPage';
@@ -16,10 +17,30 @@ const queryClient = new QueryClient({
   },
 });
 
+function AutoConnect() {
+  const { connect, connectors } = useConnect();
+  const { isConnected } = useAccount();
+  
+  useEffect(() => {
+    const enableMock = import.meta.env.VITE_ENABLE_MOCK_CONNECTOR === 'true';
+    if (enableMock && !isConnected) {
+      const mockConnector = connectors.find(c => c.id === 'mock' || c.name === 'Mock');
+      if (mockConnector) {
+        setTimeout(() => {
+          connect({ connector: mockConnector });
+        }, 100);
+      }
+    }
+  }, [connect, connectors, isConnected]);
+  
+  return null;
+}
+
 function App() {
   return (
-    <WagmiProvider config={config}>
+    <WagmiProvider config={config} reconnectOnMount>
       <QueryClientProvider client={queryClient}>
+        <AutoConnect />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Layout />}>

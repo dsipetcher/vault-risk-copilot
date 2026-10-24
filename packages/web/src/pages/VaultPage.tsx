@@ -220,7 +220,7 @@ export function VaultPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Vault</h1>
+        <h1 data-testid="vault-title" className="text-3xl font-bold text-gray-900">Vault</h1>
         <p className="mt-2 text-sm text-gray-700">
           Deposit USDC to earn yield from the ERC-4626 vault
         </p>
@@ -234,6 +234,7 @@ export function VaultPage() {
               <button
                 key={connector.id}
                 onClick={() => connect({ connector })}
+                data-testid={`connect-${connector.name.toLowerCase()}`}
                 className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
               >
                 Connect with {connector.name}
@@ -256,7 +257,7 @@ export function VaultPage() {
             <div className="space-y-2 text-sm">
               <div>
                 <span className="text-gray-600">Address:</span>{' '}
-                <span className="font-mono">{shortenAddress(address!)}</span>
+                <span data-testid="connected-address" className="font-mono">{shortenAddress(address!)}</span>
               </div>
               <div>
                 <span className="text-gray-600">Network:</span>{' '}
@@ -269,10 +270,12 @@ export function VaultPage() {
             <StatCard
               label="USDC Balance"
               value={usdcBalance ? formatUnits(usdcBalance, 6) : '0'}
+              testId="usdc-balance"
             />
             <StatCard
               label="Vault Shares"
               value={sharesBalance ? formatUnits(sharesBalance, 18) : '0'}
+              testId="vault-shares"
             />
             <StatCard label="Share Price" value={sharePrice.toFixed(6)} />
           </div>
@@ -297,18 +300,20 @@ export function VaultPage() {
                   value={mintAmount}
                   onChange={(e) => setMintAmount(e.target.value)}
                   placeholder="Amount"
+                  data-testid="mint-amount-input"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
                 />
                 <button
                   onClick={handleMint}
                   disabled={isMinting || isMintConfirming}
+                  data-testid="mint-button"
                   className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50"
                 >
                   {isMinting || isMintConfirming ? 'Minting...' : 'Mint USDC'}
                 </button>
               </div>
               {isMintSuccess && (
-                <p className="mt-2 text-sm text-green-600">Successfully minted USDC!</p>
+                <p data-testid="mint-success" className="mt-2 text-sm text-green-600">Successfully minted USDC!</p>
               )}
             </div>
           )}
@@ -325,6 +330,7 @@ export function VaultPage() {
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   placeholder="0.0"
+                  data-testid="deposit-amount-input"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                 />
               </div>
@@ -332,6 +338,7 @@ export function VaultPage() {
                 <button
                   onClick={handleApprove}
                   disabled={isApproving || isApproveConfirming}
+                  data-testid="approve-button"
                   className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
                 >
                   {isApproving || isApproveConfirming ? 'Approving...' : 'Approve USDC'}
@@ -340,16 +347,17 @@ export function VaultPage() {
                 <button
                   onClick={handleDeposit}
                   disabled={!depositAmount || isDepositing || isDepositConfirming}
+                  data-testid="deposit-button"
                   className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
                 >
                   {isDepositing || isDepositConfirming ? 'Depositing...' : 'Deposit'}
                 </button>
               )}
               {isApproveSuccess && (
-                <p className="text-sm text-green-600">Approval successful! Now you can deposit.</p>
+                <p data-testid="approve-success" className="text-sm text-green-600">Approval successful! Now you can deposit.</p>
               )}
               {isDepositSuccess && (
-                <p className="text-sm text-green-600">Deposit successful!</p>
+                <p data-testid="deposit-success" className="text-sm text-green-600">Deposit successful!</p>
               )}
             </div>
           </div>
@@ -366,18 +374,20 @@ export function VaultPage() {
                   value={redeemAmount}
                   onChange={(e) => setRedeemAmount(e.target.value)}
                   placeholder="0.0"
+                  data-testid="redeem-amount-input"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                 />
               </div>
               <button
                 onClick={handleRedeem}
                 disabled={!redeemAmount || isRedeeming || isRedeemConfirming}
+                data-testid="redeem-button"
                 className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 {isRedeeming || isRedeemConfirming ? 'Redeeming...' : 'Redeem'}
               </button>
               {isRedeemSuccess && (
-                <p className="text-sm text-green-600">Redeem successful!</p>
+                <p data-testid="redeem-success" className="text-sm text-green-600">Redeem successful!</p>
               )}
             </div>
           </div>
@@ -387,11 +397,11 @@ export function VaultPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
+function StatCard({ label, value, testId }: { label: string; value: React.ReactNode; testId?: string }) {
   return (
     <div className="bg-white shadow rounded-lg px-4 py-5">
       <dt className="text-sm font-medium text-gray-500 truncate">{label}</dt>
-      <dd className="mt-1 text-2xl font-semibold text-gray-900">{value}</dd>
+      <dd data-testid={testId} className="mt-1 text-2xl font-semibold text-gray-900">{value}</dd>
     </div>
   );
 }

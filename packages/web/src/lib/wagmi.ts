@@ -1,18 +1,18 @@
 import { http, createConfig } from 'wagmi';
 import { sepolia, foundry } from 'wagmi/chains';
 import { injected, walletConnect, mock } from 'wagmi/connectors';
-import { privateKeyToAccount } from 'viem/accounts';
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
 const enableMockConnector = import.meta.env.VITE_ENABLE_MOCK_CONNECTOR === 'true';
 
-// Anvil test account #0
-const testAccount = enableMockConnector
-  ? privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80')
-  : undefined;
+// Anvil test account #0 (unlocked by default)
+const ANVIL_ACCOUNT_0 = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 
-const connectors = enableMockConnector && testAccount
-  ? [mock({ accounts: [testAccount.address] })]
+const connectors = enableMockConnector
+  ? [mock({ 
+      accounts: [ANVIL_ACCOUNT_0],
+      features: { reconnect: true }
+    })]
   : [
       injected(),
       ...(projectId ? [walletConnect({ projectId })] : []),

@@ -4,8 +4,9 @@ set -e
 echo "=== E2E Test Setup ==="
 
 # Check if anvil is running
-if lsof -Pi :8545 -sTCP:LISTEN -t >/dev/null ; then
+if lsof -Pi :8545 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
   echo "Anvil already running on port 8545"
+  ANVIL_PID=$(lsof -Pi :8545 -sTCP:LISTEN -t)
 else
   echo "Starting Anvil..."
   anvil --port 8545 > /tmp/anvil.log 2>&1 &
@@ -39,9 +40,9 @@ fi
 echo "MockUSDC: $MOCK_USDC_ADDRESS"
 echo "Vault: $VAULT_ADDRESS"
 
-# Write .env.e2e for web app
+# Write .env.e2e.local for Vite
 cd /workspace/packages/web
-cat > .env.e2e <<EOF
+cat > .env.e2e.local <<EOF
 VITE_MOCK_USDC_ADDRESS=$MOCK_USDC_ADDRESS
 VITE_VAULT_ADDRESS=$VAULT_ADDRESS
 VITE_USDC_ADDRESS=$MOCK_USDC_ADDRESS
@@ -49,15 +50,15 @@ VITE_ENABLE_MOCK_CONNECTOR=true
 VITE_API_URL=http://localhost:3000
 EOF
 
-echo "Environment file created: .env.e2e"
-cat .env.e2e
+echo "Environment file created"
 
 echo ""
 echo "=== Running E2E Tests ==="
-cd /workspace/packages/web
 
-# Copy .env.e2e to .env.e2e.local (Vite picks up .env.[mode].local)
-cp .env.e2e .env.e2e.local
+# Export env vars for Playwright
+export VITE_VAULT_ADDRESS=$VAULT_ADDRESS
+export VITE_USDC_ADDRESS=$MOCK_USDC_ADDRESS
+export VITE_ENABLE_MOCK_CONNECTOR=true
 
 npm run test:e2e
 
@@ -65,3 +66,9 @@ echo ""
 echo "=== E2E Tests Complete ==="
 echo "Screenshots saved to docs/screenshots/"
 ls -lh ../../docs/screenshots/ 2>/dev/null || echo "No screenshots found"
+
+# Cleanup
+if [ ! -z "$ANVIL_PID" ]; then
+  echo "Stopping Anvil (PID: $ANVIL_PID)..."
+  kill $ANVIL_PID 2>/dev/null || true
+fi
