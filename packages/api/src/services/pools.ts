@@ -8,7 +8,7 @@ export async function getLatestPools(
   const { limit, offset } = pagination;
 
   // Build WHERE clause dynamically
-  const conditions: string[] = ['ps.id IN (SELECT MAX(id) FROM pool_snapshots GROUP BY pool_id)'];
+  const conditions: string[] = [];
   const params: any[] = [];
   let paramIndex = 1;
 
@@ -44,10 +44,17 @@ export async function getLatestPools(
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  // Subquery to get latest snapshots per pool_id
+  const latestSnapshotsSubquery = `
+    SELECT DISTINCT ON (pool_id) *
+    FROM pool_snapshots
+    ORDER BY pool_id, created_at DESC
+  `;
+
   // Count query
   const countQuery = `
-    SELECT COUNT(DISTINCT ps.pool_id) as total
-    FROM pool_snapshots ps
+    SELECT COUNT(*) as total
+    FROM (${latestSnapshotsSubquery}) ps
     LEFT JOIN risk_scores rs ON rs.snapshot_id = ps.id
     ${whereClause}
   `;
@@ -59,7 +66,7 @@ export async function getLatestPools(
       rs.total_risk_score,
       rs.risk_category,
       rs.vault_score_applicable
-    FROM pool_snapshots ps
+    FROM (${latestSnapshotsSubquery}) ps
     LEFT JOIN risk_scores rs ON rs.snapshot_id = ps.id
     ${whereClause}
     ORDER BY ps.tvl_usd DESC NULLS LAST
