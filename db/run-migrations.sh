@@ -63,12 +63,12 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
     
     # Check if migration contains its own BEGIN/COMMIT
     # Use awk for POSIX compatibility (works in BusyBox)
-    if awk '/^[[:space:]]*[Bb][Ee][Gg][Ii][Nn][[:space:]]*;?[[:space:]]*$/{exit 0} END{exit 1}' "$migration_file"; then
+    if awk '/^[[:space:]]*[Bb][Ee][Gg][Ii][Nn][[:space:]]*;?[[:space:]]*$/{found=1; exit} END{exit !found}' "$migration_file"; then
       echo "✗ Migration $name contains BEGIN statement"
       echo "  Migrations should not include transaction control (runner wraps them)"
       exit 1
     fi
-    if awk '/^[[:space:]]*[Cc][Oo][Mm][Mm][Ii][Tt][[:space:]]*;?[[:space:]]*$/{exit 0} END{exit 1}' "$migration_file"; then
+    if awk '/^[[:space:]]*[Cc][Oo][Mm][Mm][Ii][Tt][[:space:]]*;?[[:space:]]*$/{found=1; exit} END{exit !found}' "$migration_file"; then
       echo "✗ Migration $name contains COMMIT statement"
       echo "  Migrations should not include transaction control (runner wraps them)"
       exit 1
