@@ -17,9 +17,9 @@ describe('Explanations API Tests', () => {
     const { pool } = await import('../database.js');
     const poolResult = await pool.query(`
       INSERT INTO pool_snapshots (
-        pool_id, pool_name, snapshot_at, protocol, chain, tvl_usd, apy, il_risk, is_stablecoin, count
+        pool_id, pool_name, snapshot_at, protocol, chain, tvl_usd, apy, il_risk, is_stablecoin, count, data_source
       ) VALUES (
-        gen_random_uuid(), 'Test Pool', NOW(), 'test-protocol', 'Ethereum', 1000000, 5.5, 0.05, false, 10
+        gen_random_uuid(), 'Test Pool', NOW(), 'test-protocol', 'Ethereum', 1000000, 5.5, 0.05, false, 10, 'defillama'
       ) RETURNING pool_id
     `);
     poolId = poolResult.rows[0].pool_id;
