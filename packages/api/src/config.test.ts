@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { envSchema } from '../config.js';
+import { envSchema } from './config.js';
 
 describe('Config', () => {
   it('should parse valid environment variables', () => {
     const env = {
-      NODE_ENV: 'test',
+      NODE_ENV: 'test' as const,
       PORT: '3000',
       HOST: '0.0.0.0',
       DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',

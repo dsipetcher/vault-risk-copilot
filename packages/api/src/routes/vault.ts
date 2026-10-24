@@ -8,7 +8,6 @@ export async function vaultRoutes(app: FastifyInstance) {
     '/vault/state',
     {
       schema: {
-        tags: ['Vault'],
         response: {
           200: {
             type: 'object',

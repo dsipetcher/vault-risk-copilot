@@ -8,8 +8,6 @@ export async function healthRoutes(app: FastifyInstance) {
     '/health',
     {
       schema: {
-        description: 'Health check endpoint',
-        tags: ['Health'],
         response: {
           200: {
             type: 'object',

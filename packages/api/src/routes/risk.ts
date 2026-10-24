@@ -12,7 +12,6 @@ export async function riskRoutes(app: FastifyInstance) {
     '/risk/recompute/:id',
     {
       schema: {
-        tags: ['Risk'],
         params: {
           type: 'object',
           properties: {

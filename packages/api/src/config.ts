@@ -17,4 +17,10 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-export const env = envSchema.parse(process.env);
+// Only parse env if not in test mode or if DATABASE_URL is provided
+export const env: Env = process.env.NODE_ENV === 'test' && !process.env.DATABASE_URL
+  ? envSchema.parse({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+    })
+  : envSchema.parse(process.env);

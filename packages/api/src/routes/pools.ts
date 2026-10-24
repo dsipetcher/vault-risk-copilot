@@ -8,7 +8,6 @@ export async function poolsRoutes(app: FastifyInstance) {
     '/pools',
     {
       schema: {
-        tags: ['Pools'],
         querystring: paginationQuerySchema.merge(poolFiltersSchema),
         response: {
           200: {
@@ -50,7 +49,6 @@ export async function poolsRoutes(app: FastifyInstance) {
     '/pools/:id',
     {
       schema: {
-        tags: ['Pools'],
         params: {
           type: 'object',
           properties: {
@@ -77,7 +75,6 @@ export async function poolsRoutes(app: FastifyInstance) {
     '/pools/:id/history',
     {
       schema: {
-        tags: ['Pools'],
         params: {
           type: 'object',
           properties: {
