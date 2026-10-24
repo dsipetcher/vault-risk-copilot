@@ -6,14 +6,24 @@ import type { Pool } from '@/types/api';
 
 const mockPools: Pool[] = [
   {
-    id: 'pool-1',
+    id: 1,
+    pool_id: 'pool-1',
     protocol: 'Aave',
-    symbol: 'USDC',
+    asset_symbol: 'USDC',
     chain: 'Ethereum',
+    pool_name: 'Test Pool',
+    is_stablecoin: true,
     tvl_usd: 1000000,
+    tvl_change_7d_pct: null,
     apy: 5.5,
-    pool_meta: {},
-    updated_at: '2026-10-24T00:00:00Z',
+    apy_base: null,
+    apy_reward: null,
+    apy_sigma: null,
+    apy_pct_7d: null,
+    il_risk: null,
+    count: null,
+    snapshot_at: '2026-10-24T00:00:00Z',
+    created_at: '2026-10-24T00:00:00Z',
   },
 ];
 

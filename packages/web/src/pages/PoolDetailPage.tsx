@@ -4,6 +4,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { RiskBadge } from '@/components/RiskBadge';
 import { formatNumber, formatPercentage, formatDate } from '@/lib/utils';
+import type { Pool, PoolRiskScore } from '@/types/api';
 import {
   LineChart,
   Line,
