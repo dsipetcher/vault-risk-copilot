@@ -6,4 +6,4 @@ afterEach(() => {
   cleanup();
 });
 
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();

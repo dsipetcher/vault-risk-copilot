@@ -44,10 +44,10 @@ describe.skip('usePools', () => {
 
   // TODO: Fix mock to match actual API response structure { data: Pool[] }
   it('fetches pools successfully', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => mockPools,
-    });
+    }) as unknown as typeof fetch;
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -63,11 +63,11 @@ describe.skip('usePools', () => {
   });
 
   it('handles fetch errors', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 500,
       json: async () => ({ error: 'Server error' }),
-    });
+    }) as unknown as typeof fetch;
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
