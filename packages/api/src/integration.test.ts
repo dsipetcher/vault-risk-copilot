@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { pool } from './database.js';
 import { getLatestPools } from './services/pools.js';
+import { execSync } from 'child_process';
 
 describe('Pools Integration Tests', () => {
   beforeAll(async () => {
@@ -9,6 +10,13 @@ describe('Pools Integration Tests', () => {
     process.env.DATABASE_URL =
       process.env.DATABASE_URL ||
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
+    
+    // Run migrations before tests
+    execSync('bash ../../db/run-migrations.sh', {
+      cwd: __dirname,
+      env: { ...process.env, MIGRATIONS_DIR: '../../db/migrations' },
+      stdio: 'inherit',
+    });
     
     await pool.query('SELECT 1');
   });

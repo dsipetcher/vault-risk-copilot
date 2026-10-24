@@ -31,6 +31,7 @@ export async function getCachedExplanation(
     SELECT 
       e.explanation_text,
       e.risk_factors,
+      e.provider,
       e.model_name,
       e.prompt_tokens,
       e.completion_tokens,
@@ -41,13 +42,13 @@ export async function getCachedExplanation(
     FROM explanations e
     INNER JOIN risk_scores rs ON rs.id = e.risk_score_id
     WHERE rs.pool_id = $1
-      AND e.model_name LIKE $2 || '%'
+      AND e.provider = $2
+      AND e.model_name = $3
     ORDER BY e.generated_at DESC
     LIMIT 1
   `;
 
-  // Cache key uses model_name prefix (e.g., 'mock', 'gpt-4')
-  const result = await pool.query(query, [poolId, effectiveModel]);
+  const result = await pool.query(query, [poolId, effectiveProvider, effectiveModel]);
 
   if (result.rows.length === 0) {
     return null;
@@ -55,14 +56,11 @@ export async function getCachedExplanation(
 
   const row = result.rows[0];
 
-  // Extract provider from model_name (e.g., 'mock-v1' → 'mock')
-  const derivedProvider = row.model_name.split('-')[0] || 'unknown';
-
   return {
     explanation: row.risk_factors as ExplanationOutput,
     metadata: {
       model: row.model_name,
-      provider: derivedProvider,
+      provider: row.provider,
       promptTokens: row.prompt_tokens,
       completionTokens: row.completion_tokens,
       totalTokens: row.total_tokens,
@@ -174,6 +172,7 @@ async function cacheExplanation(
       pool_id,
       explanation_text,
       risk_factors,
+      provider,
       model_name,
       prompt_tokens,
       completion_tokens,
@@ -181,12 +180,11 @@ async function cacheExplanation(
       latency_ms,
       cost_usd,
       generated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-    ON CONFLICT (risk_score_id)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+    ON CONFLICT (risk_score_id, provider, model_name)
     DO UPDATE SET
       explanation_text = EXCLUDED.explanation_text,
       risk_factors = EXCLUDED.risk_factors,
-      model_name = EXCLUDED.model_name,
       prompt_tokens = EXCLUDED.prompt_tokens,
       completion_tokens = EXCLUDED.completion_tokens,
       total_tokens = EXCLUDED.total_tokens,
@@ -200,6 +198,7 @@ async function cacheExplanation(
     poolId,
     explanation.summary,
     JSON.stringify(explanation),
+    metadata.provider,
     metadata.model,
     metadata.promptTokens || null,
     metadata.completionTokens || null,

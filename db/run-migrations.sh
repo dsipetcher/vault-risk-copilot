@@ -61,10 +61,18 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
   if [ "$already_applied" -eq "0" ]; then
     echo "→ Applying migration $name..."
     
-    # Note: BEGIN/COMMIT check removed - Alpine BusyBox grep doesn't support
-    # extended regex or POSIX character classes consistently across versions.
-    # Migration files should not contain BEGIN/COMMIT (runner wraps them),
-    # but this is enforced via code review rather than automated check.
+    # Check if migration contains its own BEGIN/COMMIT
+    # Use awk for POSIX compatibility (works in BusyBox)
+    if awk '/^[[:space:]]*[Bb][Ee][Gg][Ii][Nn][[:space:]]*;?[[:space:]]*$/{exit 0} END{exit 1}' "$migration_file"; then
+      echo "✗ Migration $name contains BEGIN statement"
+      echo "  Migrations should not include transaction control (runner wraps them)"
+      exit 1
+    fi
+    if awk '/^[[:space:]]*[Cc][Oo][Mm][Mm][Ii][Tt][[:space:]]*;?[[:space:]]*$/{exit 0} END{exit 1}' "$migration_file"; then
+      echo "✗ Migration $name contains COMMIT statement"
+      echo "  Migrations should not include transaction control (runner wraps them)"
+      exit 1
+    fi
     
     # Run migration and record in one transaction
     # We wrap the migration file content with BEGIN/INSERT/COMMIT

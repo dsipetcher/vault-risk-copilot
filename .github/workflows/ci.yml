@@ -748,7 +748,7 @@ jobs:
         run: |
           docker cp db/migrations postgres-e2e:/tmp/migrations
           docker cp db/run-migrations.sh postgres-e2e:/tmp/run-migrations.sh
-          docker exec postgres-e2e bash -c "DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' bash /tmp/run-migrations.sh"
+          docker exec postgres-e2e bash -c "DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=/tmp/migrations bash /tmp/run-migrations.sh"
       
       - name: Seed E2E test data
         run: |

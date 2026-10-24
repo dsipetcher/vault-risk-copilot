@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { build } from '../index.js';
 import type { FastifyInstance } from 'fastify';
+import { execSync } from 'child_process';
 
 describe('Explanations API Tests', () => {
   let app: FastifyInstance;
@@ -11,6 +12,14 @@ describe('Explanations API Tests', () => {
       process.env.DATABASE_URL ||
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     process.env.LLM_PROVIDER = 'mock';
+    
+    // Run migrations before tests
+    execSync('bash ../../../db/run-migrations.sh', {
+      cwd: __dirname,
+      env: { ...process.env, MIGRATIONS_DIR: '../../../db/migrations' },
+      stdio: 'inherit',
+    });
+    
     app = await build();
     
     // Create test fixture: insert a pool snapshot and risk score
