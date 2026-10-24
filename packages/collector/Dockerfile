@@ -21,4 +21,4 @@ COPY --from=base /app/dist ./dist
 
 USER node
 
-CMD ["sh", "-c", "echo 'Container CMD started' && ls -la /app && ls -la /app/dist && which node && node --version && node dist/index.js"]
+CMD ["node", "dist/index.js"]

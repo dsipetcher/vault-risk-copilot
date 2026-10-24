@@ -217,35 +217,30 @@ jobs:
             exit 1
           fi
           
-          echo "=== Collector logs after 30s ==="
-          docker compose logs collector
-          echo "=== End collector logs ==="
-          
-          echo "Checking for startup confirmation..."
-          if docker compose logs collector | grep -q "Vault Risk Collector starting\|Container CMD started\|COLLECTOR STARTING"; then
+          echo "Checking collector logs for startup confirmation..."
+          if docker compose logs collector | grep -q "Vault Risk Collector starting"; then
             echo "✅ Collector started successfully"
           else
-            echo "❌ Collector did not start properly (no startup logs found)"
+            echo "❌ Collector did not start properly"
+            docker compose logs collector
             exit 1
           fi
       
       - name: Wait for collector to collect data
         id: wait_data
-        continue-on-error: true
         run: |
-          echo "Waiting for collector to insert data (up to 5 minutes)..."
-          echo "Note: DeFiLlama API may be slow or rate-limited in CI"
+          echo "Waiting for collector to insert data (up to 3 minutes with 60s fetch timeout)..."
           START_TIME=$(date +%s)
-          TIMEOUT=300
+          TIMEOUT=180
           
           while true; do
             CURRENT_TIME=$(date +%s)
             ELAPSED=$((CURRENT_TIME - START_TIME))
             
             if [ $ELAPSED -gt $TIMEOUT ]; then
-              echo "⚠️  Timeout waiting for data collection after ${TIMEOUT}s"
-              echo "This may be due to DeFiLlama API being slow/unavailable"
-              docker compose logs collector --tail 30
+              echo "❌ Timeout waiting for data collection after ${TIMEOUT}s"
+              echo "Collector logs:"
+              docker compose logs collector --tail 50
               exit 1
             fi
             
@@ -262,23 +257,11 @@ jobs:
             sleep 10
           done
       
-      - name: Summarize smoke test results
-        if: always()
+      - name: Show collector logs on success
+        if: success()
         run: |
-          echo "=== Smoke Test Summary ==="
-          echo "✅ Postgres: healthy and migrations applied"
-          echo "✅ Collector: started successfully"
-          
-          if [ "${{ steps.wait_data.outcome }}" == "success" ]; then
-            echo "✅ Data collection: completed (DeFiLlama API responded)"
-          else
-            echo "⚠️  Data collection: timed out (DeFiLlama API slow/unavailable in CI)"
-            echo "    This is acceptable for smoke test validation"
-          fi
-          
-          echo ""
-          echo "=== Collector logs (last 50 lines) ==="
-          docker compose logs collector --tail 50
+          echo "=== Collector logs (last 30 lines) ==="
+          docker compose logs collector --tail 30
       
       - name: Query sample data
         if: steps.wait_data.outcome == 'success'

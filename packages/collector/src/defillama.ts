@@ -50,11 +50,17 @@ export async function fetchDefiLlamaPools(
   logger.info({ url }, 'Fetching DeFiLlama pools');
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'vault-risk-copilot/0.1.0 (learning project)',
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`DeFiLlama API error: ${response.status} ${response.statusText}`);

@@ -17,9 +17,7 @@ export function loadConfig(): Config {
   const result = envSchema.safeParse(process.env);
   
   if (!result.success) {
-    const formatted = JSON.stringify(result.error.format(), null, 2);
-    process.stderr.write(`❌ Invalid environment variables:\n${formatted}\n`);
-    console.error('❌ Invalid environment variables:', result.error.format());
+    console.error('❌ Invalid environment variables:', JSON.stringify(result.error.format(), null, 2));
     throw new Error('Configuration validation failed');
   }
   
