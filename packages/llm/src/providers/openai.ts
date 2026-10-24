@@ -348,6 +348,9 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
     // Build complete set of allowed numbers from all inputs
     const allAllowedNumbers = new Set<number>();
     
+    // Add total risk score (top-level)
+    this.addNumberVariants(allAllowedNumbers, input.total_risk_score);
+    
     // Add all breakdown scores
     for (const score of Object.values(input.breakdown)) {
       if (score !== null) {
@@ -487,12 +490,19 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
         const context = factorText.substring(contextStart, contextEnd);
         
         // Check direction words ONLY if they modify the metric itself (not 'higher risk')
-        // If context contains 'risk' or 'score', direction words might be describing risk level
+        // If context contains 'risk' or 'score', only exclude 'higher/lower' (ambiguous words)
+        // but keep 'dropped/rose' etc (unambiguous metric direction)
         const hasRiskOrScore = /\brisk\b/i.test(context) || /\bscore\b/i.test(context);
-        const hasDirectionToRisk = hasRiskOrScore && (/\b(higher|lower)\b/i.test(context));
         
-        hasDecreaseWording = !hasDirectionToRisk && /\b(drop(ped)?|decrease[ds]?|declin(e[ds]?|ing)|fell|negative|down|lower)\b/i.test(context);
-        hasIncreaseWording = !hasDirectionToRisk && /\b(rose|increase[ds]?|inclin(e[ds]?|ing)|ris(e|ing)|up|gain(ed)?|grew|higher)\b/i.test(context);
+        // Check for decrease words (exclude 'lower' when risk/score nearby)
+        const hasLower = /\b(lower)\b/i.test(context);
+        const hasOtherDecrease = /\b(drop(ped)?|decrease[ds]?|declin(e[ds]?|ing)|fell|negative|down)\b/i.test(context);
+        hasDecreaseWording = hasOtherDecrease || (hasLower && !hasRiskOrScore);
+        
+        // Check for increase words (exclude 'higher' when risk/score nearby)
+        const hasHigher = /\b(higher)\b/i.test(context);
+        const hasOtherIncrease = /\b(rose|increase[ds]?|inclin(e[ds]?|ing)|ris(e|ing)|up|gain(ed)?|grew)\b/i.test(context);
+        hasIncreaseWording = hasOtherIncrease || (hasHigher && !hasRiskOrScore);
       }
 
       let found = false;

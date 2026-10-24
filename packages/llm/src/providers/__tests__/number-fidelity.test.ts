@@ -386,4 +386,40 @@ describe('Number Fidelity Validation', () => {
     const result = (provider as any).validateNumberFidelity(baseInput, output);
     expect(result).toBe(true);
   });
+
+  it('ACCEPT: summary "risk score of 85.5/100" (total_risk_score)', () => {
+    const inputWith85 = {
+      ...baseInput,
+      total_risk_score: 85.5,
+    };
+    const output: ExplanationOutput = {
+      summary: 'Pool has a risk score of 85.5/100',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '95/100',
+          explanation: 'Good TVL.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(inputWith85, output);
+    expect(result).toBe(true);
+  });
+
+  it('ACCEPT: "TVL dropped 35.2%, signalling higher risk" (honor decrease word even when risk nearby)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL dropped 35.2%, signalling higher risk',
+      key_factors: [
+        {
+          signal: 'TVL Volatility',
+          value: '35.2%',
+          explanation: 'Dropped 35.2%, signalling higher risk.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
+  });
 });

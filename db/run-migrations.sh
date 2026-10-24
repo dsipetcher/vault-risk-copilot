@@ -72,20 +72,31 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
     
     # Check if migration contains transaction control statements (outside $$ blocks)
     # PL/pgSQL blocks (DO $$ ... $$) are allowed
-    # Reject: BEGIN;/COMMIT;/ROLLBACK;/START TRANSACTION/BEGIN TRANSACTION
-    for keyword in "BEGIN" "COMMIT" "ROLLBACK"; do
-      if awk -v kw="$keyword" 'BEGIN{IGNORECASE=1} $0 ~ "^[[:space:]]*" kw "[[:space:]]*;" {found=1; exit} END{exit !found}' "$migration_file"; then
+    # Reject: BEGIN;/COMMIT;/END;/ROLLBACK; anywhere in a line (not just start)
+    # Also reject: START TRANSACTION/BEGIN TRANSACTION
+    
+    # Remove $$ blocks to avoid false positives
+    temp_file=$(mktemp)
+    sed 's/\$\$[^$]*\$\$//' "$migration_file" > "$temp_file"
+    
+    for keyword in "BEGIN" "COMMIT" "END" "ROLLBACK"; do
+      if grep -iE "\b${keyword}[[:space:]]*;" "$temp_file" > /dev/null; then
         echo "✗ Migration $name contains $keyword; statement"
         echo "  Migrations should not include transaction control (runner wraps them)"
         echo "  Note: PL/pgSQL blocks (DO \$\$ BEGIN ... END \$\$) are allowed"
+        rm -f "$temp_file"
         exit 1
       fi
     done
-    if grep -iE '(START[[:space:]]+TRANSACTION|BEGIN[[:space:]]+TRANSACTION)' "$migration_file" > /dev/null; then
+    
+    if grep -iE '(START[[:space:]]+TRANSACTION|BEGIN[[:space:]]+TRANSACTION)' "$temp_file" > /dev/null; then
       echo "✗ Migration $name contains START/BEGIN TRANSACTION"
       echo "  Migrations should not include transaction control (runner wraps them)"
+      rm -f "$temp_file"
       exit 1
     fi
+    
+    rm -f "$temp_file"
     
     # Run migration and record in one transaction
     # We wrap the migration file content with BEGIN/INSERT/COMMIT
