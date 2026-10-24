@@ -241,7 +241,15 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: packages/api/package-lock.json
+          cache-dependency-path: |
+            packages/llm/package-lock.json
+            packages/api/package-lock.json
+      
+      - name: Build llm package
+        working-directory: packages/llm
+        run: |
+          npm ci
+          npm run build
       
       - name: Set up database schema
         run: |
@@ -329,7 +337,8 @@ jobs:
       - name: Build api image
         uses: docker/build-push-action@v5
         with:
-          context: ./packages/api
+          context: ./packages
+          file: ./packages/api/Dockerfile
           push: false
           tags: vault-risk-api:latest
           cache-from: type=gha
