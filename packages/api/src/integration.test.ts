@@ -18,15 +18,12 @@ describe('Pools Integration Tests', () => {
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     
     // Clean database before migrations (test environment only)
-    // Use advisory lock to prevent concurrent schema drops causing deadlock
-    await pool.query('SELECT pg_advisory_lock(123456)');
+    // Truncate instead of DROP to avoid deadlocks in parallel tests
     try {
-      await pool.query('DROP SCHEMA IF EXISTS public CASCADE');
-      await pool.query('CREATE SCHEMA public');
-      await pool.query('GRANT ALL ON SCHEMA public TO postgres');
-      await pool.query('GRANT ALL ON SCHEMA public TO public');
-    } finally {
-      await pool.query('SELECT pg_advisory_unlock(123456)');
+      // Try to truncate existing tables, ignore errors if they don't exist
+      await pool.query('TRUNCATE TABLE schema_migrations, explanations, risk_scores, pool_snapshots CASCADE');
+    } catch (err) {
+      // If tables don't exist yet, that's fine - migrations will create them
     }
     
     // Run migrations before tests
