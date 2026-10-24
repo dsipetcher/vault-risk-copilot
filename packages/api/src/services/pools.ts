@@ -85,8 +85,22 @@ export async function getLatestPools(
 
 export async function getPoolById(poolId: string): Promise<(PoolSnapshot & { risk_score: RiskScore | null }) | null> {
   const query = `
+    WITH latest_snapshot AS (
+      SELECT *
+      FROM pool_snapshots
+      WHERE pool_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+    ),
+    latest_risk_score AS (
+      SELECT *
+      FROM risk_scores
+      WHERE pool_id = $1
+      ORDER BY calculated_at DESC
+      LIMIT 1
+    )
     SELECT 
-      ps.*,
+      ls.*,
       jsonb_build_object(
         'id', rs.id,
         'pool_id', rs.pool_id,
@@ -106,11 +120,8 @@ export async function getPoolById(poolId: string): Promise<(PoolSnapshot & { ris
         'model_version', rs.model_version,
         'calculated_at', rs.calculated_at
       ) as risk_score
-    FROM pool_snapshots ps
-    LEFT JOIN risk_scores rs ON rs.snapshot_id = ps.id
-    WHERE ps.pool_id = $1
-    ORDER BY ps.created_at DESC
-    LIMIT 1
+    FROM latest_snapshot ls
+    LEFT JOIN latest_risk_score rs ON TRUE
   `;
 
   const result = await pool.query(query, [poolId]);
