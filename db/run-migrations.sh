@@ -21,10 +21,14 @@ SQL
 echo "✓ Schema migrations table ready"
 
 # Baseline check: if schema exists but no migrations recorded, record already-applied ones
-RECORDED_COUNT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT COUNT(*) FROM schema_migrations")
-TABLE_EXISTS=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'pool_snapshots')")
+RECORDED_COUNT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT COUNT(*) FROM schema_migrations" 2>/dev/null || echo "0")
+TABLE_EXISTS=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'pool_snapshots')" 2>/dev/null || echo "f")
 
-if [ "$RECORDED_COUNT" -eq "0" ] && [ "$TABLE_EXISTS" = "t" ]; then
+# Trim whitespace from psql output
+RECORDED_COUNT=$(echo "$RECORDED_COUNT" | tr -d '[:space:]')
+TABLE_EXISTS=$(echo "$TABLE_EXISTS" | tr -d '[:space:]')
+
+if [ "$RECORDED_COUNT" = "0" ] && [ "$TABLE_EXISTS" = "t" ]; then
   echo "⚠ Detected existing schema with no recorded migrations (upgrade path)"
   # Record 001 and 002 as baseline (they were applied by old initdb or docker-entrypoint)
   psql "$DB_URL" -v ON_ERROR_STOP=1 <<SQL
