@@ -1,5 +1,21 @@
 # Docker Compose Validation Guide
 
+## Automated CI Testing
+
+Every PR runs a **Compose Smoke Test** in GitHub Actions that validates:
+
+✅ **Postgres container** starts and becomes healthy  
+✅ **Migrations** apply automatically on first boot  
+✅ **Collector container** builds and starts successfully  
+✅ **Data collection attempt** is made (DeFiLlama API call initiated)
+
+The smoke test uses `continue-on-error` for data collection completion because:
+- DeFiLlama API can be slow or rate-limited in CI (>5 minutes response time observed)
+- Container startup and database schema validation are the critical smoke test goals
+- Actual data collection is verified in local development and staging environments
+
+See the latest CI run: [.github/workflows/ci.yml](../.github/workflows/ci.yml) → **Compose Smoke Test** job
+
 ## Prerequisites
 
 - Docker Desktop or Docker Engine + Docker Compose plugin
