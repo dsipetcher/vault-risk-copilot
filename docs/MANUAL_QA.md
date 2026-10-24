@@ -112,9 +112,11 @@ bash e2e/run-e2e.sh
 
 ✅ **Deposit transaction fixed** - Root cause was incorrect ERC-4626 ABI (missing `receiver` parameter in `deposit(uint256,address)`)
 
-✅ **On-chain verification successful** - Both UI state and direct viem `readContract` confirm shares balance > 0
+✅ **Vault shares decimals fixed** - Read vault.decimals() (9 = USDC 6 + offset 3) instead of hardcoded 18
 
-✅ **All screenshots captured** - Visual documentation of complete workflow with successful deposit and redeem
+✅ **On-chain verification with assertions** - Shares display ≈ 500, convertToAssets shows ~500 USDC, shares == 0 after redeem, USDC balance restored
+
+✅ **All screenshots captured** - Visual documentation of complete workflow with correct decimal display
 
 ### Commands
 
@@ -129,23 +131,29 @@ Output:
 forge --version: forge Version: 1.8.6
 anvil --version: anvil Version: 1.8.6
 Repository root: /workspace
-Anvil already running on port 8545
+Starting Anvil...
 Deploying contracts to Anvil...
-MockUSDC: 0x3Aa5ebB10DC797CAC828524e59A333d0A371443c
-Vault: 0xc6e7DF5E7b4f2A278906862b61205850344D4e7d
+MockUSDC: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+Vault: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
 Environment file created
 
 === Running E2E Tests ===
 Running 1 test using 1 worker
-[1/1] [chromium] › e2e/vault.spec.ts:41:3 › Vault E2E Flow › complete vault workflow with on-chain verification
-[PAGE LOG]: [APPROVE] Transaction sent: 0xc34e6630d1780205170f8a1923b6b5136123d772eed89ee6001223f84a53f9fd
+[1/1] [chromium] › e2e/vault.spec.ts:55:3 › Vault E2E Flow › complete vault workflow with on-chain verification
+[PAGE LOG]: [APPROVE] Transaction sent: 0x8329fb6938580c70e243dc05cfec4f8d0df7f4cd971f80a544ec6d6789136c88
 [PAGE LOG]: [APPROVE] Confirmed! Refetching allowance...
-[PAGE LOG]: [DEPOSIT] Transaction sent: 0xa7d07766f8f554ebe4f964541cf30b4d6b3c1617e0cfb2767a39e13f79db2f42
+[PAGE LOG]: [DEPOSIT] Transaction sent: 0xfedb1ce6e641cde016fa0f310fd404254830fcb8c1b9041c43855a0b2cfd595f
 [PAGE LOG]: [DEPOSIT] Confirmed!
-Vault Shares: 0.0000005
-On-chain shares: 0.0000005
+Vault decimals: 9
+Vault Shares (UI): 500
+On-chain shares (raw): 500000000000
+On-chain shares (formatted): 500
+Assets value in USDC: 500
+Shares after redeem: 0
+Final USDC balance: 11000
+Initial USDC balance: 11000
 ✅ E2E test completed successfully
-  1 passed (13.3s)
+  1 passed (13.2s)
 
 === E2E Tests Complete ===
 Screenshots saved to docs/screenshots/
@@ -153,7 +161,7 @@ Screenshots saved to docs/screenshots/
 
 ### Root Cause and Fix
 
-**Problem**: Deposit transaction timed out waiting for confirmation.
+**Problem 1**: Deposit transaction timed out waiting for confirmation.
 
 **Diagnosis**:
 1. Tested deposit manually with `cast send` - succeeded on-chain
@@ -166,10 +174,24 @@ Screenshots saved to docs/screenshots/
 - Fixed handleDeposit and handleRedeem to pass `address` parameter
 - Added console logging via useEffect to track transaction states
 
+**Problem 2**: Vault shares displayed as 0.0000005 instead of 500.
+
+**Diagnosis**:
+1. VaultPage.tsx hardcoded shares decimals as 18
+2. SimpleVault uses `_decimalsOffset() = 3`, so vault.decimals() = USDC decimals (6) + 3 = 9
+3. UI formatted 500000000000 (raw shares with 9 decimals) using 18 decimals = 0.0000005
+
+**Solution**:
+- Read vault.decimals() from contract via useReadContract
+- Format shares using vault decimals instead of hardcoded 18
+- Add convertToAssets() to display USDC equivalent (~500 USDC)
+- Add subtitle to StatCard to show "≈ 500 USDC"
+- Fix handleRedeem to use vault decimals
+
 **Verification**:
-- E2E test now completes successfully with deposit and redeem
-- On-chain shares balance verified both in UI and via viem readContract
-- All screenshots show successful workflow
+- E2E test now shows correct values: Vault Shares: 500, Assets value in USDC: 500
+- Tightened E2E assertions: shares ≈ 500, convertToAssets ≈ 500, shares == 0 after redeem, USDC balance restored
+- All screenshots show correct decimal display
 
 ### CI Status
 
