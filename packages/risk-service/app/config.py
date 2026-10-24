@@ -12,42 +12,28 @@ class RiskThresholds(BaseSettings):
     tvl_medium_threshold: float = Field(
         default=10_000_000.0, description="TVL above this = low risk"
     )
-    tvl_drop_warning_pct: float = Field(
-        default=20.0, description="TVL drop >X% in 7d = warning"
-    )
-    tvl_drop_critical_pct: float = Field(
-        default=50.0, description="TVL drop >X% in 7d = critical"
-    )
+    tvl_drop_warning_pct: float = Field(default=20.0, description="TVL drop >X% in 7d = warning")
+    tvl_drop_critical_pct: float = Field(default=50.0, description="TVL drop >X% in 7d = critical")
 
     # APY volatility thresholds
-    apy_outlier_z_score: float = Field(
-        default=2.5, description="Z-score for APY outlier detection"
-    )
+    apy_outlier_z_score: float = Field(default=2.5, description="Z-score for APY outlier detection")
     apy_spike_threshold_pct: float = Field(
         default=100.0, description="APY increase >X% in 7d = spike"
     )
-    apy_high_absolute: float = Field(
-        default=100.0, description="APY >X% absolute = suspicious"
-    )
+    apy_high_absolute: float = Field(default=100.0, description="APY >X% absolute = suspicious")
 
     # Reward composition thresholds
-    reward_ratio_low: float = Field(
-        default=0.3, description="Reward/total APY <X = low dependency"
-    )
+    reward_ratio_low: float = Field(default=0.3, description="Reward/total APY <X = low dependency")
     reward_ratio_high: float = Field(
         default=0.7, description="Reward/total APY >X = high dependency"
     )
 
     # Data reliability thresholds
-    data_min_count: int = Field(
-        default=30, description="Minimum data points for reliable scoring"
-    )
+    data_min_count: int = Field(default=30, description="Minimum data points for reliable scoring")
     data_warning_count: int = Field(default=7, description="Data points <X = warning")
 
     # IL risk threshold
-    il_risk_threshold: float = Field(
-        default=0.5, description="IL risk >X = flag (0-1 scale)"
-    )
+    il_risk_threshold: float = Field(default=0.5, description="IL risk >X = flag (0-1 scale)")
 
     # Vault share price drop threshold
     vault_price_drop_warning_pct: float = Field(

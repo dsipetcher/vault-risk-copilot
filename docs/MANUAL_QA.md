@@ -910,3 +910,213 @@ timeout 15 node dist/index.js 2>&1 | grep -A 2 "Failed to read vault"
 ### 🐛 Bugs found: **0**
 
 **Все функции работают корректно согласно Phase 2 спецификации.**
+
+---
+
+## Phase 3: Python Risk Service Manual QA
+
+**Date:** 2026-10-24  
+**Agent:** bc-57f26702-4408-5c35-b679-758c14467306  
+**Environment:** Local Postgres + collector + risk-service on VM
+
+### Setup
+
+```bash
+# Install and start PostgreSQL
+sudo apt-get install -y postgresql postgresql-contrib
+sudo service postgresql start
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+sudo -u postgres psql -c "CREATE DATABASE vault_risk OWNER postgres;"
+sudo -u postgres psql -d vault_risk -f db/migrations/001_initial_schema.sql
+
+# Start collector (background)
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vault_risk"
+cd packages/collector
+npm install && npm run build
+npm start  # Collected 100 pools from DeFiLlama
+
+# Start risk-service
+cd packages/risk-service
+. .venv/bin/activate
+pip install -r requirements-dev.txt
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vault_risk"
+uvicorn app.main:app --host 0.0.0.0 --port 8002
+```
+
+### ✅ Test 1: Health Check
+
+```bash
+$ curl -s http://localhost:8002/health | jq .
+{
+  "status": "healthy",
+  "version": "0.1.0",
+  "model_version": "1.0",
+  "database": "connected",
+  "timestamp": "2026-10-24T12:22:34.253380Z"
+}
+```
+
+**Result:** ✅ Service healthy, DB connected
+
+---
+
+### ✅ Test 2: Compute Risk Scores (POST /recompute)
+
+```bash
+$ curl -s -X POST http://localhost:8002/recompute \
+  -H "Content-Type: application/json" -d '{}' | jq '{computed, elapsed_seconds}'
+{
+  "computed": 100,
+  "elapsed_seconds": 0.028104543685913086
+}
+```
+
+**Result:** ✅ Computed 100 scores in 28ms (deterministic, no ML)
+
+---
+
+### ✅ Test 3: List Risk Scores (GET /scores)
+
+```bash
+$ curl -s "http://localhost:8002/scores?limit=3" | jq '.scores[0]'
+{
+  "pool_id": "fdf02dc0-c38d-4850-8d61-74668d281325",
+  "pool_name": "CBETH Pool",
+  "protocol": "aave-v3",
+  "chain": "Ethereum",
+  "total_risk_score": 30.8,
+  "risk_category": "medium",
+  "breakdown": {
+    "tvl_score": 0.0,
+    "tvl_volatility_score": 50.0,
+    "apy_volatility_score": 35.0,
+    "reward_ratio_score": 50.0,
+    "stablecoin_score": 50.0,
+    "il_score": 0.0,
+    "data_age_score": 0.0,
+    "vault_score": 50.0
+  },
+  "is_anomaly": false,
+  "anomaly_reason": null,
+  "calculated_at": "2026-10-24T12:22:42.680859Z",
+  "model_version": "1.0"
+}
+```
+
+**Result:** ✅ All 8 signals present (including vault_score), breakdown explainable
+
+---
+
+### ✅ Test 4: Get Single Pool Score (GET /scores/{pool_id})
+
+```bash
+$ curl -s "http://localhost:8002/scores/747c1d2a-c668-4682-b9f9-296708a3dd90" | jq '.'
+{
+  "pool_id": "747c1d2a-c668-4682-b9f9-296708a3dd90",
+  "pool_name": "STETH Pool",
+  "protocol": "lido",
+  "chain": "Ethereum",
+  "total_risk_score": 24.5,
+  "risk_category": "low",
+  "breakdown": {
+    "tvl_score": 0.0,
+    "tvl_volatility_score": 50.0,
+    "apy_volatility_score": 0.0,
+    "reward_ratio_score": 50.0,
+    "stablecoin_score": 50.0,
+    "il_score": 0.0,
+    "data_age_score": 0.0,
+    "vault_score": 50.0
+  },
+  "is_anomaly": false,
+  "anomaly_reason": null,
+  "calculated_at": "2026-10-24T12:22:42.680695Z",
+  "model_version": "1.0"
+}
+```
+
+**Result:** ✅ Lido stETH pool (TVL $22.8B) rated "low" risk (24.5) – correct!
+
+---
+
+### ✅ Test 5: Edge Case – Nonexistent Pool
+
+```bash
+$ curl -s "http://localhost:8002/scores/nonexistent-pool-id-12345" | jq .
+{
+  "detail": "No risk score found for pool 'nonexistent-pool-id-12345'"
+}
+```
+
+**Result:** ✅ Clear 404 error message
+
+---
+
+### ✅ Test 6: Edge Case – No Data in Database
+
+```bash
+$ sudo -u postgres psql -d vault_risk -c "DELETE FROM risk_scores;"
+DELETE 100
+
+$ curl -s "http://localhost:8002/scores?limit=5" | jq '.scores | length'
+0
+```
+
+**Result:** ✅ Empty list returned (no crash)
+
+---
+
+### ✅ Test 7: Recompute After Clearing Data
+
+```bash
+$ curl -s -X POST http://localhost:8002/recompute -H "Content-Type: application/json" -d '{}' \
+  | jq '{computed, elapsed_seconds}'
+{
+  "computed": 100,
+  "elapsed_seconds": 0.02303481101989746
+}
+```
+
+**Result:** ✅ Repopulated 100 scores deterministically
+
+---
+
+### 🔬 Sample Risk Scores Analysis
+
+| Pool | Protocol | TVL | APY | Risk Score | Category | Vault Score | Notes |
+|------|----------|-----|-----|------------|----------|-------------|-------|
+| STETH Pool | lido | $22.8B | 2.22% | 24.5 | low | 50.0 | Stable, large TVL |
+| CBETH Pool | aave-v3 | Large | 0.0% | 30.8 | medium | 50.0 | No yield = higher risk |
+| 0.3% | uniswap-v3 | Large | 0.0% | 37.5 | medium | 50.0 | IL risk = 100 |
+
+**Observations:**
+- ✅ Low TVL pools correctly penalized
+- ✅ Stablecoin pools get lower stablecoin_score
+- ✅ IL risk = 100 for volatile pairs (Uniswap)
+- ✅ vault_score = 50.0 when no vault data (medium risk default)
+- ✅ NO scikit-learn or ML – fully deterministic
+
+---
+
+### 🧪 Edge Case Testing
+
+1. **Missing vault data:**
+   - ✅ vault_score defaults to 50.0 (no crash)
+
+2. **Stale data:**
+   - ✅ data_age_score = 0 for pools with count >= 30
+   - ✅ data_age_score = 100 for new pools (count < 7)
+
+3. **Rule-based anomaly detection:**
+   - ✅ No anomalies flagged in current 100 pools (all have reasonable metrics)
+   - ✅ Deterministic rules (no IsolationForest randomness)
+
+4. **API validation:**
+   - ✅ Invalid JSON body → 422 error with validation details
+   - ✅ Missing required fields → clear Pydantic error messages
+
+---
+
+### 🐛 Bugs found: **0**
+
+**Все эндпоинты работают корректно. Risk model deterministic, explainable, без ML dependencies.**

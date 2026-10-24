@@ -313,7 +313,9 @@ def vault_share_price_drop_signal(share_price_change_pct: float | None) -> float
 # === Anomaly Detection (Rule-Based) ===
 
 
-def detect_anomaly_rule_based(risk_score: float, breakdown: dict[str, float]) -> tuple[bool, str | None]:
+def detect_anomaly_rule_based(
+    risk_score: float, breakdown: dict[str, float]
+) -> tuple[bool, str | None]:
     """
     Detect anomalous risk patterns using deterministic rules.
 
@@ -397,7 +399,7 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
     stable_score = stablecoin_signal(is_stablecoin)
     il_score = il_risk_signal(il_risk)
     age_score = data_age_signal(count)
-    
+
     # Vault share price drop signal (if data available)
     vault_price_change = decimal_to_float(snapshot.get("vault_share_price_change_pct"))
     vault_score = vault_share_price_drop_signal(vault_price_change)
