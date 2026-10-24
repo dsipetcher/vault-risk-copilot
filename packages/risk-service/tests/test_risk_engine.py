@@ -234,8 +234,8 @@ def test_data_age_signal_linear():
 
 @pytest.mark.unit
 def test_vault_share_price_drop_signal_no_data():
-    """No vault data should return medium risk."""
-    assert vault_share_price_drop_signal(None) == 50.0
+    """No vault data should return None (not applicable)."""
+    assert vault_share_price_drop_signal(None) is None
 
 
 @pytest.mark.unit
@@ -262,6 +262,80 @@ def test_vault_share_price_drop_signal_warning():
     # Drop between warning and critical should be 50-100
     score_mid = vault_share_price_drop_signal(-3.0)
     assert 50.0 < score_mid < 100.0
+
+
+@pytest.mark.unit
+def test_vault_share_price_drop_renormalization():
+    """Test that weights are renormalized when vault score is not applicable."""
+    # Create a pool without vault data
+    snapshot_no_vault = {
+        "id": 1,
+        "pool_id": str(uuid4()),
+        "tvl_usd": 5_000_000.0,
+        "tvl_change_7d_pct": 0.0,
+        "apy": 10.0,
+        "apy_sigma": 1.0,
+        "apy_pct_7d": 0.0,
+        "apy_reward": 2.0,
+        "is_stablecoin": True,
+        "il_risk": None,
+        "count": 30,
+        "vault_share_price_change_pct": None,  # No vault data
+    }
+
+    # Create same pool with vault data
+    snapshot_with_vault = {
+        **snapshot_no_vault,
+        "vault_share_price_change_pct": 0.0,  # Vault data present (no drop)
+    }
+
+    result_no_vault = calculate_risk_score(snapshot_no_vault)
+    result_with_vault = calculate_risk_score(snapshot_with_vault)
+
+    # Both should have similar risk scores (vault score=0 doesn't add risk)
+    # But no-vault should have renormalized weights
+    assert "vault_score_applicable" in result_no_vault
+    assert not result_no_vault["vault_score_applicable"]
+    assert result_with_vault["vault_score_applicable"]
+
+    # Vault score should be 0 for both (no drop in with_vault, not applicable in no_vault)
+    assert result_no_vault["vault_score"] == 0.0
+    assert result_with_vault["vault_score"] == 0.0
+
+    # Total scores should be similar (within 2 points due to renormalization)
+    assert abs(result_no_vault["total_risk_score"] - result_with_vault["total_risk_score"]) < 2.0
+
+
+@pytest.mark.unit
+def test_vault_signal_does_not_distort_defillama_pools():
+    """
+    Verify that DeFiLlama pools without vault data are scored correctly.
+    The vault signal should not add artificial risk (previously returned 50 for None).
+    """
+    # Create a typical DeFiLlama pool (no vault data)
+    defillama_pool = {
+        "id": 1,
+        "pool_id": str(uuid4()),
+        "tvl_usd": 10_000_000.0,  # High TVL (score ~0)
+        "tvl_change_7d_pct": 5.0,  # Growing (score 0)
+        "apy": 8.0,  # Reasonable APY
+        "apy_sigma": 0.8,  # Low volatility
+        "apy_pct_7d": 3.0,  # Slight increase
+        "apy_reward": 1.0,  # Low reward ratio (1/8 = 12.5%)
+        "is_stablecoin": True,  # Stablecoin (score 0)
+        "il_risk": None,  # No IL (lending pool)
+        "count": 50,  # Mature pool (score 0)
+        "vault_share_price_change_pct": None,  # NOT a vault pool
+    }
+
+    result = calculate_risk_score(defillama_pool)
+
+    # This pool should have LOW risk (all fundamentals are good)
+    assert result["total_risk_score"] < 30.0, (
+        f"Expected low risk for stable DeFiLlama pool, got {result['total_risk_score']}"
+    )
+    assert result["risk_category"] in ["low", "medium"]
+    assert not result["vault_score_applicable"]
 
 
 # === Anomaly Detection Tests (Rule-Based) ===

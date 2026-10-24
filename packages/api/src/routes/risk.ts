@@ -1,39 +1,58 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { recomputeRisk } from '../services/risk.js';
 
-const RISK_SERVICE_URL = process.env.RISK_SERVICE_URL || 'http://localhost:8000';
+const recomputeBodySchema = z.object({
+  force: z.boolean().optional().default(false),
+});
 
-export async function riskRoutes(fastify: FastifyInstance) {
-  fastify.post<{ Params: { id: string } }>('/api/risk/recompute/:id', async (request, reply) => {
-    try {
-      const { id } = request.params;
-
-      const response = await fetch(`${RISK_SERVICE_URL}/recompute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+export async function riskRoutes(app: FastifyInstance) {
+  // POST /risk/recompute/:id - Trigger risk recomputation
+  app.post<{ Params: { id: string }; Body: { force?: boolean } }>(
+    '/risk/recompute/:id',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+          },
+          required: ['id'],
         },
-        body: JSON.stringify({
-          pool_ids: [id],
-          force: true,
-        }),
-      });
+        body: {
+          type: 'object',
+          properties: {
+            force: { type: 'boolean', default: false },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              pool_id: { type: 'string' },
+              status: { type: 'string', enum: ['success', 'error'] },
+              message: { type: 'string' },
+              risk_score: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const body = recomputeBodySchema.parse(request.body);
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-        reply.code(response.status);
-        return { error: 'Risk service error', message: error };
+      try {
+        const result = await recomputeRisk(id, body.force);
+        return reply.send(result);
+      } catch (error) {
+        app.log.error({ error, pool_id: id }, 'Risk recompute failed');
+        return reply.code(500).send({
+          pool_id: id,
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
-
-      const result = await response.json();
-      return {
-        success: true,
-        message: `Recomputed risk for pool ${id}`,
-        result,
-      };
-    } catch (error: any) {
-      fastify.log.error(error);
-      reply.code(500);
-      return { error: 'Failed to recompute risk', message: error.message };
     }
-  });
+  );
 }

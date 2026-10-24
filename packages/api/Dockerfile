@@ -1,21 +1,39 @@
-FROM node:22-alpine AS base
+# syntax=docker/dockerfile:1.4
+
+# Build stage
+FROM node:22-alpine AS builder
+
 WORKDIR /app
 
-FROM base AS deps
-COPY package*.json ./
-RUN npm ci --only=production
+# Copy package files
+COPY package*.json tsconfig.json ./
+COPY src ./src
 
-FROM base AS builder
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+# Install dependencies and build
+RUN npm ci --only=production=false && \
+    npm run build
 
-FROM base AS runner
-ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
+# Production stage
+FROM node:22-alpine AS production
+
+WORKDIR /app
+
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+# Copy package files and install only production dependencies
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy built files from builder
 COPY --from=builder /app/dist ./dist
-COPY package*.json ./
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+USER nodejs
 
 EXPOSE 3000
-CMD ["npm", "start"]
+
+CMD ["node", "dist/index.js"]
