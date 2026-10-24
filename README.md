@@ -1,2 +1,266 @@
-# vault-risk-copilot
-AI-powered risk copilot for ERC-4626 DeFi vaults
+# Vault Risk Copilot
+
+**A testnet-only learning project demonstrating DeFi concepts, ERC-4626 vaults, risk analytics, and AI integration.**
+
+[![CI](https://github.com/username/vault-risk-copilot/workflows/CI/badge.svg)](https://github.com/username/vault-risk-copilot/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+---
+
+## ⚠️ Disclaimer
+
+**THIS IS A LEARNING PROJECT - NOT FINANCIAL ADVICE**
+
+- 🧪 **Testnet only** - Deployed on Sepolia, no mainnet usage
+- 📚 **Educational purpose** - Built to demonstrate technical skills
+- 🚫 **No financial advice** - Risk signals are for learning, not investment decisions
+- 💸 **No real funds** - Never use with production wallets or mainnet
+
+---
+
+## What is This?
+
+Vault Risk Copilot is a full-stack DeFi application that:
+
+1. **📊 Analyzes Real DeFi Pools** - Fetches data from live protocols (read-only) and calculates explainable risk signals
+2. **🏦 Custom ERC-4626 Vault** - Implements a simple yield vault on Sepolia testnet with security best practices
+3. **🤖 AI-Powered Explanations** - Uses LLMs to explain risk factors in plain language (structured, validated output)
+4. **🔌 MCP Integration** - Exposes read-only tools for AI agents to query pool risk and vault state
+
+## Architecture
+
+```
+┌─────────────┐   REST/JSON   ┌──────────────┐  HTTP   ┌────────────────┐
+│ React + TS  │ ────────────► │ Node.js API  │ ──────► │ Python Risk    │
+│ (Vite,      │               │ (TypeScript, │         │ Service        │
+│ wagmi/viem) │               │ zod, OpenAPI)│         │ (FastAPI)      │
+└──────┬──────┘               └──┬────┬──────┘         └───────┬────────┘
+       │ wallet (Sepolia)        │    │ SQL                    │ SQL
+       ▼                         │    ▼                        ▼
+┌─────────────┐   viem read     │ ┌──────────────────────────────┐
+│ ERC-4626    │ ◄───────────────┘ │ PostgreSQL                   │
+│ SimpleVault │                   │ (snapshots, scores, logs)    │
+│ (Foundry)   │                   └──────────────▲───────────────┘
+└─────────────┘                                  │ ingest
+                                                 │
+┌──────────────┐  read-only   ┌──────────────────┴──┐
+│ MCP Server   │ ◄──────────  │ Collector (Node/Go) │
+│ (TypeScript) │   tools      │ + viem              │
+└──────────────┘              └─────────────────────┘
+                                     │
+                                     ├─► DeFiLlama Yields API
+                                     └─► On-chain (mainnet, read-only)
+```
+
+## Technology Stack
+
+### Smart Contracts
+- **Solidity 0.8.28** with Foundry
+- **OpenZeppelin 5.6.1** (ERC-4626, SafeERC20, access control)
+- Unit, fuzz, and invariant tests
+- Slither static analysis
+
+### Frontend
+- **React 19** + **TypeScript 7** + **Vite 8**
+- **wagmi 3.7** + **viem 2.57** for Web3 interactions
+- TanStack Query for data fetching
+- Recharts for visualization
+
+### Backend
+- **Node.js 22** + **TypeScript 7**
+- **Fastify 5** API with zod validation
+- OpenAPI documentation
+- Rate limiting & security headers
+
+### Risk Service
+- **Python 3.12** + **FastAPI**
+- **pandas** + **scikit-learn** for risk scoring
+- Explainable features (TVL, APY volatility, reward ratio, etc.)
+
+### Infrastructure
+- **PostgreSQL 16** for data storage
+- **Docker** + **docker-compose** for local development
+- **GitHub Actions** for CI/CD
+
+### AI & MCP
+- Provider-agnostic LLM integration (OpenAI, Anthropic, etc.)
+- **MCP** (Model Context Protocol) server with read-only tools
+- Structured output validation with zod
+- Prompt injection defenses
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 22+
+- Python 3.12+
+- Docker & Docker Compose
+- Git
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/username/vault-risk-copilot.git
+cd vault-risk-copilot
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Start all services
+docker compose up
+```
+
+The application will be available at:
+- **Frontend:** http://localhost:5173
+- **API:** http://localhost:3000
+- **Risk Service:** http://localhost:8000
+- **MCP Server:** http://localhost:3001
+
+### Running Tests
+
+```bash
+# Smart contracts
+cd contracts
+forge test
+
+# Backend tests
+npm run test:api
+
+# Frontend tests
+npm run test:web
+
+# Python tests
+cd packages/risk-service
+pytest
+```
+
+## Smart Contracts on Sepolia
+
+Deployed contracts (Sepolia testnet):
+
+| Contract | Address | Etherscan |
+|----------|---------|-----------|
+| MockUSDC | `TBD` | [View](https://sepolia.etherscan.io/address/TBD) |
+| SimpleVault | `TBD` | [View](https://sepolia.etherscan.io/address/TBD) |
+
+## Features
+
+### 🔍 Risk Analysis
+
+The risk scoring system evaluates pools based on:
+
+- **TVL Level & Change** - Total value locked and 7-day trend
+- **APY Volatility** - Standard deviation and recent fluctuations
+- **Reward Composition** - Ratio of incentive rewards to base yield
+- **Asset Type** - Stablecoin vs volatile assets
+- **Impermanent Loss Risk** - For AMM pools
+- **Anomaly Detection** - Statistical outliers using z-score and IsolationForest
+
+**Limitations:** This is a simplified model for learning. It does NOT:
+- Predict future yields or prices
+- Account for smart contract risk
+- Consider market conditions or regulatory risk
+- Constitute financial advice
+
+### 🏦 ERC-4626 Vault
+
+`SimpleVault` implements the full ERC-4626 standard with:
+
+- ✅ Deposit/withdraw/mint/redeem functions
+- ✅ Share price calculations with correct rounding
+- ✅ Protection against inflation/donation attacks (via OZ virtual shares)
+- ✅ Pausable functionality
+- ✅ Deposit cap
+- ✅ Role-based access control
+- ✅ Harvest function (owner-only, simulates yield)
+- ✅ SafeERC20 for token operations
+- ✅ Comprehensive test suite (unit, fuzz, invariant)
+
+**Security:** See [SECURITY.md](./SECURITY.md) for the threat model and security measures.
+
+### 🤖 AI Features
+
+**LLM Risk Explanations:**
+- Generates human-readable explanations of risk factors
+- Structured output with schema validation
+- Uses only data from the input (no hallucination of numbers)
+- Prompt injection defenses
+- No financial advice in output
+
+**MCP Server (Read-Only):**
+- `list_pools` - Get available pools with basic info
+- `get_pool_risk` - Retrieve risk score and factors for a pool
+- `explain_pool` - Get AI explanation of pool risk
+- `get_vault_state` - Query Sepolia vault state (TVL, share price)
+
+**No transaction signing** - MCP server is read-only by design.
+
+## Roadmap
+
+See [docs/ROADMAP.md](./docs/ROADMAP.md) for planned features:
+
+- [ ] Multi-chain support (Arbitrum, Optimism)
+- [ ] Historical risk tracking & charts
+- [ ] Backtesting framework for risk signals
+- [ ] Advanced ML models (gradient boosting)
+- [ ] User portfolio tracking
+- [ ] Alert system for risk changes
+- [ ] Go-based collector (performance)
+- [ ] Kubernetes deployment
+
+## Learning Resources
+
+This project was built to learn and demonstrate:
+
+1. **ERC-4626 Vault Mechanics** - See [docs/LEARNING.md](./docs/LEARNING.md) for key concepts
+2. **DeFi Protocols** - Lending (Aave, Compound), AMMs (Uniswap), yield aggregation
+3. **Smart Contract Security** - Reentrancy, access control, rounding attacks
+4. **Web3 Integration** - wagmi/viem for wallet connection and contract interaction
+5. **Risk Modeling** - Feature engineering and explainable ML
+6. **AI Safety** - Prompt injection, structured outputs, validation
+7. **DevOps** - Docker, CI/CD, testing strategies
+
+## AI Assistance
+
+**Transparency:** This project was built with AI assistance using Cursor Agent (Claude). The codebase is **AI-generated and currently under owner review**.
+
+**AI-Generated:**
+- Smart contract implementation (MockUSDC, SimpleVault)
+- Test suite (unit, fuzz, invariant tests)
+- Project structure and configuration
+- OpenZeppelin and Foundry integration
+- Documentation and guides
+
+**Owner Status:** The repository owner has not yet completed a full review. This is a portfolio/learning project demonstrating AI-assisted development capabilities. All code should be considered AI-generated until the owner confirms review and understanding.
+
+## Contributing
+
+This is a learning project and not actively maintained for production use. However, feedback and suggestions are welcome!
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
+
+## License
+
+MIT License - see [LICENSE](./LICENSE) for details.
+
+## Acknowledgments
+
+- **OpenZeppelin** - Secure smart contract library
+- **Foundry** - Ethereum development toolkit
+- **DeFiLlama** - DeFi data aggregation
+- **MCP** - Model Context Protocol by Anthropic
+- **Cursor** - AI-powered development environment
+
+---
+
+**Built as a portfolio project for learning DeFi, smart contracts, and AI integration.**
+
+*Not affiliated with any DeFi protocol. Testnet only. Not financial advice.*

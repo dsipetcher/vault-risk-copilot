@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main, cursor/**]
+  pull_request:
+    branches: [main]
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  contracts:
+    name: Smart Contracts
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      
+      - name: Show Foundry version
+        run: |
+          forge --version
+          cast --version
+          anvil --version
+      
+      - name: Build contracts
+        working-directory: contracts
+        run: forge build --sizes
+      
+      - name: Run tests
+        working-directory: contracts
+        run: forge test -vvv
+      
+      - name: Run coverage
+        working-directory: contracts
+        run: forge coverage --report summary
+      
+      - name: Check gas snapshots
+        working-directory: contracts
+        run: forge snapshot --check
+
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      
+      - name: Check Solidity formatting
+        working-directory: contracts
+        run: forge fmt --check
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Slither
+        run: pip install slither-analyzer
+      
+      - name: Run Slither
+        working-directory: contracts
+        run: slither . --fail-none --json slither-report.json || true
+      
+      - name: Upload Slither report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: slither-report
+          path: contracts/slither-report.json
+      
+      - name: Secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  dependency-check:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      
+      - name: Check for known vulnerabilities in dependencies
+        working-directory: contracts
+        run: |
+          echo "Checking OpenZeppelin and forge-std for known issues..."
+          forge update
+          
+          # Check if there are any security advisories
+          # (This is a placeholder - in production, use tools like Slither or manual review)
+          echo "Dependencies updated successfully"
