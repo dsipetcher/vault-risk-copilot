@@ -418,16 +418,35 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
   } {
     const categoryLabel = input.risk_category.charAt(0).toUpperCase() + input.risk_category.slice(1);
 
+    // Generate one factor per non-null signal (deterministic)
+    const factors: Array<{ signal: string; value: string; explanation: string }> = [];
+    
+    const signalMap: Array<[keyof typeof input.breakdown, string]> = [
+      ['tvl_score', 'TVL Score'],
+      ['tvl_volatility_score', 'TVL Volatility'],
+      ['apy_volatility_score', 'APY Volatility'],
+      ['reward_ratio_score', 'Reward Ratio'],
+      ['stablecoin_score', 'Stablecoin'],
+      ['il_score', 'IL Risk'],
+      ['data_age_score', 'Data Age'],
+      ['vault_score', 'Vault Score'],
+    ];
+
+    for (const [key, label] of signalMap) {
+      const value = input.breakdown[key];
+      if (value !== null) {
+        factors.push({
+          signal: label,
+          value: `${value.toFixed(1)}/100`,
+          explanation: `Score indicates ${value < 40 ? 'lower' : value > 70 ? 'higher' : 'moderate'} risk for this signal.`,
+        });
+      }
+    }
+
     return {
       output: {
         summary: `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. Due to data processing limitations, detailed analysis is temporarily unavailable.`,
-        key_factors: [
-          {
-            signal: 'Risk Score',
-            value: `${input.total_risk_score.toFixed(1)}/100`,
-            explanation: 'Overall risk assessment based on multiple signals including liquidity and yield metrics.',
-          },
-        ],
+        key_factors: factors,
         disclaimer:
           'This risk assessment is for educational purposes only and does not constitute financial advice. DeFi protocols carry inherent risks. Always conduct your own research.',
       },
