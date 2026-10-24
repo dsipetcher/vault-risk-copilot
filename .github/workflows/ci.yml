@@ -219,6 +219,21 @@ jobs:
     name: API Service (Node.js)
     runs-on: ubuntu-latest
     
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -227,6 +242,10 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: packages/api/package-lock.json
+      
+      - name: Set up database schema
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
       
       - name: Install dependencies
         working-directory: packages/api
@@ -238,6 +257,8 @@ jobs:
       
       - name: Run unit tests
         working-directory: packages/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
         run: npm test
       
       - name: Build

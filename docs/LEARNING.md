@@ -1161,7 +1161,7 @@ pytest -m "unit and slow"   # Both markers
 
 **Answer:**
 **Security reasons:**
-1. **Liability:** Server storing user API keys = responsible for breaches, compliance (PCI-DSS, SOC2)
+1. **Liability:** Server storing user API keys = responsible for breaches and security incidents
 2. **Trust:** Users don't have to trust us with $$$-worth API keys
 3. **Cost control:** User controls their own LLM spend, no surprise bills
 4. **Privacy:** User's prompts/responses never touch our logs (only metadata)
@@ -1169,7 +1169,7 @@ pytest -m "unit and slow"   # Both markers
 **Why NOT store keys server-side:**
 - **Attack surface:** Encrypted keys at rest still require decryption keys somewhere
 - **Insider risk:** Admins with DB access could extract keys
-- **Regulatory:** GDPR Article 32 (security of processing), PCI DSS if keys have payment methods
+- **Regulatory complexity:** Additional security requirements and audit obligations
 - **Vendor lock-in:** Users can switch providers without migrating data
 
 **Trade-off:**
