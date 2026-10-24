@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getVaultState } from '../lib/viem.js';
 
 export async function vaultRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/vault/state', async (request, reply) => {
+  fastify.get('/api/vault/state', async (_request, reply) => {
     try {
       const state = await getVaultState();
       return state;

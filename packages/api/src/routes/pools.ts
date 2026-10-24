@@ -3,7 +3,7 @@ import { query } from '../lib/db.js';
 import type { Pool, PoolHistory } from '../types/index.js';
 
 export async function poolsRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/pools', async (request, reply) => {
+  fastify.get('/api/pools', async (_request, reply) => {
     try {
       const result = await query<any>(`
         SELECT DISTINCT ON (ps.pool_id)

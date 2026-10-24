@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { pool } from '../lib/db.js';
 
 export async function healthRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/health', async (request, reply) => {
+  fastify.get('/api/health', async (_request, reply) => {
     try {
       await pool.query('SELECT 1');
       return {

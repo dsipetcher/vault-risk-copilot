@@ -36,11 +36,11 @@ await fastify.register(poolsRoutes);
 await fastify.register(vaultRoutes);
 await fastify.register(riskRoutes);
 
-fastify.setErrorHandler((error, request, reply) => {
+fastify.setErrorHandler((error, _request, reply) => {
   fastify.log.error(error);
   reply.status(500).send({
     error: 'Internal Server Error',
-    message: NODE_ENV === 'development' ? error.message : undefined,
+    message: NODE_ENV === 'development' && error instanceof Error ? error.message : undefined,
   });
 });
 
