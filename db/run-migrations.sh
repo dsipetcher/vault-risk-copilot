@@ -58,7 +58,8 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
     echo "→ Applying migration $name..."
     
     # Check if migration contains its own BEGIN/COMMIT
-    if grep -qiE "^[[:space:]]*BEGIN" "$migration_file" || grep -qiE "^[[:space:]]*COMMIT" "$migration_file"; then
+    # Check for standalone BEGIN or COMMIT at start of line (with optional whitespace)
+    if grep -qi "^[[:blank:]]*BEGIN" "$migration_file" || grep -qi "^[[:blank:]]*COMMIT" "$migration_file"; then
       echo "✗ Migration $name contains BEGIN/COMMIT statements"
       echo "  Migrations should not include transaction control (runner wraps them)"
       exit 1

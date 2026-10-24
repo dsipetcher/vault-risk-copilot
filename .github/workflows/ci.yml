@@ -844,6 +844,8 @@ jobs:
             postgres:16-alpine
           
           timeout 30 bash -c 'until docker exec postgres-migration-test pg_isready -U postgres; do sleep 1; done'
+          # Extra validation: ensure postgres accepts connections
+          docker exec postgres-migration-test psql -U postgres -c "SELECT 1" > /dev/null
           echo "✅ Postgres is ready"
       
       - name: Set up schema_migrations table
@@ -903,6 +905,8 @@ jobs:
             postgres:16-alpine
           
           timeout 30 bash -c 'until docker exec postgres-upgrade-test pg_isready -U postgres; do sleep 1; done'
+          # Extra validation: ensure postgres accepts connections
+          docker exec postgres-upgrade-test psql -U postgres -c "SELECT 1" > /dev/null
           echo "✅ Postgres is ready"
       
       - name: Apply old migrations via initdb (simulating pre-PR volumes)
