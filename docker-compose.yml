@@ -1,0 +1,150 @@
+version: '3.9'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: vault-risk-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vault_risk_copilot}
+      POSTGRES_USER: ${POSTGRES_USER:-vault_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vault_pass_local}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vault_user} -d ${POSTGRES_DB:-vault_risk_copilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vault-network
+
+  # Risk service (Python FastAPI)
+  risk-service:
+    build:
+      context: ./packages/risk-service
+      dockerfile: Dockerfile
+    container_name: vault-risk-service
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${RISK_SERVICE_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vault-network
+    volumes:
+      - ./packages/risk-service:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Node.js API
+  api:
+    build:
+      context: ./packages/api
+      dockerfile: Dockerfile
+    container_name: vault-risk-api
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
+      RISK_SERVICE_URL: http://risk-service:8000
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      risk-service:
+        condition: service_started
+    networks:
+      - vault-network
+    volumes:
+      - ./packages/api:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev"]
+
+  # Collector service (TypeScript)
+  collector:
+    build:
+      context: ./packages/collector
+      dockerfile: Dockerfile
+    container_name: vault-risk-collector
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
+      RPC_URL: ${RPC_URL:-https://sepolia.infura.io/v3/YOUR_INFURA_KEY}
+      MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://eth.llamarpc.com}
+      DEFILLAMA_API_URL: ${DEFILLAMA_API_URL:-https://yields.llama.fi}
+      VAULT_ADDRESS: ${VAULT_ADDRESS}
+      COLLECTION_INTERVAL_MS: ${COLLECTION_INTERVAL_MS:-300000}
+      NODE_ENV: ${NODE_ENV:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vault-network
+    volumes:
+      - ./packages/collector:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev"]
+
+  # Frontend (React + Vite)
+  web:
+    build:
+      context: ./packages/web
+      dockerfile: Dockerfile
+      target: development
+    container_name: vault-risk-web
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_CHAIN_ID: ${VITE_CHAIN_ID:-11155111}
+      VITE_VAULT_ADDRESS: ${VAULT_ADDRESS}
+      VITE_USDC_ADDRESS: ${MOCK_USDC_ADDRESS}
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    depends_on:
+      - api
+    networks:
+      - vault-network
+    volumes:
+      - ./packages/web:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev", "--", "--host"]
+
+  # MCP server (TypeScript, read-only)
+  mcp:
+    build:
+      context: ./packages/mcp
+      dockerfile: Dockerfile
+    container_name: vault-risk-mcp
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
+      API_URL: http://api:3000
+      RPC_URL: ${RPC_URL:-https://sepolia.infura.io/v3/YOUR_INFURA_KEY}
+      VAULT_ADDRESS: ${VAULT_ADDRESS}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "${MCP_PORT:-3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    networks:
+      - vault-network
+    volumes:
+      - ./packages/mcp:/app
+      - /app/node_modules
+    command: ["npm", "start"]
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  vault-network:
+    driver: bridge

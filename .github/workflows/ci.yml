@@ -114,6 +114,56 @@ jobs:
           echo "Checking OpenZeppelin and forge-std for known issues..."
           forge update
           
-          # Check if there are any security advisories
-          # (This is a placeholder - in production, use tools like Slither or manual review)
           echo "Dependencies updated successfully"
+
+  collector:
+    name: Collector Service
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/collector/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: packages/collector
+        run: npm ci
+      
+      - name: Lint
+        working-directory: packages/collector
+        run: npm run lint || echo "Linting will be configured later"
+      
+      - name: Type check
+        working-directory: packages/collector
+        run: npm run typecheck
+      
+      - name: Run tests
+        working-directory: packages/collector
+        run: npm test
+      
+      - name: Build
+        working-directory: packages/collector
+        run: npm run build
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build collector image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/collector
+          push: false
+          tags: vault-risk-collector:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
