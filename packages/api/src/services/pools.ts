@@ -77,8 +77,21 @@ export async function getLatestPools(
     pool.query(dataQuery, [...params, limit, offset]),
   ]);
 
+  const pools = dataResult.rows.map((row: any) => ({
+    ...row,
+    tvl_usd: row.tvl_usd ? parseFloat(row.tvl_usd) : null,
+    tvl_change_7d_pct: row.tvl_change_7d_pct ? parseFloat(row.tvl_change_7d_pct) : null,
+    apy: row.apy ? parseFloat(row.apy) : null,
+    apy_base: row.apy_base ? parseFloat(row.apy_base) : null,
+    apy_reward: row.apy_reward ? parseFloat(row.apy_reward) : null,
+    apy_sigma: row.apy_sigma ? parseFloat(row.apy_sigma) : null,
+    apy_pct_7d: row.apy_pct_7d ? parseFloat(row.apy_pct_7d) : null,
+    il_risk: row.il_risk ? parseFloat(row.il_risk) : null,
+    total_risk_score: row.total_risk_score ? parseFloat(row.total_risk_score) : null,
+  })) as PoolWithRisk[];
+
   return {
-    pools: dataResult.rows as PoolWithRisk[],
+    pools,
     total: parseInt(countResult.rows[0].total, 10),
   };
 }
@@ -125,7 +138,36 @@ export async function getPoolById(poolId: string): Promise<(PoolSnapshot & { ris
   `;
 
   const result = await pool.query(query, [poolId]);
-  return result.rows[0] || null;
+  
+  if (!result.rows[0]) {
+    return null;
+  }
+
+  const row = result.rows[0];
+  
+  return {
+    ...row,
+    tvl_usd: row.tvl_usd ? parseFloat(row.tvl_usd) : null,
+    tvl_change_7d_pct: row.tvl_change_7d_pct ? parseFloat(row.tvl_change_7d_pct) : null,
+    apy: row.apy ? parseFloat(row.apy) : null,
+    apy_base: row.apy_base ? parseFloat(row.apy_base) : null,
+    apy_reward: row.apy_reward ? parseFloat(row.apy_reward) : null,
+    apy_sigma: row.apy_sigma ? parseFloat(row.apy_sigma) : null,
+    apy_pct_7d: row.apy_pct_7d ? parseFloat(row.apy_pct_7d) : null,
+    il_risk: row.il_risk ? parseFloat(row.il_risk) : null,
+    risk_score: row.risk_score ? {
+      ...row.risk_score,
+      total_risk_score: row.risk_score.total_risk_score ? parseFloat(row.risk_score.total_risk_score) : null,
+      tvl_score: row.risk_score.tvl_score ? parseFloat(row.risk_score.tvl_score) : null,
+      tvl_volatility_score: row.risk_score.tvl_volatility_score ? parseFloat(row.risk_score.tvl_volatility_score) : null,
+      apy_volatility_score: row.risk_score.apy_volatility_score ? parseFloat(row.risk_score.apy_volatility_score) : null,
+      reward_ratio_score: row.risk_score.reward_ratio_score ? parseFloat(row.risk_score.reward_ratio_score) : null,
+      stablecoin_score: row.risk_score.stablecoin_score ? parseFloat(row.risk_score.stablecoin_score) : null,
+      il_score: row.risk_score.il_score ? parseFloat(row.risk_score.il_score) : null,
+      data_age_score: row.risk_score.data_age_score ? parseFloat(row.risk_score.data_age_score) : null,
+      vault_score: row.risk_score.vault_score ? parseFloat(row.risk_score.vault_score) : null,
+    } : null,
+  };
 }
 
 export async function getPoolHistory(poolId: string, limit: number = 30): Promise<PoolSnapshot[]> {
@@ -138,5 +180,16 @@ export async function getPoolHistory(poolId: string, limit: number = 30): Promis
   `;
 
   const result = await pool.query(query, [poolId, limit]);
-  return result.rows as PoolSnapshot[];
+  
+  return result.rows.map((row: any) => ({
+    ...row,
+    tvl_usd: row.tvl_usd ? parseFloat(row.tvl_usd) : null,
+    tvl_change_7d_pct: row.tvl_change_7d_pct ? parseFloat(row.tvl_change_7d_pct) : null,
+    apy: row.apy ? parseFloat(row.apy) : null,
+    apy_base: row.apy_base ? parseFloat(row.apy_base) : null,
+    apy_reward: row.apy_reward ? parseFloat(row.apy_reward) : null,
+    apy_sigma: row.apy_sigma ? parseFloat(row.apy_sigma) : null,
+    apy_pct_7d: row.apy_pct_7d ? parseFloat(row.apy_pct_7d) : null,
+    il_risk: row.il_risk ? parseFloat(row.il_risk) : null,
+  })) as PoolSnapshot[];
 }
