@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { render } from '@testing-library/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { prepareChartData } from '@/utils/chartData';
 
@@ -91,15 +91,15 @@ describe('Risk Factor Chart Rendering', () => {
     expect(chartData.every(item => typeof item.value === 'number')).toBe(true);
   });
 
-  it('should convert string values to numbers correctly', () => {
-    // Test with string values (in case API returns strings)
+  it('should convert mixed numeric types correctly', () => {
+    // Test with numeric values (integers and floats)
     const mockRiskScore = {
-      tvl_score: 15.5 as any,
-      tvl_volatility_score: 20 as any,
+      tvl_score: 15.5,
+      tvl_volatility_score: 20,
       apy_volatility_score: null,
       reward_ratio_score: null,
       stablecoin_score: null,
-      il_score: 35.2 as any,
+      il_score: 35.2,
       data_age_score: null,
       vault_score: null,
     };

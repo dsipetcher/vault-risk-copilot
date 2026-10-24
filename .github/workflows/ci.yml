@@ -916,11 +916,11 @@ jobs:
       
       - name: Verify baseline detection and migration runner
         run: |
-          docker cp db/migrations postgres-upgrade-test:/migrations
+          docker cp db/migrations postgres-upgrade-test:/tmp/migrations
           docker cp db/run-migrations.sh postgres-upgrade-test:/run-migrations.sh
           
           # Run migration runner - should detect baseline and record 001+002
-          docker exec postgres-upgrade-test bash -c "cd / && DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' bash /run-migrations.sh"
+          docker exec postgres-upgrade-test bash -c "cd / && DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=/tmp/migrations bash /run-migrations.sh"
           
           # Verify 001 and 002 are recorded
           COUNT_001=$(docker exec postgres-upgrade-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
