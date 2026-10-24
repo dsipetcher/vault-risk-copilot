@@ -482,15 +482,17 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
       let hasIncreaseWording = false;
       
       if (numIndex !== -1) {
-        const contextStart = Math.max(0, numIndex - 30);
-        const contextEnd = Math.min(factorText.length, numIndex + numStr.length + 30);
+        const contextStart = Math.max(0, numIndex - 40);
+        const contextEnd = Math.min(factorText.length, numIndex + numStr.length + 40);
         const context = factorText.substring(contextStart, contextEnd);
         
         // Check direction words ONLY if they modify the metric itself (not 'higher risk')
-        // Explicitly exclude 'higher/lower risk/score' phrases
-        const hasRiskScorePhrase = /\b(higher|lower)\s+(risk|score)\b/i.test(context);
-        hasDecreaseWording = !hasRiskScorePhrase && /\b(drop(ped)?|decrease[ds]?|declin(e[ds]?|ing)|fell|negative|down|lower)\b/i.test(context);
-        hasIncreaseWording = !hasRiskScorePhrase && /\b(rose|increase[ds]?|inclin(e[ds]?|ing)|ris(e|ing)|up|gain(ed)?|grew|higher)\b/i.test(context);
+        // If context contains 'risk' or 'score', direction words might be describing risk level
+        const hasRiskOrScore = /\brisk\b/i.test(context) || /\bscore\b/i.test(context);
+        const hasDirectionToRisk = hasRiskOrScore && (/\b(higher|lower)\b/i.test(context));
+        
+        hasDecreaseWording = !hasDirectionToRisk && /\b(drop(ped)?|decrease[ds]?|declin(e[ds]?|ing)|fell|negative|down|lower)\b/i.test(context);
+        hasIncreaseWording = !hasDirectionToRisk && /\b(rose|increase[ds]?|inclin(e[ds]?|ing)|ris(e|ing)|up|gain(ed)?|grew|higher)\b/i.test(context);
       }
 
       let found = false;
