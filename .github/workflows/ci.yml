@@ -229,9 +229,9 @@ jobs:
       - name: Wait for collector to collect data
         id: wait_data
         run: |
-          echo "Waiting for collector to insert data (up to 5 minutes with 120s fetch timeout)..."
+          echo "Waiting for collector to insert data (up to 2 minutes)..."
           START_TIME=$(date +%s)
-          TIMEOUT=300
+          TIMEOUT=120
           
           while true; do
             CURRENT_TIME=$(date +%s)
@@ -239,8 +239,15 @@ jobs:
             
             if [ $ELAPSED -gt $TIMEOUT ]; then
               echo "❌ Timeout waiting for data collection after ${TIMEOUT}s"
-              echo "Collector logs:"
-              docker compose logs collector --tail 50
+              echo ""
+              echo "=== Container status ==="
+              docker compose ps -a
+              echo ""
+              echo "=== Collector inspect ==="
+              docker inspect vault-risk-collector --format='{{json .State}}' | jq
+              echo ""
+              echo "=== All services logs (no tail) ==="
+              docker compose logs --no-color
               exit 1
             fi
             
@@ -254,7 +261,7 @@ jobs:
               break
             fi
             
-            sleep 10
+            sleep 5
           done
       
       - name: Show collector logs on success
