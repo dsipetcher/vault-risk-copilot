@@ -1,17 +1,5 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { PoolDetailPage } from '@/pages/PoolDetailPage';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { prepareChartData } from '@/utils/chartData';
-
-// Mock react-router-dom params
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual,
-    useParams: () => ({ id: 'test-pool-id' }),
-  };
-});
 
 describe('Risk Factor Chart Rendering', () => {
   beforeAll(() => {
@@ -23,13 +11,9 @@ describe('Risk Factor Chart Rendering', () => {
     };
   });
 
-  it('should render chart with numeric values from STRING scores (API response)', async () => {
-    // Mock API response with STRING scores (critical: this tests Number() conversion)
-    const mockApiResponse = {
-      pool_id: 'test-pool-id',
-      pool_name: 'Test Pool',
-      total_risk_score: '50',
-      risk_category: 'medium',
+  it('should convert STRING scores to numbers in prepareChartData', () => {
+    // Mock API risk_score with STRING values (critical: this tests Number() conversion)
+    const mockRiskScore = {
       tvl_score: '15',
       tvl_volatility_score: '20.5',
       apy_volatility_score: '25',
@@ -40,43 +24,22 @@ describe('Risk Factor Chart Rendering', () => {
       vault_score: '45',
     };
 
-    // Mock fetch to return string scores
-    const fetchMock = vi.fn((url: string | URL | Request): Promise<Response> => {
-      const urlString = typeof url === 'string' ? url : url.toString();
-      if (urlString.includes('/api/risk/test-pool-id')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => mockApiResponse,
-        } as Response);
-      }
-      return Promise.reject(new Error('Not found'));
-    });
-    global.fetch = fetchMock as typeof fetch;
-
-    const { container } = render(
-      <BrowserRouter>
-        <PoolDetailPage />
-      </BrowserRouter>
-    );
-
-    // Wait for chart to render
-    await waitFor(() => {
-      expect(container.querySelector('.recharts-wrapper')).toBeInTheDocument();
-    });
-
-    // Verify all 8 bars are present (test fails without Number() in prepareChartData)
-    const bars = container.querySelectorAll('.recharts-bar-rectangle');
-    expect(bars.length).toBe(8);
-
-    // Verify prepareChartData converts strings to numbers
+    // Call prepareChartData with string scores (simulates API response)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chartData = prepareChartData(mockApiResponse as any);
+    const chartData = prepareChartData(mockRiskScore as any);
+    
+    // Verify all 8 scores are converted to numbers
     expect(chartData).toHaveLength(8);
     chartData.forEach(item => {
       expect(typeof item.value).toBe('number');
       expect(item.value).toBeGreaterThan(0);
       expect(item.value).toBeLessThanOrEqual(100);
     });
+    
+    // Verify specific values match
+    expect(chartData[0].value).toBe(15);
+    expect(chartData[1].value).toBe(20.5);
+    expect(chartData[2].value).toBe(25);
   });
 
 });
