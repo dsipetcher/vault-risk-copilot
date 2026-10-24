@@ -39,7 +39,7 @@ describe('PoolDetailPage Risk Factor Chart', () => {
       },
     };
 
-    (global.fetch as any).mockResolvedValueOnce({
+    (global.fetch as vi.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockPool,
     });
