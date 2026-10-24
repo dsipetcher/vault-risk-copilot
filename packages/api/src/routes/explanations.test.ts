@@ -37,7 +37,6 @@ describe('Explanations API Tests', () => {
     app = await build();
     
     // Create test fixture: insert a pool snapshot and risk score
-    const { pool } = await import('../database.js');
     const poolResult = await pool.query(`
       INSERT INTO pool_snapshots (
         pool_id, pool_name, snapshot_at, protocol, chain, tvl_usd, apy, il_risk, is_stablecoin, count, data_source
