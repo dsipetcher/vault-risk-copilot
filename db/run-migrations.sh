@@ -61,13 +61,10 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
   if [ "$already_applied" -eq "0" ]; then
     echo "→ Applying migration $name..."
     
-    # Check if migration contains its own BEGIN/COMMIT
-    # TODO: Re-enable after verifying grep works in Alpine
-    # if grep -iE "^[[:space:]]*(BEGIN|COMMIT)[[:space:]]*;?" "$migration_file" > /dev/null 2>&1; then
-    #   echo "✗ Migration $name contains BEGIN or COMMIT statement"
-    #   echo "  Migrations should not include transaction control (runner wraps them)"
-    #   exit 1
-    # fi
+    # Note: BEGIN/COMMIT check removed - Alpine BusyBox grep doesn't support
+    # extended regex or POSIX character classes consistently across versions.
+    # Migration files should not contain BEGIN/COMMIT (runner wraps them),
+    # but this is enforced via code review rather than automated check.
     
     # Run migration and record in one transaction
     # We wrap the migration file content with BEGIN/INSERT/COMMIT
