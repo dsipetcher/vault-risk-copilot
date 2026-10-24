@@ -528,6 +528,24 @@ jobs:
             exit 1
           fi
       
+      - name: Trigger risk score computation
+        run: |
+          echo "=== Triggering risk score recomputation ==="
+          RECOMPUTE_RESULT=$(curl -s -X POST http://localhost:8000/recompute \
+            -H "Content-Type: application/json" \
+            -d '{"pool_ids": null, "force": true}')
+          
+          echo "$RECOMPUTE_RESULT" | jq .
+          
+          COMPUTED=$(echo "$RECOMPUTE_RESULT" | jq -r '.computed')
+          echo "Computed risk scores for $COMPUTED pools"
+          
+          if [ "$COMPUTED" -eq 0 ]; then
+            echo "❌ No risk scores were computed"
+            exit 1
+          fi
+          echo "✅ Risk score computation succeeded"
+      
       - name: Test LLM explain endpoint
         run: |
           echo "=== Testing LLM explain endpoint with mock provider ==="
@@ -576,24 +594,6 @@ jobs:
           fi
           
           echo "✅ LLM explain endpoint validated successfully"
-      
-      - name: Trigger risk score computation
-        run: |
-          echo "=== Triggering risk score recomputation ==="
-          RECOMPUTE_RESULT=$(curl -s -X POST http://localhost:8000/recompute \
-            -H "Content-Type: application/json" \
-            -d '{"pool_ids": null, "force": true}')
-          
-          echo "$RECOMPUTE_RESULT" | jq .
-          
-          COMPUTED=$(echo "$RECOMPUTE_RESULT" | jq -r '.computed')
-          echo "Computed risk scores for $COMPUTED pools"
-          
-          if [ "$COMPUTED" -eq 0 ]; then
-            echo "❌ No risk scores were computed"
-            exit 1
-          fi
-          echo "✅ Risk score computation succeeded"
       
       - name: Verify risk_scores table
         run: |
