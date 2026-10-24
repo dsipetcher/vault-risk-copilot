@@ -328,49 +328,56 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
   }
 
   private validateNumberFidelity(input: RiskInput, output: ExplanationOutput): boolean {
-    const fullText = JSON.stringify(output);
-    
-    // Normalize K/M/B units: $0.5M -> 500000, $520K -> 520000
-    let normalizedText = fullText
-      .replace(/\$(\d+(?:\.\d+)?)([KMB])/gi, (match, num, unit) => {
-        const multipliers: Record<string, number> = { K: 1000, M: 1000000, B: 1000000000 };
-        return `$${parseFloat(num) * multipliers[unit.toUpperCase()]}`;
-      })
-      .replace(/\$(\d+),(\d+)/g, '$1$2');  // $520,000 -> $520000
-    
-    // Remove duration labels BEFORE extracting numbers (7d, 30d, "7 days")
-    normalizedText = normalizedText.replace(/\b\d+\s*d(?:ays?)?\b/gi, '');
-    
-    normalizedText = normalizedText
-      .replace(/\/100\b/g, '')  // Remove /100 scale
-      .replace(/-?\d+(?:\.\d+)?%/g, (match) => ` ${match.slice(0, -1)} `);  // Remove % but keep number
-    
-    // Match numbers with optional minus sign
-    const numberPattern = /-?\d+(?:\.\d+)?/g;
-    const numbersInOutput = normalizedText.match(numberPattern) || [];
+    // Per-field structured validation: each key_factor must reference its own signal's numbers
+    const signalMap: Record<string, number | null> = {
+      'TVL Score': input.breakdown.tvl_score,
+      'TVL Volatility': input.breakdown.tvl_volatility_score,
+      'APY Volatility': input.breakdown.apy_volatility_score,
+      'Reward Ratio': input.breakdown.reward_ratio_score,
+      'Stablecoin': input.breakdown.stablecoin_score,
+      'IL Risk': input.breakdown.il_score,
+      'Data Age': input.breakdown.data_age_score,
+      'Vault Score': input.breakdown.vault_score,
+    };
 
-    const inputNumbers = new Set<number>();
-    this.collectNumbers(input, inputNumbers);
+    // Map of which pool_metrics fields are relevant for each signal
+    const metricsForSignal: Record<string, Array<keyof typeof input.pool_metrics>> = {
+      'TVL Score': ['tvl_usd'],
+      'TVL Volatility': ['tvl_change_7d_pct', 'tvl_usd'],
+      'APY Volatility': ['apy', 'apy_base', 'apy_reward', 'apy_sigma'],
+      'Reward Ratio': ['apy_base', 'apy_reward'],
+      'Stablecoin': ['is_stablecoin'],
+      'IL Risk': ['il_risk'],
+      'Data Age': ['count'],
+      'Vault Score': [],
+    };
 
-    for (const numStr of numbersInOutput) {
-      const num = parseFloat(numStr);
-      if (isNaN(num)) continue;
+    for (const factor of output.key_factors) {
+      const signalValue = signalMap[factor.signal];
+      if (signalValue === undefined) {
+        console.warn(`[Number Fidelity] Unknown signal: ${factor.signal}`);
+        return false;
+      }
 
-      let found = false;
-      for (const inputNum of inputNumbers) {
-        // Direct match with tolerance
-        const tolerance = Math.abs(inputNum) * 0.02;
-        const diff = Math.abs(inputNum - num);
-        if (diff <= Math.max(tolerance, 0.01)) {
-          found = true;
-          break;
+      // Build allowed numbers for this specific factor
+      const allowedNumbers = new Set<number>();
+      
+      // Add the score itself
+      if (signalValue !== null) {
+        this.addNumberVariants(allowedNumbers, signalValue);
+      }
+
+      // Add relevant metrics
+      const relevantMetrics = metricsForSignal[factor.signal] || [];
+      for (const metricKey of relevantMetrics) {
+        const metricValue = input.pool_metrics[metricKey];
+        if (typeof metricValue === 'number') {
+          this.addNumberVariants(allowedNumbers, metricValue);
         }
       }
 
-      if (!found) {
-        // Always log for debugging validation failures
-        console.warn(`[Number Fidelity] Number ${num} not found in input. Input numbers:`, Array.from(inputNumbers).sort((a,b) => a-b));
-        console.warn(`[Number Fidelity] Output text sample:`, fullText.substring(0, 300));
+      // Validate factor explanation
+      if (!this.validateFactorNumbers(factor, allowedNumbers, input)) {
         return false;
       }
     }
@@ -378,26 +385,107 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
     return true;
   }
 
-  private collectNumbers(obj: unknown, numbers: Set<number>): void {
-    if (typeof obj === 'number') {
-      numbers.add(obj);
-      // Add common rounding variants
-      numbers.add(parseFloat(obj.toFixed(0)));
-      numbers.add(parseFloat(obj.toFixed(1)));
-      numbers.add(parseFloat(obj.toFixed(2)));
-      // Add absolute value for drop/decrease wording support
-      if (obj < 0) {
-        const abs = Math.abs(obj);
-        numbers.add(abs);
-        numbers.add(parseFloat(abs.toFixed(1)));
-        numbers.add(parseFloat(abs.toFixed(2)));
+  private validateFactorNumbers(
+    factor: { signal: string; value: string; explanation: string },
+    allowedNumbers: Set<number>,
+    input: RiskInput
+  ): boolean {
+    const factorText = `${factor.value} ${factor.explanation}`;
+    
+    // Normalize K/M/B units
+    let normalized = factorText
+      .replace(/\$(\d+(?:\.\d+)?)([KMB])/gi, (match, num, unit) => {
+        const multipliers: Record<string, number> = { K: 1000, M: 1000000, B: 1000000000 };
+        return `$${parseFloat(num) * multipliers[unit.toUpperCase()]}`;
+      })
+      .replace(/\$(\d+),(\d+)/g, '$1$2');
+
+    // Remove duration labels
+    normalized = normalized.replace(/\b\d+\s*d(?:ays?)?\b/gi, '');
+    normalized = normalized.replace(/\/100\b/g, '');
+    normalized = normalized.replace(/-?\d+(?:\.\d+)?%/g, (match) => ` ${match.slice(0, -1)} `);
+
+    // Extract numbers
+    const numberPattern = /-?\d+(?:\.\d+)?/g;
+    const numbersInFactor = normalized.match(numberPattern) || [];
+
+    // Check for increase/decrease wording
+    const hasDecreaseWording = /\b(drop(ped)?|decrease[ds]?|declin(e[ds]?|ing)|fell|negative|lower|down)\b/i.test(factorText);
+    const hasIncreaseWording = /\b(rose|increase[ds]?|inclin(e[ds]?|ing)|ris(e|ing)|higher|up|gain(ed)?|grew)\b/i.test(factorText);
+
+    for (const numStr of numbersInFactor) {
+      const num = parseFloat(numStr);
+      if (isNaN(num)) continue;
+
+      let found = false;
+      for (const allowedNum of allowedNumbers) {
+        const tolerance = Math.abs(allowedNum) * 0.02;
+        const diff = Math.abs(allowedNum - num);
+        
+        if (diff <= Math.max(tolerance, 0.01)) {
+          // Check sign consistency
+          const signMatches = (allowedNum < 0) === (num < 0);
+          
+          // If signs match exactly, allow it
+          if (signMatches) {
+            // But reject increase wording with negative numbers
+            if (allowedNum < 0 && hasIncreaseWording) {
+              console.warn(`[Number Fidelity] Factor '${factor.signal}' uses increase wording with negative input ${allowedNum}`);
+              return false;
+            }
+            found = true;
+            break;
+          }
+          
+          // If allowedNum is negative but num is positive (abs value case)
+          if (allowedNum < 0 && num > 0) {
+            // Only allow if there's decrease wording
+            if (hasDecreaseWording) {
+              found = true;
+              break;
+            }
+            // Reject increase wording with positive abs value of negative input
+            if (hasIncreaseWording) {
+              console.warn(`[Number Fidelity] Factor '${factor.signal}' uses increase wording (${num}) for negative input ${allowedNum}`);
+              return false;
+            }
+          }
+        }
       }
-    } else if (typeof obj === 'object' && obj !== null) {
-      for (const value of Object.values(obj)) {
-        this.collectNumbers(value, numbers);
+
+      if (!found) {
+        // Last chance: check if num is abs value of any negative allowedNum with decrease wording
+        if (num > 0 && hasDecreaseWording) {
+          for (const allowedNum of allowedNumbers) {
+            if (allowedNum < 0) {
+              const tolerance = Math.abs(allowedNum) * 0.02;
+              const diff = Math.abs(Math.abs(allowedNum) - num);
+              if (diff <= Math.max(tolerance, 0.01)) {
+                found = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (!found) {
+        console.warn(`[Number Fidelity] Factor '${factor.signal}' contains number ${num} not in allowed set:`, Array.from(allowedNumbers).sort((a,b) => a-b));
+        console.warn(`[Number Fidelity] Factor text:`, factorText);
+        return false;
       }
     }
+
+    return true;
   }
+
+  private addNumberVariants(numbers: Set<number>, value: number): void {
+    numbers.add(value);
+    numbers.add(parseFloat(value.toFixed(0)));
+    numbers.add(parseFloat(value.toFixed(1)));
+    numbers.add(parseFloat(value.toFixed(2)));
+  }
+
 
   private estimateCost(usage: { prompt_tokens: number; completion_tokens: number }): number {
     const promptCostPer1k = 0.01;

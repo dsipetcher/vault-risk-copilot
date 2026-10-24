@@ -14,8 +14,8 @@ describe('Number Fidelity Validation', () => {
     risk_category: 'medium',
     breakdown: {
       tvl_score: 95,
-      tvl_volatility_score: null,
-      apy_volatility_score: null,
+      tvl_volatility_score: 75,
+      apy_volatility_score: 60,
       reward_ratio_score: null,
       stablecoin_score: null,
       il_score: 0.05,
@@ -44,9 +44,9 @@ describe('Number Fidelity Validation', () => {
         explanation: 'High TVL of $520,000 indicates strong liquidity.',
       },
       {
-        signal: 'IL Score',
+        signal: 'IL Risk',
         value: '0.05',
-        explanation: 'Very low IL risk.',
+        explanation: 'Very low IL risk of 0.05.',
       },
     ],
     disclaimer: 'Educational only.',
@@ -62,9 +62,9 @@ describe('Number Fidelity Validation', () => {
       summary: 'TVL of $520,000.',
       key_factors: [
         {
-          signal: 'TVL',
+          signal: 'TVL Score',
           value: '$520,000',
-          explanation: 'Test',
+          explanation: 'TVL of $520,000 indicates strong liquidity.',
         },
       ],
       disclaimer: 'Test',
@@ -78,9 +78,9 @@ describe('Number Fidelity Validation', () => {
       summary: 'TVL score is high.',
       key_factors: [
         {
-          signal: 'TVL',
+          signal: 'TVL Score',
           value: '93.2/100',
-          explanation: 'Within tolerance of input value.',
+          explanation: 'TVL score 93.2 is within tolerance of input value 95.',
         },
       ],
       disclaimer: 'Test',
@@ -94,9 +94,9 @@ describe('Number Fidelity Validation', () => {
       summary: 'Change: -35.2%',
       key_factors: [
         {
-          signal: 'TVL Change',
+          signal: 'TVL Volatility',
           value: '-35.2%',
-          explanation: 'Test',
+          explanation: 'TVL change -35.2% shows decline.',
         },
       ],
       disclaimer: 'Test',
@@ -174,9 +174,9 @@ describe('Number Fidelity Validation', () => {
       summary: 'TVL of $0.52M.',
       key_factors: [
         {
-          signal: 'TVL',
+          signal: 'TVL Score',
           value: '$0.52M',
-          explanation: 'Test',
+          explanation: 'TVL of $0.52M indicates strong liquidity.',
         },
       ],
       disclaimer: 'Test',
@@ -190,9 +190,9 @@ describe('Number Fidelity Validation', () => {
       summary: 'TVL of $520K.',
       key_factors: [
         {
-          signal: 'TVL',
+          signal: 'TVL Score',
           value: '$520K',
-          explanation: 'Test',
+          explanation: 'TVL of $520K shows decent size.',
         },
       ],
       disclaimer: 'Test',
@@ -206,9 +206,9 @@ describe('Number Fidelity Validation', () => {
       summary: 'TVL dropped 35.2% in the last 7 days.',
       key_factors: [
         {
-          signal: 'TVL Change',
+          signal: 'TVL Volatility',
           value: '35.2%',
-          explanation: 'Significant decline indicating withdrawal pressure.',
+          explanation: 'TVL dropped 35.2% indicating withdrawal pressure.',
         },
       ],
       disclaimer: 'Test',
@@ -222,9 +222,9 @@ describe('Number Fidelity Validation', () => {
       summary: 'TVL decreased by 35.2%.',
       key_factors: [
         {
-          signal: 'TVL Change',
+          signal: 'TVL Volatility',
           value: '35.2%',
-          explanation: 'Negative trend.',
+          explanation: 'Decreased by 35.2% showing negative trend.',
         },
       ],
       disclaimer: 'Test',
@@ -233,19 +233,75 @@ describe('Number Fidelity Validation', () => {
     expect(result).toBe(true);
   });
 
-  it('REJECT: completely wrong number (42 vs -35.2)', () => {
+  it('REJECT: "TVL rose 35.2%" with negative input -35.2', () => {
     const output: ExplanationOutput = {
-      summary: 'TVL change is 42%.',
+      summary: 'TVL rose 35.2%.',
       key_factors: [
         {
-          signal: 'TVL Change',
-          value: '42%',
-          explanation: 'This is completely hallucinated!',
+          signal: 'TVL Volatility',
+          value: '35.2%',
+          explanation: 'TVL rose 35.2% showing growth.',
         },
       ],
       disclaimer: 'Test',
     };
     const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(false);
+  });
+
+  it('REJECT: APY volatility 88 (real 95) - wrong field number', () => {
+    const output: ExplanationOutput = {
+      summary: 'Test',
+      key_factors: [
+        {
+          signal: 'APY Volatility',
+          value: '88/100',
+          explanation: 'APY volatility score is 88.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(false);
+  });
+
+  it('REJECT: Vault score 92 (real 75) - hallucinated number', () => {
+    const inputWith75 = {
+      ...baseInput,
+      breakdown: { ...baseInput.breakdown, vault_score: 75 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Test',
+      key_factors: [
+        {
+          signal: 'Vault Score',
+          value: '92/100',
+          explanation: 'Vault score is 92.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    expect(result).toBe(false);
+  });
+
+  it('REJECT: $510K vs input 500K (2% tolerance = 10K, so 510K fails)', () => {
+    const inputWith500K = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 500000 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Test',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$511K',
+          explanation: 'TVL is $511K.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(inputWith500K, output);
     expect(result).toBe(false);
   });
 });
