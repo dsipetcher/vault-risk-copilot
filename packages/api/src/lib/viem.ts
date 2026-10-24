@@ -1,12 +1,12 @@
-import { createPublicClient, http, parseAbi } from 'viem';
+import { createPublicClient, http, parseAbi, type PublicClient, type Chain } from 'viem';
 import { sepolia, foundry } from 'viem/chains';
 
 const RPC_URL = process.env.RPC_URL || process.env.SEPOLIA_RPC_URL;
 const VAULT_ADDRESS = (process.env.VAULT_ADDRESS || '') as `0x${string}`;
 
-const chain = RPC_URL?.includes('sepolia') || RPC_URL?.includes('11155111') ? sepolia : foundry;
+const chain: Chain = RPC_URL?.includes('sepolia') || RPC_URL?.includes('11155111') ? sepolia : foundry;
 
-export const publicClient = createPublicClient({
+export const publicClient: PublicClient = createPublicClient({
   chain,
   transport: http(RPC_URL),
 });

@@ -34,7 +34,7 @@ export function PoolDetailPage() {
     return <ErrorMessage message="Pool not found" />;
   }
 
-  const riskScore = (pool as any).risk_score;
+  const riskScore = (pool as Pool & { risk_score?: PoolRiskScore }).risk_score;
 
   return (
     <div className="space-y-6">
