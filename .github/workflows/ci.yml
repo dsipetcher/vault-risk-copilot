@@ -831,26 +831,28 @@ jobs:
     name: Migration Error Handling
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
       - uses: actions/checkout@v4
       
-      - name: Start test postgres
-        run: |
-          docker run -d --name postgres-migration-test \
-            -e POSTGRES_USER=postgres \
-            -e POSTGRES_PASSWORD=postgres \
-            -e POSTGRES_DB=vault_risk \
-            -p 5433:5432 \
-            postgres:16-alpine
-          
-          timeout 30 bash -c 'until docker exec postgres-migration-test pg_isready -U postgres; do sleep 1; done'
-          # Extra validation: ensure postgres accepts connections
-          docker exec postgres-migration-test psql -U postgres -c "SELECT 1" > /dev/null
-          echo "✅ Postgres is ready"
-      
       - name: Set up schema_migrations table
         run: |
-          docker exec postgres-migration-test psql -U postgres -d vault_risk -c "
+          PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d vault_risk -c "
             CREATE TABLE IF NOT EXISTS schema_migrations (
               version INTEGER PRIMARY KEY,
               applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -860,14 +862,12 @@ jobs:
       
       - name: Test broken migration fails correctly
         run: |
-          docker cp db/run-migrations.sh postgres-migration-test:/tmp/run-migrations.sh
-          docker cp db/migrations/999_test_broken.sql.disabled postgres-migration-test:/tmp/999_test_broken.sql
+          # Copy broken migration to test directory
+          mkdir -p /tmp/test-migrations
+          cp db/migrations/999_test_broken.sql.disabled /tmp/test-migrations/999_test_broken.sql
           
-          # Enable the broken migration
-          docker exec postgres-migration-test bash -c "mkdir -p /tmp/migrations && cp /tmp/999_test_broken.sql /tmp/migrations/"
-          
-          # This MUST fail (note: inside container, postgres is at localhost:5432)
-          if docker exec postgres-migration-test bash -c "cd /tmp && DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=/tmp/migrations bash /tmp/run-migrations.sh"; then
+          # This MUST fail (runner connects to service container via localhost:5433)
+          if DATABASE_URL='postgresql://postgres:postgres@localhost:5433/vault_risk' MIGRATIONS_DIR=/tmp/test-migrations bash db/run-migrations.sh; then
             echo "ERROR: Broken migration should have failed but succeeded!"
             exit 1
           else
@@ -875,7 +875,7 @@ jobs:
           fi
           
           # Verify schema_migrations table doesn't have the broken entry
-          COUNT=$(docker exec postgres-migration-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 999")
+          COUNT=$(PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 999")
           if [ "$COUNT" != "0" ]; then
             echo "ERROR: Broken migration was marked as applied!"
             exit 1
@@ -892,44 +892,41 @@ jobs:
     name: Migration Upgrade Path
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Start test postgres
-        run: |
-          docker run -d --name postgres-upgrade-test \
-            -e POSTGRES_USER=postgres \
-            -e POSTGRES_PASSWORD=postgres \
-            -e POSTGRES_DB=vault_risk \
-            -p 5434:5432 \
-            postgres:16-alpine
-          
-          timeout 30 bash -c 'until docker exec postgres-upgrade-test pg_isready -U postgres; do sleep 1; done'
-          # Extra validation: ensure postgres accepts connections
-          docker exec postgres-upgrade-test psql -U postgres -c "SELECT 1" > /dev/null
-          echo "✅ Postgres is ready"
       
       - name: Apply old migrations via initdb (simulating pre-PR volumes)
         run: |
           # Simulate old deployment: 001 and 002 applied, no schema_migrations table
-          docker cp db/migrations/001_initial_schema.sql postgres-upgrade-test:/tmp/001.sql
-          docker cp db/migrations/002_fix_explanation_cache_key.sql postgres-upgrade-test:/tmp/002.sql
-          docker exec postgres-upgrade-test psql -U postgres -d vault_risk -f /tmp/001.sql
-          docker exec postgres-upgrade-test psql -U postgres -d vault_risk -f /tmp/002.sql
+          PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+          PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -f db/migrations/002_fix_explanation_cache_key.sql
           echo "✓ Old migrations applied (simulating pre-PR state)"
       
       - name: Verify baseline detection and migration runner
         run: |
-          docker cp db/migrations postgres-upgrade-test:/tmp/migrations
-          docker cp db/run-migrations.sh postgres-upgrade-test:/run-migrations.sh
-          
           # Run migration runner - should detect baseline and record 001+002
-          docker exec postgres-upgrade-test bash -c "cd / && DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=/tmp/migrations bash /run-migrations.sh"
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5434/vault_risk' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh
           
           # Verify 001 and 002 are recorded
-          COUNT_001=$(docker exec postgres-upgrade-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
-          COUNT_002=$(docker exec postgres-upgrade-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
-          COUNT_003=$(docker exec postgres-upgrade-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 3")
+          COUNT_001=$(PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
+          COUNT_002=$(PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
+          COUNT_003=$(PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 3")
           
           if [ "$COUNT_001" != "1" ] || [ "$COUNT_002" != "1" ]; then
             echo "ERROR: Baseline migrations not recorded correctly!"
@@ -942,9 +939,61 @@ jobs:
           fi
           
           echo "✓ Upgrade path works: baseline recorded, new migration applied"
+  
+  migration-partial-schema:
+    name: Migration Partial Schema (001 only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
       
-      - name: Cleanup
-        if: always()
+      - name: Apply only 001 (simulating partial deployment)
         run: |
-          docker stop postgres-upgrade-test || true
-          docker rm postgres-upgrade-test || true
+          # Apply only migration 001, NOT 002 (partial schema)
+          PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+          echo "✓ Migration 001 applied (partial schema)"
+      
+      - name: Verify migration 002 actually executes
+        run: |
+          # Run migration runner - should detect 001 baseline, then EXECUTE 002
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5435/vault_risk' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh
+          
+          # Verify 001 is recorded as baseline
+          COUNT_001=$(PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
+          
+          # Verify 002 is recorded AND provider column exists
+          COUNT_002=$(PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
+          PROVIDER_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'explanations' AND column_name = 'provider')")
+          
+          if [ "$COUNT_001" != "1" ]; then
+            echo "ERROR: Migration 001 baseline not recorded!"
+            exit 1
+          fi
+          
+          if [ "$COUNT_002" != "1" ]; then
+            echo "ERROR: Migration 002 not recorded!"
+            exit 1
+          fi
+          
+          if [ "$(echo $PROVIDER_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: provider column does not exist - migration 002 did not execute!"
+            exit 1
+          fi
+          
+          echo "✓ Partial schema test passed: 001 baseline, 002 executed with provider column"

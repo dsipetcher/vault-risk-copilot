@@ -20,22 +20,49 @@ SQL
 
 echo "✓ Schema migrations table ready"
 
-# Baseline check: if schema exists but no migrations recorded, record already-applied ones
+# Baseline check: if schema exists but no migrations recorded, verify actual objects before recording
 RECORDED_COUNT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT COUNT(*) FROM schema_migrations" 2>/dev/null || echo "0")
-TABLE_EXISTS=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'pool_snapshots')" 2>/dev/null || echo "f")
-
-# Trim whitespace from psql output
 RECORDED_COUNT=$(echo "$RECORDED_COUNT" | tr -d '[:space:]')
-TABLE_EXISTS=$(echo "$TABLE_EXISTS" | tr -d '[:space:]')
 
-if [ "$RECORDED_COUNT" = "0" ] && [ "$TABLE_EXISTS" = "t" ]; then
-  echo "⚠ Detected existing schema with no recorded migrations (upgrade path)"
-  # Record 001 and 002 as baseline (they were applied by old initdb or docker-entrypoint)
-  psql "$DB_URL" -v ON_ERROR_STOP=1 <<SQL
-INSERT INTO schema_migrations (version, name, applied_at) VALUES (1, '001_initial_schema', NOW());
-INSERT INTO schema_migrations (version, name, applied_at) VALUES (2, '002_fix_explanation_cache_key', NOW());
-SQL
-  echo "✓ Recorded baseline migrations (001, 002)"
+if [ "$RECORDED_COUNT" = "0" ]; then
+  # Check if 001 objects exist (pool_snapshots table and its indexes)
+  HAS_001=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "
+    SELECT EXISTS (
+      SELECT FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'pool_snapshots'
+    ) AND EXISTS (
+      SELECT FROM pg_indexes 
+      WHERE schemaname = 'public' AND tablename = 'pool_snapshots' AND indexname = 'idx_pool_snapshots_pool_id'
+    );
+  " 2>/dev/null || echo "f")
+  HAS_001=$(echo "$HAS_001" | tr -d '[:space:]')
+  
+  # Check if 002 objects exist (provider column and unique constraint)
+  HAS_002=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "
+    SELECT EXISTS (
+      SELECT FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'explanations' AND column_name = 'provider'
+    ) AND EXISTS (
+      SELECT FROM pg_constraint 
+      WHERE conname = 'explanations_unique_per_risk_provider_model'
+    );
+  " 2>/dev/null || echo "f")
+  HAS_002=$(echo "$HAS_002" | tr -d '[:space:]')
+  
+  if [ "$HAS_001" = "t" ] || [ "$HAS_002" = "t" ]; then
+    echo "⚠ Detected existing schema with no recorded migrations (upgrade path)"
+    
+    # Only record migrations whose objects actually exist
+    if [ "$HAS_001" = "t" ]; then
+      psql "$DB_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (version, name, applied_at) VALUES (1, '001_initial_schema', NOW());"
+      echo "✓ Recorded baseline: 001_initial_schema (objects verified)"
+    fi
+    
+    if [ "$HAS_002" = "t" ]; then
+      psql "$DB_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (version, name, applied_at) VALUES (2, '002_fix_explanation_cache_key', NOW());"
+      echo "✓ Recorded baseline: 002_fix_explanation_cache_key (objects verified)"
+    fi
+  fi
 fi
 
 # Detect migrations directory (local or copied to /tmp)

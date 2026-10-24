@@ -19,19 +19,7 @@ describe('Explanations API Tests', () => {
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     process.env.LLM_PROVIDER = 'mock';
     
-    // Clean database before migrations (test environment only)
-    // Drop tables to force migrations to run fresh (not baseline)
-    const { pool } = await import('../database.js');
-    try {
-      await pool.query('DROP TABLE IF EXISTS schema_migrations CASCADE');
-      await pool.query('DROP TABLE IF EXISTS explanations CASCADE');
-      await pool.query('DROP TABLE IF EXISTS risk_scores CASCADE');
-      await pool.query('DROP TABLE IF EXISTS pool_snapshots CASCADE');
-    } catch (err) {
-      // Ignore errors (e.g. permission issues in some environments)
-    }
-    
-    // Run migrations before tests
+    // Run migrations before tests (CI provides fresh postgres via services)
     const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
     const migrationsDir = resolve(workspaceRoot, 'db/migrations');
     execSync(`bash ${migrationsScript}`, {
@@ -40,6 +28,9 @@ describe('Explanations API Tests', () => {
     });
     
     app = await build();
+    
+    // Create test fixture: insert a pool snapshot and risk score
+    const { pool } = await import('../database.js');
     
     // Create test fixture: insert a pool snapshot and risk score
     const poolResult = await pool.query(`

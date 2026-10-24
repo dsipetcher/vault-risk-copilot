@@ -17,18 +17,7 @@ describe('Pools Integration Tests', () => {
       process.env.DATABASE_URL ||
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     
-    // Clean database before migrations (test environment only)
-    // Drop tables to force migrations to run fresh (not baseline)
-    try {
-      await pool.query('DROP TABLE IF EXISTS schema_migrations CASCADE');
-      await pool.query('DROP TABLE IF EXISTS explanations CASCADE');
-      await pool.query('DROP TABLE IF EXISTS risk_scores CASCADE');
-      await pool.query('DROP TABLE IF EXISTS pool_snapshots CASCADE');
-    } catch (err) {
-      // Ignore errors (e.g. permission issues in some environments)
-    }
-    
-    // Run migrations before tests
+    // Run migrations before tests (CI provides fresh postgres via services)
     const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
     const migrationsDir = resolve(workspaceRoot, 'db/migrations');
     execSync(`bash ${migrationsScript}`, {
