@@ -43,7 +43,7 @@ describe('MockProvider', () => {
     expect(result.metadata.latencyMs).toBeGreaterThanOrEqual(0);
 
     const parsed = explanationOutputSchema.parse(result.output);
-    expect(parsed.summary).toContain('Test Pool');
+    expect(parsed.summary).toContain('test-protocol');
     expect(parsed.key_factors.length).toBeGreaterThan(0);
     expect(parsed.disclaimer).toContain('educational purposes');
   });
