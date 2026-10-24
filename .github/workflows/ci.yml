@@ -421,6 +421,12 @@ jobs:
       - name: Start services
         run: docker compose up -d --build
       
+      - name: Check migrate service logs
+        if: always()
+        run: |
+          echo "=== Migrate service logs ==="
+          docker compose logs migrate || echo "No migrate logs available"
+      
       - name: Wait for postgres to be healthy
         run: |
           echo "Waiting for postgres to be healthy..."
