@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, cursor/**]
+    branches: [main]
   pull_request:
     branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   FOUNDRY_PROFILE: ci
@@ -13,6 +17,7 @@ jobs:
   contracts:
     name: Smart Contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +54,7 @@ jobs:
   lint:
     name: Lint & Format Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +69,7 @@ jobs:
   security:
     name: Security Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +106,7 @@ jobs:
   dependency-check:
     name: Dependency Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -119,6 +127,7 @@ jobs:
   collector:
     name: Collector Service
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -152,6 +161,7 @@ jobs:
   risk-service:
     name: Risk Service (Python)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     services:
       postgres:
@@ -218,6 +228,7 @@ jobs:
   api:
     name: API Service (Node.js)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -247,6 +258,7 @@ jobs:
   web:
     name: Web Frontend (React)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -283,6 +295,7 @@ jobs:
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     steps:
       - uses: actions/checkout@v4
@@ -296,8 +309,8 @@ jobs:
           context: ./packages/collector
           push: false
           tags: vault-risk-collector:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=collector
+          cache-to: type=gha,scope=collector,mode=max
       
       - name: Build risk-service image
         uses: docker/build-push-action@v5
@@ -305,8 +318,8 @@ jobs:
           context: ./packages/risk-service
           push: false
           tags: vault-risk-service:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=risk-service
+          cache-to: type=gha,scope=risk-service,mode=max
       
       - name: Build api image
         uses: docker/build-push-action@v5
@@ -314,8 +327,8 @@ jobs:
           context: ./packages/api
           push: false
           tags: vault-risk-api:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
       
       - name: Build web image
         uses: docker/build-push-action@v5
@@ -326,12 +339,13 @@ jobs:
           build-args: |
             VITE_API_URL=http://localhost:3000
             VITE_CHAIN_ID=31337
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
 
   compose-smoke-test:
     name: Compose Smoke Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -606,6 +620,7 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
