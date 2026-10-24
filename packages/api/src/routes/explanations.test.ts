@@ -19,6 +19,13 @@ describe('Explanations API Tests', () => {
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     process.env.LLM_PROVIDER = 'mock';
     
+    // Clean database before migrations (test environment only)
+    const { pool } = await import('../database.js');
+    await pool.query('DROP SCHEMA public CASCADE');
+    await pool.query('CREATE SCHEMA public');
+    await pool.query('GRANT ALL ON SCHEMA public TO postgres');
+    await pool.query('GRANT ALL ON SCHEMA public TO public');
+    
     // Run migrations before tests
     const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
     const migrationsDir = resolve(workspaceRoot, 'db/migrations');
