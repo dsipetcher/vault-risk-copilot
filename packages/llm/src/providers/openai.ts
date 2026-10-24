@@ -102,7 +102,7 @@ export class OpenAIProvider implements LLMProvider {
             continue;
           }
           console.error('[LLM Factor Count Mismatch]', {
-            provider: 'openai',
+            provider: new URL(this.baseUrl).hostname,
             model: this.model,
             expected: nonNullSignals,
             got: parsed.key_factors.length,
@@ -151,10 +151,11 @@ export class OpenAIProvider implements LLMProvider {
 
     const latencyMs = Date.now() - startTime;
     const sanitizedReason = this.sanitizeFallbackReason(lastError);
+    const providerHost = new URL(this.baseUrl).hostname;
     
     // Log full error server-side with key redacted
     console.error('[LLM Provider Error]', {
-      provider: 'openai',
+      provider: providerHost,
       model: this.model,
       error: lastError?.message,
       sanitizedReason,
@@ -281,14 +282,23 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
 
     if (!response.ok) {
       const errorText = await response.text();
+      const providerHost = new URL(this.baseUrl).hostname;
       
       // On 429, honor retry-after header
       if (response.status === 429) {
         const retryAfter = response.headers.get('retry-after');
         if (retryAfter) {
-          const waitMs = parseInt(retryAfter, 10) * 1000; // retry-after is in seconds
+          const waitSec = parseInt(retryAfter, 10);
+          const waitMs = waitSec * 1000;
+          
+          // Fail fast if retry-after > 3 seconds
+          if (!isNaN(waitSec) && waitSec > 3) {
+            console.warn(`[Rate Limited] Provider ${providerHost} requires ${waitSec}s wait, failing fast with rate_limited fallback`);
+            throw new Error('Rate limit exceeded (retry-after too long)');
+          }
+          
           if (!isNaN(waitMs) && waitMs > 0 && waitMs < 60000) {
-            console.warn(`[Rate Limited] Waiting ${waitMs}ms before retry`);
+            console.warn(`[Rate Limited] Provider ${providerHost} waiting ${waitMs}ms before retry`);
             await new Promise(resolve => setTimeout(resolve, waitMs));
             
             // Retry once after waiting
@@ -303,7 +313,7 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
             
             if (!retryResponse.ok) {
               const retryErrorText = await retryResponse.text();
-              throw new Error(`OpenAI API error (after retry): ${retryResponse.status} ${retryErrorText}`);
+              throw new Error(`${providerHost} API error (after retry): ${retryResponse.status} ${retryErrorText}`);
             }
             
             return (await retryResponse.json()) as OpenAIChatCompletionResponse;
@@ -311,7 +321,7 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
         }
       }
       
-      throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+      throw new Error(`${providerHost} API error: ${response.status} ${errorText}`);
     }
 
     return (await response.json()) as OpenAIChatCompletionResponse;
