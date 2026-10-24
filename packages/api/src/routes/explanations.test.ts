@@ -2,6 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { build } from '../index.js';
 import type { FastifyInstance } from 'fastify';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const workspaceRoot = resolve(__dirname, '../../../..');
 
 describe('Explanations API Tests', () => {
   let app: FastifyInstance;
@@ -14,9 +20,10 @@ describe('Explanations API Tests', () => {
     process.env.LLM_PROVIDER = 'mock';
     
     // Run migrations before tests
-    execSync('bash ../../../db/run-migrations.sh', {
-      cwd: __dirname,
-      env: { ...process.env, MIGRATIONS_DIR: '../../../db/migrations' },
+    const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
+    const migrationsDir = resolve(workspaceRoot, 'db/migrations');
+    execSync(`bash ${migrationsScript}`, {
+      env: { ...process.env, MIGRATIONS_DIR: migrationsDir },
       stdio: 'inherit',
     });
     

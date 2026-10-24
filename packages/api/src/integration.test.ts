@@ -2,6 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { pool } from './database.js';
 import { getLatestPools } from './services/pools.js';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const workspaceRoot = resolve(__dirname, '../../..');
 
 describe('Pools Integration Tests', () => {
   beforeAll(async () => {
@@ -12,9 +18,10 @@ describe('Pools Integration Tests', () => {
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     
     // Run migrations before tests
-    execSync('bash ../../db/run-migrations.sh', {
-      cwd: __dirname,
-      env: { ...process.env, MIGRATIONS_DIR: '../../db/migrations' },
+    const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
+    const migrationsDir = resolve(workspaceRoot, 'db/migrations');
+    execSync(`bash ${migrationsScript}`, {
+      env: { ...process.env, MIGRATIONS_DIR: migrationsDir },
       stdio: 'inherit',
     });
     
