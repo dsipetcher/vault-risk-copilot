@@ -9,6 +9,8 @@ import { healthRoutes } from './routes/health.js';
 import { poolsRoutes } from './routes/pools.js';
 import { vaultRoutes } from './routes/vault.js';
 import { riskRoutes } from './routes/risk.js';
+import { explanationsRoutes } from './routes/explanations.js';
+import { redactApiKey } from '@vault-risk-copilot/llm';
 
 const app = Fastify({
   logger: {
@@ -24,11 +26,48 @@ const app = Fastify({
           }
         : undefined,
   },
+  disableRequestLogging: false,
 });
 
-// Security middleware
+app.addHook('onRequest', async (request) => {
+  const apiKey = request.headers['x-llm-api-key'];
+  if (apiKey) {
+    (request.headers as any)['x-llm-api-key'] = redactApiKey(apiKey as string);
+  }
+});
+
+app.addHook('onResponse', async (request, reply) => {
+  const apiKey = request.raw.headers['x-llm-api-key'];
+  if (apiKey) {
+    request.log.info(
+      {
+        req: {
+          method: request.method,
+          url: request.url,
+          headers: {
+            ...request.headers,
+            'x-llm-api-key': redactApiKey(apiKey as string),
+          },
+        },
+        res: {
+          statusCode: reply.statusCode,
+        },
+      },
+      'Request completed'
+    );
+  }
+});
+
+app.setErrorHandler((error, request, reply) => {
+  const errorMessage = error.message.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]');
+  request.log.error({ ...error, message: errorMessage }, 'Request error');
+  reply.status(error.statusCode || 500).send({
+    error: errorMessage,
+  });
+});
+
 await app.register(helmet, {
-  contentSecurityPolicy: false, // Disable for API
+  contentSecurityPolicy: false,
 });
 
 await app.register(cors, {
@@ -41,7 +80,6 @@ await app.register(rateLimit, {
   timeWindow: env.RATE_LIMIT_WINDOW,
 });
 
-// OpenAPI documentation
 await app.register(apiReference, {
   routePrefix: '/docs',
   configuration: {
@@ -64,13 +102,12 @@ await app.register(apiReference, {
   },
 });
 
-// Register routes
 await app.register(healthRoutes, { prefix: '/api' });
 await app.register(poolsRoutes, { prefix: '/api' });
 await app.register(vaultRoutes, { prefix: '/api' });
 await app.register(riskRoutes, { prefix: '/api' });
+await app.register(explanationsRoutes, { prefix: '/api' });
 
-// Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 signals.forEach((signal) => {
   process.on(signal, async () => {
@@ -81,7 +118,6 @@ signals.forEach((signal) => {
   });
 });
 
-// Start server
 async function start() {
   try {
     await app.listen({ port: env.PORT, host: env.HOST });
