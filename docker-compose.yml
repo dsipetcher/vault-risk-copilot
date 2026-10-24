@@ -104,24 +104,31 @@ services:
       retries: 3
       start_period: 10s
 
-  # # Frontend (React + Vite) - Phase 4
-  # web:
-  #   profiles: ["full"]
-  #   build:
-  #     context: ./packages/web
-  #     dockerfile: Dockerfile
-  #   container_name: vault-risk-web
-  #   environment:
-  #     VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-  #     VITE_CHAIN_ID: ${VITE_CHAIN_ID:-11155111}
-  #     VITE_VAULT_ADDRESS: ${VAULT_ADDRESS}
-  #     VITE_USDC_ADDRESS: ${MOCK_USDC_ADDRESS}
-  #   ports:
-  #     - "${WEB_PORT:-5173}:5173"
-  #   depends_on:
-  #     - api
-  #   networks:
-  #     - vault-network
+  # Frontend (React + Vite) - Phase 4-5
+  web:
+    build:
+      context: ./packages/web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_CHAIN_ID: ${VITE_CHAIN_ID:-11155111}
+        VITE_VAULT_ADDRESS: ${VAULT_ADDRESS:-}
+        VITE_USDC_ADDRESS: ${MOCK_USDC_ADDRESS:-}
+    container_name: vault-risk-web
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - vault-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # # MCP server (TypeScript, read-only) - Phase 5
   # mcp:

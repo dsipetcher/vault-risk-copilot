@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, cursor/**]
+    branches: [main]
   pull_request:
     branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   FOUNDRY_PROFILE: ci
@@ -13,6 +17,7 @@ jobs:
   contracts:
     name: Smart Contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +54,7 @@ jobs:
   lint:
     name: Lint & Format Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +69,7 @@ jobs:
   security:
     name: Security Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +106,7 @@ jobs:
   dependency-check:
     name: Dependency Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -119,6 +127,7 @@ jobs:
   collector:
     name: Collector Service
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -152,6 +161,7 @@ jobs:
   risk-service:
     name: Risk Service (Python)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     services:
       postgres:
@@ -218,6 +228,7 @@ jobs:
   api:
     name: API Service (Node.js)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -244,9 +255,47 @@ jobs:
         working-directory: packages/api
         run: npm run build
 
+  web:
+    name: Web Frontend (React)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/web/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: packages/web
+        run: npm ci
+      
+      - name: Lint
+        working-directory: packages/web
+        run: npm run lint
+      
+      - name: Type check
+        working-directory: packages/web
+        run: npm run typecheck
+      
+      - name: Run tests
+        working-directory: packages/web
+        run: npm test
+      
+      - name: Build
+        working-directory: packages/web
+        env:
+          VITE_API_URL: http://localhost:3000
+          VITE_CHAIN_ID: 31337
+        run: npm run build
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     steps:
       - uses: actions/checkout@v4
@@ -260,8 +309,8 @@ jobs:
           context: ./packages/collector
           push: false
           tags: vault-risk-collector:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=collector
+          cache-to: type=gha,scope=collector,mode=max
       
       - name: Build risk-service image
         uses: docker/build-push-action@v5
@@ -269,8 +318,8 @@ jobs:
           context: ./packages/risk-service
           push: false
           tags: vault-risk-service:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=risk-service
+          cache-to: type=gha,scope=risk-service,mode=max
       
       - name: Build api image
         uses: docker/build-push-action@v5
@@ -278,12 +327,25 @@ jobs:
           context: ./packages/api
           push: false
           tags: vault-risk-api:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      
+      - name: Build web image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/web
+          push: false
+          tags: vault-risk-web:latest
+          build-args: |
+            VITE_API_URL=http://localhost:3000
+            VITE_CHAIN_ID=31337
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
 
   compose-smoke-test:
     name: Compose Smoke Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -465,6 +527,34 @@ jobs:
             exit 1
           fi
       
+      - name: Wait for web to be ready
+        run: |
+          echo "Waiting for web to be ready (up to 60 seconds)..."
+          timeout 60 bash -c 'until curl -sf http://localhost:5173 > /dev/null; do sleep 2; done'
+          echo "✅ Web is ready"
+      
+      - name: Test web frontend
+        run: |
+          echo "=== Testing web frontend ==="
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5173)
+          
+          if [ "$STATUS_CODE" -eq 200 ]; then
+            echo "✅ Web frontend returns 200 OK"
+          else
+            echo "❌ Web frontend returned status: $STATUS_CODE"
+            docker compose logs web
+            exit 1
+          fi
+          
+          echo "=== Checking web content ==="
+          CONTENT=$(curl -s http://localhost:5173)
+          if echo "$CONTENT" | grep -q "root"; then
+            echo "✅ Web frontend serves HTML with root element"
+          else
+            echo "❌ Web frontend HTML does not contain expected content"
+            exit 1
+          fi
+      
       - name: Trigger risk score computation
         run: |
           echo "=== Triggering risk score recomputation ==="
@@ -526,3 +616,64 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose down -v
+
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/web/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: packages/web
+        run: npm ci
+      
+      - name: Install Playwright browsers
+        working-directory: packages/web
+        run: npx playwright install --with-deps chromium
+      
+      - name: Run E2E tests
+        working-directory: packages/web
+        shell: bash
+        run: |
+          export PATH="$PATH:$HOME/.foundry/bin"
+          bash e2e/run-e2e.sh
+      
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: docs/screenshots/
+          retention-days: 30
+      
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: packages/web/playwright-report/
+          retention-days: 30
+      
+      - name: Upload Anvil logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anvil-logs
+          path: packages/web/anvil.log
+          retention-days: 30
+          if-no-files-found: ignore

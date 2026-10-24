@@ -1,50 +1,59 @@
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { WagmiProvider, useConnect, useAccount } from 'wagmi';
+import { useEffect } from 'react';
+import { config } from './lib/wagmi';
+import { Layout } from './components/Layout';
+import { PoolsPage } from './pages/PoolsPage';
+import { PoolDetailPage } from './pages/PoolDetailPage';
+import { VaultPage } from './pages/VaultPage';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30000,
+      retry: 1,
+    },
+  },
+});
+
+function AutoConnect() {
+  const { connect, connectors } = useConnect();
+  const { isConnected } = useAccount();
+  
+  useEffect(() => {
+    const enableMock = import.meta.env.VITE_ENABLE_MOCK_CONNECTOR === 'true';
+    if (enableMock && !isConnected) {
+      const mockConnector = connectors.find(c => c.id === 'mock' || c.name === 'Mock');
+      if (mockConnector) {
+        setTimeout(() => {
+          connect({ connector: mockConnector });
+        }, 100);
+      }
+    }
+  }, [connect, connectors, isConnected]);
+  
+  return null;
+}
 
 function App() {
   return (
-    <div className="App">
-      <header>
-        <h1>🏦 Vault Risk Copilot</h1>
-        <p>DeFi Risk Analytics Dashboard</p>
-      </header>
-
-      <main>
-        <section className="status">
-          <h2>Phase 4-5 Status</h2>
-          <p>✅ <strong>Phase 0-3</strong>: Smart contracts, DB, collector, risk-service - Complete</p>
-          <p>🚧 <strong>Phase 4</strong>: Node.js API - Core implementation complete, minor type fixes pending</p>
-          <p>🚧 <strong>Phase 5</strong>: React UI - Structure scaffolded, wagmi integration pending</p>
-        </section>
-
-        <section className="features">
-          <h2>Planned Features</h2>
-          <ul>
-            <li>📊 Pools table with risk scores, sort & filter</li>
-            <li>📈 Pool detail page with risk factor breakdown charts</li>
-            <li>🏦 Vault page: connect wallet, view balance/shares, deposit/withdraw</li>
-            <li>⚡ Transaction states and error handling</li>
-            <li>📱 Responsive UI with accessibility basics</li>
-          </ul>
-        </section>
-
-        <section className="api">
-          <h2>API Endpoints</h2>
-          <p>Backend API: <code>http://localhost:3000</code></p>
-          <ul>
-            <li><code>GET /api/health</code> - Health check</li>
-            <li><code>GET /api/pools</code> - List pools with filters</li>
-            <li><code>GET /api/pools/:id</code> - Pool details</li>
-            <li><code>GET /api/vault/state</code> - On-chain vault state</li>
-          </ul>
-          <p><a href="http://localhost:3000/docs" target="_blank">📚 OpenAPI Documentation</a></p>
-        </section>
-      </main>
-
-      <footer>
-        <p>⚠️ Testnet only - Not financial advice - Educational project</p>
-      </footer>
-    </div>
-  )
+    <WagmiProvider config={config} reconnectOnMount>
+      <QueryClientProvider client={queryClient}>
+        <AutoConnect />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Navigate to="/pools" replace />} />
+              <Route path="pools" element={<PoolsPage />} />
+              <Route path="pools/:id" element={<PoolDetailPage />} />
+              <Route path="vault" element={<VaultPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
 }
 
-export default App
+export default App;
