@@ -32,7 +32,7 @@ export function PoolsPage() {
 
     if (filterCategory !== 'all') {
       filtered = filtered.filter(
-        (pool) => (pool as any).risk_score?.category === filterCategory
+        (pool) => (pool as Pool & { risk_score?: { category: string } }).risk_score?.category === filterCategory
       );
     }
 
@@ -49,8 +49,8 @@ export function PoolsPage() {
           bVal = b.apy;
           break;
         case 'risk':
-          aVal = (a as any).risk_score?.score ?? 0;
-          bVal = (b as any).risk_score?.score ?? 0;
+          aVal = (a as Pool & { risk_score?: { score: number } }).risk_score?.score ?? 0;
+          bVal = (b as Pool & { risk_score?: { score: number } }).risk_score?.score ?? 0;
           break;
         default:
           return 0;
@@ -182,7 +182,7 @@ export function PoolsPage() {
 }
 
 function PoolRow({ pool }: { pool: Pool }) {
-  const riskScore = (pool as any).risk_score;
+  const riskScore = (pool as Pool & { risk_score?: { category: string; score: number } }).risk_score;
 
   return (
     <tr className="hover:bg-gray-50">
