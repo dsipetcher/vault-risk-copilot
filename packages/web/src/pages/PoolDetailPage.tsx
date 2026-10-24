@@ -3,6 +3,7 @@ import { usePoolDetail, usePoolHistory } from '@/hooks/usePools';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { RiskBadge } from '@/components/RiskBadge';
+import { ExplainPanel } from '@/components/ExplainPanel';
 import { formatNumber, formatPercentage, formatDate } from '@/lib/utils';
 import type { Pool, PoolRiskScore } from '@/types/api';
 import {
@@ -67,6 +68,8 @@ export function PoolDetailPage() {
           }
         />
       </div>
+
+      {riskScore && <ExplainPanel poolId={pool.pool_id} />}
 
       {riskScore && (
         <div className="bg-white shadow rounded-lg p-6">
