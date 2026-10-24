@@ -103,22 +103,33 @@ def test_apy_volatility_signal_stable():
 def test_apy_volatility_signal_high_absolute():
     """APY >100% should trigger penalty."""
     score = apy_volatility_signal(apy=150.0, apy_sigma=5.0, apy_pct_7d=10.0)
-    assert score > 30.0
+    # APY 150% > 100% threshold: penalty = min(30, (150-100)/2) = 25
+    # CV = 5/150 = 0.033 < 2.5: no penalty
+    # Spike 10% < 100%: no penalty
+    # Total ~25
+    assert 20.0 < score < 30.0
 
 
 @pytest.mark.unit
 def test_apy_volatility_signal_high_sigma():
     """High APY sigma (coefficient of variation) should trigger penalty."""
     score = apy_volatility_signal(apy=10.0, apy_sigma=30.0, apy_pct_7d=5.0)
-    # CV = 30/10 = 3.0, which is > z_threshold (2.5)
-    assert score > 30.0
+    # APY 10% < 100%: no penalty
+    # CV = 30/10 = 3.0 > 2.5 threshold: penalty = min(35, (3.0-2.5)*10) = 5
+    # Spike 5% < 100%: no penalty
+    # Total ~5
+    assert 0.0 < score < 10.0
 
 
 @pytest.mark.unit
 def test_apy_volatility_signal_spike():
     """Recent APY spike should trigger penalty."""
     score = apy_volatility_signal(apy=20.0, apy_sigma=2.0, apy_pct_7d=150.0)
-    assert score > 30.0
+    # APY 20% < 100%: no penalty
+    # CV = 2/20 = 0.1 < 2.5: no penalty
+    # Spike 150% > 100%: penalty = min(35, (150-100)/2) = 25
+    # Total ~25
+    assert 20.0 < score < 30.0
 
 
 # === Reward Ratio Signal Tests ===

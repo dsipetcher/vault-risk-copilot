@@ -75,7 +75,8 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: PostgresDsn = Field(
+    database_url: PostgresDsn | None = Field(
+        default=None,
         description="PostgreSQL connection string",
     )
 
