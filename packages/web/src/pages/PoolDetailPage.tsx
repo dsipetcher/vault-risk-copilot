@@ -87,7 +87,9 @@ export function PoolDetailPage() {
                 { name: 'IL Risk', value: riskScore.il_score },
                 { name: 'Data Age', value: riskScore.data_age_score },
                 { name: 'Vault Score', value: riskScore.vault_score },
-              ].filter(item => item.value !== null)}
+              ]
+                .filter(item => item.value !== null)
+                .map(item => ({ ...item, value: Number(item.value) }))}
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
