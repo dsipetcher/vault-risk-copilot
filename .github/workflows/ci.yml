@@ -567,6 +567,10 @@ jobs:
           # Call explain endpoint
           EXPLAIN_RESPONSE=$(curl -s -X POST http://localhost:3000/api/pools/$POOL_ID/explain)
           
+          # Debug: show full response
+          echo "Full explain response:"
+          echo "$EXPLAIN_RESPONSE" | jq .
+          
           # Check response structure
           if echo "$EXPLAIN_RESPONSE" | jq -e '.explanation' > /dev/null; then
             echo "✅ Explain endpoint returned valid response"

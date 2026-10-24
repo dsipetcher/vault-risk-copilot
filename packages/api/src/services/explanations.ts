@@ -152,7 +152,7 @@ function getCacheKey(poolId: string, provider?: string, model?: string): string 
 }
 
 async function cacheExplanation(
-  riskScoreId: number,
+  riskScoreId: string,
   poolId: string,
   explanation: ExplanationOutput,
   metadata: {

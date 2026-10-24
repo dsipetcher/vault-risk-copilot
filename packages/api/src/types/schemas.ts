@@ -24,9 +24,9 @@ export const poolSnapshotSchema = z.object({
 export type PoolSnapshot = z.infer<typeof poolSnapshotSchema>;
 
 export const riskScoreSchema = z.object({
-  id: z.number(),
+  id: z.string().uuid(),
   pool_id: z.string().uuid(),
-  snapshot_id: z.number(),
+  snapshot_id: z.string().uuid().nullable(),
   total_risk_score: z.number(),
   risk_category: z.enum(['low', 'medium', 'high', 'critical']),
   tvl_score: z.number(),
