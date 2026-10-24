@@ -168,4 +168,84 @@ describe('Number Fidelity Validation', () => {
     const result = (provider as any).validateNumberFidelity(baseInput, output);
     expect(result).toBe(false);
   });
+
+  it('should accept K/M/B unit scaling ($0.52M for 520000)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL of $0.52M.',
+      key_factors: [
+        {
+          signal: 'TVL',
+          value: '$0.52M',
+          explanation: 'Test',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
+  });
+
+  it('should accept K/M/B unit scaling ($520K for 520000)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL of $520K.',
+      key_factors: [
+        {
+          signal: 'TVL',
+          value: '$520K',
+          explanation: 'Test',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
+  });
+
+  it('should accept "TVL dropped 35.2%" for negative input -35.2', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL dropped 35.2% in the last 7 days.',
+      key_factors: [
+        {
+          signal: 'TVL Change',
+          value: '35.2%',
+          explanation: 'Significant decline indicating withdrawal pressure.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
+  });
+
+  it('should accept "decreased by 35.2%" for negative input -35.2', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL decreased by 35.2%.',
+      key_factors: [
+        {
+          signal: 'TVL Change',
+          value: '35.2%',
+          explanation: 'Negative trend.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
+  });
+
+  it('REJECT: completely wrong number (42 vs -35.2)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL change is 42%.',
+      key_factors: [
+        {
+          signal: 'TVL Change',
+          value: '42%',
+          explanation: 'This is completely hallucinated!',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(false);
+  });
 });

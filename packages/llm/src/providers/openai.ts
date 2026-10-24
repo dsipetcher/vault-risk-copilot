@@ -316,16 +316,24 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
   private validateNumberFidelity(input: RiskInput, output: ExplanationOutput): boolean {
     const fullText = JSON.stringify(output);
     
-    // Parse thousand separators and remove scale denominators/duration labels
-    const cleanedText = fullText
-      .replace(/\$(\d+),(\d+)/g, '$1$2')  // $520,000 -> $520000
+    // Normalize K/M/B units: $0.5M -> 500000, $520K -> 520000
+    let normalizedText = fullText
+      .replace(/\$(\d+(?:\.\d+)?)([KMB])/gi, (match, num, unit) => {
+        const multipliers: Record<string, number> = { K: 1000, M: 1000000, B: 1000000000 };
+        return `$${parseFloat(num) * multipliers[unit.toUpperCase()]}`;
+      })
+      .replace(/\$(\d+),(\d+)/g, '$1$2');  // $520,000 -> $520000
+    
+    // Remove duration labels BEFORE extracting numbers (7d, 30d, "7 days")
+    normalizedText = normalizedText.replace(/\b\d+\s*d(?:ays?)?\b/gi, '');
+    
+    normalizedText = normalizedText
       .replace(/\/100\b/g, '')  // Remove /100 scale
-      .replace(/\b\d+d\b/gi, '')  // Remove 7d, 30d duration labels
       .replace(/-?\d+(?:\.\d+)?%/g, (match) => ` ${match.slice(0, -1)} `);  // Remove % but keep number
     
-    // Match numbers with optional minus sign - preserve sign!
+    // Match numbers with optional minus sign
     const numberPattern = /-?\d+(?:\.\d+)?/g;
-    const numbersInOutput = cleanedText.match(numberPattern) || [];
+    const numbersInOutput = normalizedText.match(numberPattern) || [];
 
     const inputNumbers = new Set<number>();
     this.collectNumbers(input, inputNumbers);
@@ -336,10 +344,7 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
 
       let found = false;
       for (const inputNum of inputNumbers) {
-        // Sign must match
-        if ((inputNum < 0) !== (num < 0)) continue;
-        
-        // 2% relative tolerance
+        // Direct match with tolerance
         const tolerance = Math.abs(inputNum) * 0.02;
         const diff = Math.abs(inputNum - num);
         if (diff <= Math.max(tolerance, 0.01)) {
@@ -367,6 +372,13 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
       numbers.add(parseFloat(obj.toFixed(0)));
       numbers.add(parseFloat(obj.toFixed(1)));
       numbers.add(parseFloat(obj.toFixed(2)));
+      // Add absolute value for drop/decrease wording support
+      if (obj < 0) {
+        const abs = Math.abs(obj);
+        numbers.add(abs);
+        numbers.add(parseFloat(abs.toFixed(1)));
+        numbers.add(parseFloat(abs.toFixed(2)));
+      }
     } else if (typeof obj === 'object' && obj !== null) {
       for (const value of Object.values(obj)) {
         this.collectNumbers(value, numbers);
