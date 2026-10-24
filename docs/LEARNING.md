@@ -469,3 +469,230 @@ function test_InflationAttackMitigation() public {
 
 **Next Steps:**
 Phase 2 will add data collection, database, and the risk scoring service.
+
+---
+
+## Phase 2: Data Layer (PostgreSQL, Collector, viem)
+
+### Key Concepts
+
+**1. PostgreSQL Schema Design**
+- **Normalized tables:** `pool_snapshots`, `risk_scores`, `explanations`, `vault_state_snapshots`
+- **Time-series data:** `snapshot_at` timestamps for trend analysis
+- **Indexes:** Performance optimization for common queries (pool_id, snapshot_at, tvl)
+- **JSONB type:** Flexible storage for `risk_factors` with PostgreSQL indexing support
+- **Idempotent inserts:** `ON CONFLICT ... DO NOTHING` prevents duplicate data
+
+**2. viem vs ethers.js**
+- **viem** is TypeScript-native, tree-shakeable, and modular (smaller bundle size)
+- Type-safe contract reads using `readContract()` with ABI
+- Built-in support for multicall and batching
+- Better performance: no BigNumber wrapper overhead
+- Uses native `bigint` type from ES2020
+
+**3. DeFi Metrics (DeFiLlama)**
+- **TVL (Total Value Locked):** Total USD value in a protocol/pool
+- **APY (Annual Percentage Yield):** Includes compounding
+- **APY Base:** Yield from protocol fees/interest
+- **APY Reward:** Yield from token incentives
+- **IL (Impermanent Loss):** Loss from price divergence in AMM pools
+- **Sigma (σ):** Standard deviation of APY (volatility measure)
+
+**4. Data Collection Architecture**
+- **Pull model:** Collector initiates requests on schedule (cron)
+- **Idempotency:** Safe to re-run without duplicating data
+- **Graceful shutdown:** SIGTERM/SIGINT handling for clean exit
+- **Structured logging:** JSON logs for observability (pino)
+- **Error isolation:** Network failures don't crash the service
+
+**5. Docker Compose Networking**
+- **Bridge network:** Containers can communicate via service names (DNS)
+- **Health checks:** Dependencies wait for postgres to be ready
+- **Volume mounts:** Dev mode with hot reload (`./packages/collector:/app`)
+- **Multi-stage builds:** Smaller production images (build deps vs runtime deps)
+
+### Interview Questions and Answers
+
+#### Q1: Why use JSONB instead of separate columns for risk_factors in explanations table?
+
+**Answer:**
+JSONB provides flexibility for evolving schemas without migrations. As we add new risk factors or change the LLM output structure, we don't need to alter the table. JSONB supports:
+- Indexing with GIN indexes for fast queries
+- JSON path queries (`jsonb_path_query`)
+- Validation at application level (zod schema)
+- Backward compatibility (old records remain valid)
+
+Trade-off: Slightly slower than typed columns, but acceptable for our read-heavy workload.
+
+#### Q2: How does viem handle bigint values from Solidity uint256?
+
+**Answer:**
+viem returns Solidity `uint256` as JavaScript native `bigint` (ES2020+). This avoids:
+- BigNumber wrapper overhead (ethers.js uses this)
+- String serialization round-trips
+- Custom arithmetic operations
+
+For Postgres storage, we convert `bigint` to string and use `NUMERIC(78, 0)` type (max 2^256-1).
+
+Example:
+```typescript
+const totalAssets: bigint = await client.readContract({
+  address: vaultAddress,
+  abi: VAULT_ABI,
+  functionName: 'totalAssets',
+});
+
+// Convert for Postgres
+const asString = totalAssets.toString(); // "1000000000"
+```
+
+#### Q3: What is the purpose of the `count` field in DeFiLlama pool data?
+
+**Answer:**
+`count` represents the number of historical data points DeFiLlama has for that pool. Higher count = more reliable data.
+
+Example:
+- `count = 7` → Only 7 days of history, new pool, higher uncertainty
+- `count = 365` → Full year of data, mature pool, more reliable APY trends
+
+We use this in risk scoring: lower count → higher "data age" risk score.
+
+#### Q4: Explain the idempotency strategy in insertPoolSnapshot().
+
+**Answer:**
+```typescript
+await sql`
+  INSERT INTO pool_snapshots ${sql(snapshot)}
+  ON CONFLICT (pool_id, snapshot_at) DO NOTHING
+`;
+```
+
+The `UNIQUE` constraint on `(pool_id, snapshot_at)` prevents duplicate snapshots for the same pool at the same time. If a collector run fails and retries, it won't insert duplicates.
+
+This is **idempotent:** running the same insert N times = running it once.
+
+Alternative: `ON CONFLICT ... DO UPDATE` would overwrite, but we prefer preserving the first successful insert.
+
+#### Q5: Why filter DeFiLlama pools to TVL ≥ $100k and APY ≤ 1000%?
+
+**Answer:**
+- **TVL ≥ $100k:** Filters out dust pools, rugpulls, and testing deployments. Adds liquidity context for risk assessment.
+- **APY ≤ 1000%:** Filters out outliers, likely scams, or data errors. Real DeFi APY rarely exceeds 100-200% sustainably.
+- **Top 100 after filtering:** Keeps dataset manageable for demo/learning project without overwhelming the database.
+
+Production system would be more sophisticated (outlier detection, historical validation).
+
+#### Q6: What is the purpose of `share_price` calculation in VaultReader?
+
+**Answer:**
+```typescript
+const sharePrice = totalSupply > 0n 
+  ? Number(totalAssets) / Number(totalSupply) 
+  : undefined;
+```
+
+Share price tracks vault performance over time:
+- `share_price = 1.0` → Initial state (1 asset = 1 share)
+- `share_price = 1.5` → 50% yield accumulated
+- `share_price < 1.0` → Vault lost value (bad harvest, hack, etc.)
+
+This metric is **essential for dashboard charts** (historical performance) and **risk signals** (sudden drops indicate issues).
+
+#### Q7: How does the cron scheduler work in collector/index.ts?
+
+**Answer:**
+```typescript
+const intervalMinutes = Math.floor(config.COLLECTION_INTERVAL_MS / 60000);
+const cronExpression = `*/${intervalMinutes} * * * *`;
+
+cron.schedule(cronExpression, async () => {
+  await collectData();
+});
+```
+
+- Converts milliseconds to minutes
+- Generates cron expression: `*/5 * * * *` = every 5 minutes
+- Runs `collectData()` on schedule
+- Also runs once immediately on startup
+
+**Cron format:** `minute hour day month weekday`
+
+#### Q8: Why separate pool_snapshots and risk_scores tables?
+
+**Answer:**
+**Separation of concerns:**
+- `pool_snapshots` = raw data from external APIs (immutable, append-only)
+- `risk_scores` = computed metrics from our model (can be recalculated/versioned)
+
+Benefits:
+1. Can re-score historical snapshots without re-fetching data
+2. Can A/B test different risk models on same snapshots
+3. `model_version` field tracks which algorithm generated the score
+4. Cleaner data lineage (raw → processed → presented)
+
+This is **event sourcing pattern** applied to data pipeline.
+
+#### Q9: What is the advantage of using postgres client over pg or Prisma?
+
+**Answer:**
+**`postgres` library advantages:**
+- **Tagged template literals:** SQL injection safe, readable syntax
+- **Automatic type inference:** TypeScript infers result types from SQL
+- **Smaller bundle:** No ORM overhead
+- **Performance:** Pipelining support, connection pooling
+
+Trade-offs:
+- Less abstraction than Prisma (no auto-generated types, migrations)
+- More SQL knowledge required
+- Better for **data-intensive workloads** where SQL control matters
+
+Prisma/TypeORM better for **CRUD-heavy apps** with many models.
+
+#### Q10: How would you handle DeFiLlama API rate limits in production?
+
+**Answer:**
+**Current implementation:**
+- No rate limiting (relies on DeFiLlama's generosity + 5-minute intervals)
+- User-Agent header for identification
+
+**Production improvements:**
+1. **Exponential backoff:** On 429 (rate limit) or 5xx errors, wait and retry
+2. **Circuit breaker:** Stop requests if API consistently fails
+3. **Caching:** Store last successful response, serve stale data if API down
+4. **Incremental updates:** Fetch only changed pools (if API supports it)
+5. **Pagination:** Fetch in batches to avoid large responses
+6. **Monitoring:** Alert on API errors, latency spikes
+
+```typescript
+if (response.status === 429) {
+  const retryAfter = response.headers.get('Retry-After');
+  await sleep(retryAfter * 1000);
+  // retry with exponential backoff
+}
+```
+
+---
+
+## Phase 2 Completion Checklist
+
+- [x] PostgreSQL schema (4 tables, indexes, constraints)
+- [x] Database migrations in SQL
+- [x] Docker Compose for all services
+- [x] TypeScript Collector service
+- [x] viem integration for on-chain reads
+- [x] DeFiLlama API integration with filtering
+- [x] Zod configuration validation
+- [x] Pino structured logging
+- [x] Unit tests (5 tests for config)
+- [x] TypeScript strict mode (typecheck passing)
+- [x] npm build successful
+- [x] CI/CD jobs (collector, docker)
+- [x] README and documentation
+
+**Test Results:**
+- Collector unit tests: 5/5 passing ✓
+- TypeScript typecheck: No errors ✓
+- Build: Successful ✓
+
+**Next Steps:**
+Phase 3 will add the Python Risk Service with scikit-learn for explainable risk scoring.

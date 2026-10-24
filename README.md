@@ -139,6 +139,19 @@ cd packages/risk-service
 pytest
 ```
 
+## Project Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 0-1 | ✅ Complete | Smart contracts (ERC-4626 vault), tests, CI/CD |
+| Phase 2 | ✅ Complete | PostgreSQL schema, Docker Compose, TypeScript collector |
+| Phase 3 | 🚧 Planned | Python Risk Service (FastAPI, scikit-learn) |
+| Phase 4 | 🚧 Planned | Node.js API + React frontend |
+| Phase 5 | 🚧 Planned | LLM integration + MCP server |
+| Phase 6 | 🚧 Planned | DevOps hardening, Kubernetes |
+
+**See:** [PHASE_2_REPORT.md](./PHASE_2_REPORT.md) for detailed Phase 2 implementation
+
 ## Smart Contracts on Sepolia
 
 Deployed contracts (Sepolia testnet):
