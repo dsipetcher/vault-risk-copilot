@@ -23,6 +23,20 @@ const VAULT_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ type: 'uint8' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'shares', type: 'uint256' }],
+    name: 'convertToAssets',
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
 async function takeScreenshot(page: Page, name: string) {
@@ -94,8 +108,13 @@ test.describe('Vault E2E Flow', () => {
     await takeScreenshot(page, '04-after-mint');
 
     // Verify USDC balance updated
-    const usdcBalanceText = await page.getByTestId('usdc-balance').textContent();
-    console.log('USDC Balance after mint:', usdcBalanceText);
+    const usdcBalanceAfterMint = await page.getByTestId('usdc-balance').textContent();
+    const usdcBalanceNum = parseFloat(usdcBalanceAfterMint || '0');
+    console.log('USDC Balance after mint:', usdcBalanceAfterMint);
+    expect(usdcBalanceNum).toBeGreaterThan(1000); // Should have initial + 1000 minted
+
+    // Store initial balance for later comparison
+    const initialUsdcBalance = usdcBalanceNum;
 
     // Try to approve and deposit
     // Deposit
@@ -123,10 +142,22 @@ test.describe('Vault E2E Flow', () => {
     await page.waitForTimeout(2000);
     await takeScreenshot(page, '06-after-deposit');
 
+    // Get vault decimals for proper formatting
+    const vaultDecimals = await publicClient.readContract({
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: 'decimals',
+    });
+    console.log('Vault decimals:', vaultDecimals);
+
     // Verify shares balance
     const sharesText = await page.getByTestId('vault-shares').textContent();
-    console.log('Vault Shares:', sharesText);
-    expect(parseFloat(sharesText || '0')).toBeGreaterThan(0);
+    console.log('Vault Shares (UI):', sharesText);
+    const sharesDisplayed = parseFloat(sharesText || '0');
+    
+    // Shares should be approximately 500 (deposited amount)
+    expect(sharesDisplayed).toBeGreaterThan(400);
+    expect(sharesDisplayed).toBeLessThan(600);
 
     // Verify on-chain balance
     const onChainShares = await publicClient.readContract({
@@ -135,17 +166,49 @@ test.describe('Vault E2E Flow', () => {
       functionName: 'balanceOf',
       args: ['0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'],
     });
-    console.log('On-chain shares:', formatUnits(onChainShares, 18));
+    console.log('On-chain shares (raw):', onChainShares.toString());
+    console.log('On-chain shares (formatted):', formatUnits(onChainShares, vaultDecimals));
     expect(onChainShares).toBeGreaterThan(0n);
 
-    // Redeem half
-    const sharesToRedeem = Math.floor(parseFloat(sharesText || '0') / 2);
-    await page.getByTestId('redeem-amount-input').fill(sharesToRedeem.toString());
+    // Verify convertToAssets shows ~500 USDC
+    const assetsValue = await publicClient.readContract({
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: 'convertToAssets',
+      args: [onChainShares],
+    });
+    const assetsInUsdc = parseFloat(formatUnits(assetsValue, 6));
+    console.log('Assets value in USDC:', assetsInUsdc);
+    expect(assetsInUsdc).toBeGreaterThan(490);
+    expect(assetsInUsdc).toBeLessThan(510);
+
+    // Redeem ALL shares
+    await page.getByTestId('redeem-amount-input').fill(sharesDisplayed.toString());
     await page.getByTestId('redeem-button').click();
     
     await expect(page.getByTestId('redeem-success')).toBeVisible({ timeout: 30000 });
     await page.waitForTimeout(2000);
     await takeScreenshot(page, '07-after-redeem');
+
+    // Verify shares are zero after full redeem
+    const sharesAfterRedeem = await publicClient.readContract({
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: 'balanceOf',
+      args: ['0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'],
+    });
+    console.log('Shares after redeem:', sharesAfterRedeem.toString());
+    expect(sharesAfterRedeem).toBe(0n);
+
+    // Verify USDC balance restored (should be approximately initial balance)
+    const finalUsdcBalanceText = await page.getByTestId('usdc-balance').textContent();
+    const finalUsdcBalance = parseFloat(finalUsdcBalanceText || '0');
+    console.log('Final USDC balance:', finalUsdcBalance);
+    console.log('Initial USDC balance:', initialUsdcBalance);
+    
+    // Allow small rounding difference
+    const balanceDiff = Math.abs(finalUsdcBalance - initialUsdcBalance);
+    expect(balanceDiff).toBeLessThan(1); // Less than 1 USDC difference
 
     console.log('✅ E2E test completed successfully');
     

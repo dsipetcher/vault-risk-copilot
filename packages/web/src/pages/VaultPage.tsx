@@ -23,6 +23,13 @@ const VAULT_ABI = [
     type: 'function',
   },
   {
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ type: 'uint8' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [
       { name: 'assets', type: 'uint256' },
       { name: 'receiver', type: 'address' }
@@ -41,6 +48,13 @@ const VAULT_ABI = [
     name: 'redeem',
     outputs: [{ type: 'uint256' }],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'shares', type: 'uint256' }],
+    name: 'convertToAssets',
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
@@ -117,6 +131,14 @@ export function VaultPage() {
     query: { enabled: isConnected && !!address },
   });
 
+  const { data: sharesInAssets } = useReadContract({
+    address: VAULT_ADDRESS,
+    abi: VAULT_ABI,
+    functionName: 'convertToAssets',
+    args: sharesBalance ? [sharesBalance] : undefined,
+    query: { enabled: isConnected && !!address && !!sharesBalance },
+  });
+
   const { data: totalAssets } = useReadContract({
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
@@ -127,6 +149,12 @@ export function VaultPage() {
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: 'totalSupply',
+  });
+
+  const { data: vaultDecimals } = useReadContract({
+    address: VAULT_ADDRESS,
+    abi: VAULT_ABI,
+    functionName: 'decimals',
   });
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
@@ -218,8 +246,8 @@ export function VaultPage() {
   };
 
   const handleRedeem = () => {
-    if (!redeemAmount) return;
-    const amount = parseUnits(redeemAmount, 18);
+    if (!redeemAmount || !vaultDecimals) return;
+    const amount = parseUnits(redeemAmount, vaultDecimals);
     redeem({
       address: VAULT_ADDRESS,
       abi: VAULT_ABI,
@@ -306,8 +334,9 @@ export function VaultPage() {
             />
             <StatCard
               label="Vault Shares"
-              value={sharesBalance ? formatUnits(sharesBalance, 18) : '0'}
+              value={sharesBalance && vaultDecimals ? formatUnits(sharesBalance, vaultDecimals) : '0'}
               testId="vault-shares"
+              subtitle={sharesInAssets ? `≈ ${formatUnits(sharesInAssets, 6)} USDC` : undefined}
             />
             <StatCard label="Share Price" value={sharePrice.toFixed(6)} />
           </div>
@@ -429,11 +458,12 @@ export function VaultPage() {
   );
 }
 
-function StatCard({ label, value, testId }: { label: string; value: React.ReactNode; testId?: string }) {
+function StatCard({ label, value, testId, subtitle }: { label: string; value: React.ReactNode; testId?: string; subtitle?: string }) {
   return (
     <div className="bg-white shadow rounded-lg px-4 py-5">
       <dt className="text-sm font-medium text-gray-500 truncate">{label}</dt>
       <dd data-testid={testId} className="mt-1 text-2xl font-semibold text-gray-900">{value}</dd>
+      {subtitle && <dd className="mt-1 text-xs text-gray-500">{subtitle}</dd>}
     </div>
   );
 }
