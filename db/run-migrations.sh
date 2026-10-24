@@ -61,15 +61,19 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
   if [ "$already_applied" -eq "0" ]; then
     echo "→ Applying migration $name..."
     
-    # Check if migration contains its own BEGIN/COMMIT
-    # Use awk for POSIX compatibility (works in BusyBox)
-    if awk '/^[[:space:]]*[Bb][Ee][Gg][Ii][Nn][[:space:]]*;?[[:space:]]*$/{found=1; exit} END{exit !found}' "$migration_file"; then
-      echo "✗ Migration $name contains BEGIN statement"
+    # Check if migration contains standalone BEGIN/COMMIT (not PL/pgSQL blocks)
+    # DO $$ BEGIN ... END $$ is PL/pgSQL and allowed
+    # Standalone BEGIN; or COMMIT; is transaction control and forbidden
+    # Use awk to check: reject "BEGIN;" or "COMMIT;" with semicolon (transaction control)
+    # Allow BEGIN without semicolon (PL/pgSQL block inside DO $$)
+    if awk '/^[[:space:]]*[Bb][Ee][Gg][Ii][Nn][[:space:]]*;/{found=1; exit} END{exit !found}' "$migration_file"; then
+      echo "✗ Migration $name contains standalone BEGIN; statement"
       echo "  Migrations should not include transaction control (runner wraps them)"
+      echo "  Note: PL/pgSQL blocks (DO \$\$ BEGIN ... END \$\$) are allowed"
       exit 1
     fi
-    if awk '/^[[:space:]]*[Cc][Oo][Mm][Mm][Ii][Tt][[:space:]]*;?[[:space:]]*$/{found=1; exit} END{exit !found}' "$migration_file"; then
-      echo "✗ Migration $name contains COMMIT statement"
+    if awk '/^[[:space:]]*[Cc][Oo][Mm][Mm][Ii][Tt][[:space:]]*;/{found=1; exit} END{exit !found}' "$migration_file"; then
+      echo "✗ Migration $name contains COMMIT; statement"
       echo "  Migrations should not include transaction control (runner wraps them)"
       exit 1
     fi
