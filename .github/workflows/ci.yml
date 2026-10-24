@@ -244,6 +244,42 @@ jobs:
         working-directory: packages/api
         run: npm run build
 
+  web:
+    name: Web Frontend (React)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/web/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: packages/web
+        run: npm ci
+      
+      - name: Lint
+        working-directory: packages/web
+        run: npm run lint
+      
+      - name: Type check
+        working-directory: packages/web
+        run: npm run typecheck
+      
+      - name: Run tests
+        working-directory: packages/web
+        run: npm test
+      
+      - name: Build
+        working-directory: packages/web
+        env:
+          VITE_API_URL: http://localhost:3000
+          VITE_CHAIN_ID: 31337
+        run: npm run build
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
@@ -278,6 +314,18 @@ jobs:
           context: ./packages/api
           push: false
           tags: vault-risk-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build web image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/web
+          push: false
+          tags: vault-risk-web:latest
+          build-args: |
+            VITE_API_URL=http://localhost:3000
+            VITE_CHAIN_ID=31337
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -462,6 +510,34 @@ jobs:
           else
             echo "❌ API /api/pools endpoint failed"
             echo "Response: $POOLS_RESPONSE"
+            exit 1
+          fi
+      
+      - name: Wait for web to be ready
+        run: |
+          echo "Waiting for web to be ready (up to 60 seconds)..."
+          timeout 60 bash -c 'until curl -sf http://localhost:5173 > /dev/null; do sleep 2; done'
+          echo "✅ Web is ready"
+      
+      - name: Test web frontend
+        run: |
+          echo "=== Testing web frontend ==="
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5173)
+          
+          if [ "$STATUS_CODE" -eq 200 ]; then
+            echo "✅ Web frontend returns 200 OK"
+          else
+            echo "❌ Web frontend returned status: $STATUS_CODE"
+            docker compose logs web
+            exit 1
+          fi
+          
+          echo "=== Checking web content ==="
+          CONTENT=$(curl -s http://localhost:5173)
+          if echo "$CONTENT" | grep -q "root"; then
+            echo "✅ Web frontend serves HTML with root element"
+          else
+            echo "❌ Web frontend HTML does not contain expected content"
             exit 1
           fi
       
