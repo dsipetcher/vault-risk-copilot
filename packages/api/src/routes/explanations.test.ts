@@ -20,13 +20,15 @@ describe('Explanations API Tests', () => {
     process.env.LLM_PROVIDER = 'mock';
     
     // Clean database before migrations (test environment only)
-    // Truncate instead of DROP to avoid deadlocks in parallel tests
+    // Drop tables to force migrations to run fresh (not baseline)
     const { pool } = await import('../database.js');
     try {
-      // Try to truncate existing tables, ignore errors if they don't exist
-      await pool.query('TRUNCATE TABLE schema_migrations, explanations, risk_scores, pool_snapshots CASCADE');
+      await pool.query('DROP TABLE IF EXISTS schema_migrations CASCADE');
+      await pool.query('DROP TABLE IF EXISTS explanations CASCADE');
+      await pool.query('DROP TABLE IF EXISTS risk_scores CASCADE');
+      await pool.query('DROP TABLE IF EXISTS pool_snapshots CASCADE');
     } catch (err) {
-      // If tables don't exist yet, that's fine - migrations will create them
+      // Ignore errors (e.g. permission issues in some environments)
     }
     
     // Run migrations before tests
