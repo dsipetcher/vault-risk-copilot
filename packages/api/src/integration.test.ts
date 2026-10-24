@@ -18,10 +18,16 @@ describe('Pools Integration Tests', () => {
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     
     // Clean database before migrations (test environment only)
-    await pool.query('DROP SCHEMA public CASCADE');
-    await pool.query('CREATE SCHEMA public');
-    await pool.query('GRANT ALL ON SCHEMA public TO postgres');
-    await pool.query('GRANT ALL ON SCHEMA public TO public');
+    // Use advisory lock to prevent concurrent schema drops causing deadlock
+    await pool.query('SELECT pg_advisory_lock(123456)');
+    try {
+      await pool.query('DROP SCHEMA IF EXISTS public CASCADE');
+      await pool.query('CREATE SCHEMA public');
+      await pool.query('GRANT ALL ON SCHEMA public TO postgres');
+      await pool.query('GRANT ALL ON SCHEMA public TO public');
+    } finally {
+      await pool.query('SELECT pg_advisory_unlock(123456)');
+    }
     
     // Run migrations before tests
     const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
