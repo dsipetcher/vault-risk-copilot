@@ -150,6 +150,41 @@ describe('ExplainPanel', () => {
     });
   });
 
+  it('should hide latency when explanation is cached', async () => {
+    const cachedExplanation = { ...mockExplanation, cached: true };
+    vi.mocked(api.apiClient.explainRisk).mockResolvedValue(cachedExplanation);
+
+    render(<ExplainPanel poolId={mockPoolId} />);
+    
+    await userEvent.click(screen.getByTestId('explain-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('explanation-metadata')).toBeInTheDocument();
+    });
+
+    // Latency should not be shown when cached
+    expect(screen.queryByText(/Generated in.*ms/)).not.toBeInTheDocument();
+  });
+
+  it('should hide latency when latency_ms is null', async () => {
+    const explanationWithoutLatency = {
+      ...mockExplanation,
+      metadata: { ...mockExplanation.metadata, latency_ms: null },
+    };
+    vi.mocked(api.apiClient.explainRisk).mockResolvedValue(explanationWithoutLatency);
+
+    render(<ExplainPanel poolId={mockPoolId} />);
+    
+    await userEvent.click(screen.getByTestId('explain-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('explanation-metadata')).toBeInTheDocument();
+    });
+
+    // Latency should not be shown when null
+    expect(screen.queryByText(/Generated in.*ms/)).not.toBeInTheDocument();
+  });
+
   it('should show error message when API call fails', async () => {
     vi.mocked(api.apiClient.explainRisk).mockRejectedValue(
       new Error('API key invalid')

@@ -74,8 +74,8 @@ export class MockProvider implements LLMProvider {
     
     return (
       `This pool on ${protocol} (${chain}) has a ${riskLevel.toLowerCase()} risk rating ` +
-      `with a score of ${riskScore.toFixed(1)} out of 100. This assessment is based on multiple factors ` +
-      `including liquidity depth, yield stability, and historical performance data.`
+      `with a score of ${riskScore.toFixed(1)} out of 100. The assessment is based on the pool's ` +
+      `current metrics and risk signals.`
     );
   }
 
@@ -90,100 +90,90 @@ export class MockProvider implements LLMProvider {
       explanation: string;
     }> = [];
 
-    if (input.breakdown.tvl_score > 60) {
+    // Generate factor for each non-null signal with its actual value
+    if (input.breakdown.tvl_score != null) {
       const tvl = input.pool_metrics.tvl_usd;
+      const score = input.breakdown.tvl_score;
       factors.push({
-        signal: 'TVL Size',
-        value: tvl ? `$${this.formatNumber(tvl)}` : 'Low TVL',
+        signal: 'TVL Score',
+        value: `${score.toFixed(1)}/100 (TVL: $${tvl ? this.formatNumber(tvl) : 'N/A'})`,
         explanation:
-          'Lower total value locked indicates less market confidence and higher manipulation risk.',
+          score > 50
+            ? 'Lower total value locked indicates less market confidence and higher manipulation risk.'
+            : 'High total value locked suggests strong market confidence and liquidity.',
       });
     }
 
-    if (input.breakdown.tvl_volatility_score > 60) {
+    if (input.breakdown.tvl_volatility_score != null) {
       const change = input.pool_metrics.tvl_change_7d_pct;
+      const score = input.breakdown.tvl_volatility_score;
       factors.push({
         signal: 'TVL Volatility',
-        value: change ? `${change.toFixed(1)}% change` : 'Recent TVL drop',
+        value: `${score.toFixed(1)}/100 (${change != null ? change.toFixed(1) : 'N/A'}% 7d change)`,
         explanation:
-          'Significant capital outflows suggest declining user confidence or yield opportunities elsewhere.',
+          score > 50
+            ? 'Significant capital movements suggest changing user confidence or market conditions.'
+            : 'Stable TVL indicates consistent liquidity and user confidence.',
       });
     }
 
-    if (input.breakdown.apy_volatility_score > 60) {
+    if (input.breakdown.apy_volatility_score != null) {
       const apy = input.pool_metrics.apy;
       const sigma = input.pool_metrics.apy_sigma;
+      const score = input.breakdown.apy_volatility_score;
       factors.push({
         signal: 'APY Volatility',
-        value:
-          apy && sigma
-            ? `${apy.toFixed(2)}% APY, σ=${sigma.toFixed(2)}%`
-            : 'Unstable yields',
+        value: `${score.toFixed(1)}/100 (APY: ${apy?.toFixed(2) ?? 'N/A'}%, σ=${sigma?.toFixed(2) ?? 'N/A'}%)`,
         explanation:
-          'High yield volatility often indicates unsustainable incentive programs or low liquidity.',
+          score > 50
+            ? 'High yield volatility often indicates unsustainable incentive programs or low liquidity.'
+            : 'Stable yields suggest reliable returns and mature incentive structure.',
       });
     }
 
-    if (input.breakdown.reward_ratio_score > 60) {
+    if (input.breakdown.reward_ratio_score != null) {
       const base = input.pool_metrics.apy_base ?? 0;
       const reward = input.pool_metrics.apy_reward ?? 0;
       const total = base + reward;
       const ratio = total > 0 ? (reward / total) * 100 : 0;
+      const score = input.breakdown.reward_ratio_score;
       factors.push({
-        signal: 'Reward Dependency',
-        value: `${ratio.toFixed(0)}% from incentives`,
+        signal: 'Reward Ratio',
+        value: `${score.toFixed(1)}/100 (${ratio.toFixed(0)}% from incentives)`,
         explanation:
-          'Heavy reliance on reward tokens creates sustainability risk when incentive programs end.',
+          score > 50
+            ? 'Heavy reliance on reward tokens creates sustainability risk when incentive programs end.'
+            : 'Low reward dependency indicates organic yield generation.',
       });
     }
 
-    if (input.breakdown.stablecoin_score > 40 && !input.pool_metrics.is_stablecoin) {
-      factors.push({
-        signal: 'Asset Volatility',
-        value: 'Non-stablecoin assets',
-        explanation:
-          'Volatile assets expose users to price risk in addition to protocol-specific risks.',
-      });
-    }
-
-    if (input.breakdown.il_score > 60) {
+    if (input.breakdown.il_score != null) {
       const ilRisk = input.pool_metrics.il_risk;
+      const score = input.breakdown.il_score;
       factors.push({
-        signal: 'Impermanent Loss',
-        value: ilRisk ? `IL risk: ${ilRisk.toFixed(2)}` : 'High IL exposure',
+        signal: 'IL Score',
+        value: `${score.toFixed(1)}/100 (IL risk: ${ilRisk?.toFixed(2) ?? 'N/A'})`,
         explanation:
-          'AMM pools with uncorrelated assets can experience significant impermanent loss during price divergence.',
+          score > 50
+            ? 'AMM pools with uncorrelated assets can experience significant impermanent loss during price divergence.'
+            : 'Low impermanent loss risk due to correlated or stable assets.',
       });
     }
 
-    if (input.breakdown.data_age_score > 60) {
+    if (input.breakdown.data_age_score != null) {
       const count = input.pool_metrics.count ?? 0;
+      const score = input.breakdown.data_age_score;
       factors.push({
-        signal: 'Data History',
-        value: `${count} data points`,
+        signal: 'Data Age',
+        value: `${score.toFixed(1)}/100 (${count} data points)`,
         explanation:
-          'Limited historical data makes it harder to assess long-term stability and performance.',
+          score > 50
+            ? 'Limited historical data makes it harder to assess long-term stability and performance.'
+            : 'Comprehensive historical data enables reliable performance assessment.',
       });
     }
 
-    if (input.breakdown.vault_score > 60) {
-      factors.push({
-        signal: 'Vault Performance',
-        value: 'Share price concerns',
-        explanation:
-          'Vault share price movements may indicate underlying strategy performance issues.',
-      });
-    }
-
-    if (factors.length === 0) {
-      factors.push({
-        signal: 'Overall Assessment',
-        value: `${input.total_risk_score.toFixed(1)}/100 risk score`,
-        explanation: 'This pool shows relatively stable metrics across all monitored signals.',
-      });
-    }
-
-    return factors.slice(0, 8);
+    return factors;
   }
 
   private formatNumber(num: number): string {

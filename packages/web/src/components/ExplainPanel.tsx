@@ -115,9 +115,9 @@ export function ExplainPanel({ poolId }: ExplainPanelProps) {
                 Provider: <strong>{explanation.metadata.provider}</strong>
                 {explanation.metadata.model && ` • Model: ${explanation.metadata.model}`}
               </span>
-              <span>
-                Generated in {explanation.metadata.latency_ms}ms
-              </span>
+              {!explanation.cached && explanation.metadata.latency_ms != null && (
+                <span>Generated in {explanation.metadata.latency_ms}ms</span>
+              )}
             </div>
           </div>
         </div>

@@ -132,11 +132,18 @@ export function PoolDetailPage() {
             <LineChart data={history}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
-                dataKey="timestamp"
+                dataKey="snapshot_at"
                 tickFormatter={(value) => formatDate(value)}
               />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
+              <YAxis 
+                yAxisId="left" 
+                tickFormatter={(value) => `$${(value / 1e6).toFixed(0)}M`}
+              />
+              <YAxis 
+                yAxisId="right" 
+                orientation="right"
+                tickFormatter={(value) => `${value.toFixed(1)}%`}
+              />
               <Tooltip
                 labelFormatter={(value) => formatDate(value)}
                 formatter={(value: number, name: string) => {

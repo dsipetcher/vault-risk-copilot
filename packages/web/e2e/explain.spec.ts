@@ -77,14 +77,17 @@ test.describe('LLM Explain Feature', () => {
     expect(summaryText!.length).toBeGreaterThan(20); // Min length from schema
     console.log(`✅ Summary present: "${summaryText?.substring(0, 50)}..."`);
 
-    // Verify at least 1 risk factor is present
+    // Verify risk factors match available signals
+    // Low-risk pool (33333333-...) has 6 non-null signals:
+    // tvl_score, tvl_volatility_score, apy_volatility_score, 
+    // reward_ratio_score, il_score, data_age_score
     const factors = page.getByTestId('explanation-factors');
     await expect(factors).toBeVisible();
     
     const factorElements = page.locator('[data-testid^="risk-factor-"]');
     const factorCount = await factorElements.count();
-    expect(factorCount).toBeGreaterThan(0);
-    console.log(`✅ Found ${factorCount} risk factors`);
+    expect(factorCount).toBe(6); // Must match number of non-null signals
+    console.log(`✅ Found ${factorCount} risk factors (matches available signals)`);
 
     // Verify first factor has signal, value, and explanation
     const firstFactor = factorElements.first();
