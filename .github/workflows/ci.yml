@@ -740,8 +740,13 @@ jobs:
             -p 5432:5432 \
             postgres:16
           
-          # Wait for Postgres to be ready
-          timeout 30 bash -c 'until docker exec postgres-e2e pg_isready -U postgres; do sleep 1; done'
+          # Wait for Postgres to be ready (after initdb restart)
+          # postgres:16 entrypoint starts temporary server for initdb, then restarts
+          # Wait for 'database system is ready to accept connections' to appear twice
+          timeout 60 bash -c 'until [ $(docker logs postgres-e2e 2>&1 | grep -c "database system is ready to accept connections") -ge 2 ]; do sleep 1; done'
+          
+          # Extra validation: ensure postgres accepts connections
+          docker exec postgres-e2e psql -U postgres -c "SELECT 1" > /dev/null
           echo "✅ Postgres is ready"
       
       - name: Run database migrations
