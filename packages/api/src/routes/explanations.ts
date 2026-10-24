@@ -21,15 +21,21 @@ export async function explanationsRoutes(app: FastifyInstance) {
           required: ['id'],
         },
         body: {
-          type: 'object',
-          properties: {
-            provider: {
-              type: 'string',
-              enum: ['openai', 'openrouter', 'groq', 'ollama', 'mock'],
+          anyOf: [
+            {
+              type: 'object',
+              properties: {
+                provider: {
+                  type: 'string',
+                  enum: ['openai', 'openrouter', 'groq', 'ollama', 'mock'],
+                },
+                model: { type: 'string' },
+                baseUrl: { type: 'string', format: 'uri' },
+              },
+              additionalProperties: false,
             },
-            model: { type: 'string' },
-            baseUrl: { type: 'string', format: 'uri' },
-          },
+            { type: 'null' },
+          ],
         },
         headers: {
           type: 'object',
