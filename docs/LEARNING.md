@@ -696,3 +696,459 @@ if (response.status === 429) {
 
 **Next Steps:**
 Phase 3 will add the Python Risk Service with scikit-learn for explainable risk scoring.
+
+---
+
+## Phase 3: Python Risk Service - Q&A for Python Newcomers
+
+### Q1: What is FastAPI and why use it over Flask?
+
+**Answer:**
+**FastAPI** is a modern Python web framework for building APIs.
+
+**Advantages over Flask:**
+1. **Automatic API documentation:** OpenAPI (Swagger) and ReDoc generated from code
+2. **Type hints + validation:** Uses Pydantic models for request/response validation
+3. **Async support:** Built on ASGI (Starlette), supports `async/await` natively
+4. **Performance:** Faster than Flask (comparable to Node.js, Go)
+5. **Editor support:** Better autocomplete from type hints
+
+**Example:**
+```python
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class Item(BaseModel):
+    name: str
+    price: float
+
+@app.post("/items/")
+async def create_item(item: Item):  # Type hint + validation
+    return {"name": item.name, "price": item.price}
+```
+
+**When to use Flask:** Simple prototypes, existing Flask ecosystem, synchronous-only code.
+
+---
+
+### Q2: What is Pydantic v2 and why use it?
+
+**Answer:**
+**Pydantic** is a data validation library using Python type hints.
+
+**Key features:**
+- **Runtime validation:** Validates data matches declared types
+- **Serialization:** Convert models to dict/JSON
+- **IDE support:** Type checkers and autocomplete work
+- **Error messages:** Clear validation errors
+
+**Pydantic v2 improvements (over v1):**
+- **Much faster:** Core rewritten in Rust
+- **Better error messages**
+- **Stricter by default:** Less implicit coercion
+- **`model_config` instead of `class Config`**
+
+**Example:**
+```python
+from pydantic import BaseModel, Field, ValidationError
+
+class User(BaseModel):
+    username: str = Field(min_length=3, max_length=20)
+    age: int = Field(ge=0, le=120)
+
+try:
+    user = User(username="ab", age=150)  # Validation fails
+except ValidationError as e:
+    print(e.errors())  # Clear error messages
+```
+
+**Use case in risk-service:** All API request/response models are Pydantic for type safety.
+
+---
+
+### Q3: What is asyncpg and why not use psycopg2?
+
+**Answer:**
+**asyncpg** is an async PostgreSQL driver for Python.
+
+**Comparison:**
+
+| Feature | asyncpg | psycopg2 |
+|---------|---------|----------|
+| Async support | Yes (native) | No (blocking I/O) |
+| Performance | Fastest Python Postgres driver | Slower |
+| Connection pooling | Built-in | Requires psycopg2-pool |
+| Type conversion | Efficient binary protocol | Text protocol |
+| API style | Low-level (raw SQL) | Low-level or ORM (SQLAlchemy) |
+
+**When to use asyncpg:**
+- FastAPI with async endpoints
+- High-throughput applications
+- Raw SQL queries (no ORM)
+
+**When to use psycopg2:**
+- Django (not async)
+- Sync-only code
+- SQLAlchemy ORM (though SQLAlchemy 2.0 supports asyncpg)
+
+**Example:**
+```python
+import asyncpg
+
+async def fetch_users():
+    conn = await asyncpg.connect("postgresql://user:pass@localhost/db")
+    rows = await conn.fetch("SELECT * FROM users WHERE age > $1", 18)
+    await conn.close()
+    return rows
+```
+
+---
+
+### Q4: What is ruff and why use it instead of pylint/flake8?
+
+**Answer:**
+**Ruff** is an extremely fast Python linter and formatter written in Rust.
+
+**Features:**
+- **Replaces:** flake8, isort, black, pylint (partially), pydocstyle
+- **Speed:** 10-100x faster than alternatives
+- **Configuration:** Single `[tool.ruff]` section in pyproject.toml
+- **Rules:** Implements 700+ rules from popular tools
+
+**Comparison:**
+
+| Tool | Speed | Format | Lint | Config |
+|------|-------|--------|------|--------|
+| ruff | Fast | Yes | Yes | Simple |
+| black | Medium | Yes | No | Limited |
+| flake8 | Slow | No | Yes | Complex |
+| pylint | Very slow | No | Yes | Complex |
+
+**Example pyproject.toml:**
+```toml
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "B"]  # pycodestyle, pyflakes, isort, bugbear
+ignore = ["E501"]  # Allow long lines
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B018"]  # Allow assert without message in tests
+```
+
+**Commands:**
+```bash
+ruff check .            # Lint
+ruff check --fix .      # Auto-fix
+ruff format .           # Format
+```
+
+**Use case in risk-service:** Single tool for linting and formatting, fast in CI.
+
+---
+
+### Q5: What is mypy and why use strict mode?
+
+**Answer:**
+**mypy** is a static type checker for Python.
+
+**What it does:**
+- Analyzes code without running it
+- Checks type hints match actual usage
+- Catches bugs before runtime
+
+**Strict mode benefits:**
+```toml
+[tool.mypy]
+strict = true  # Enables all strict flags
+```
+
+**Strict flags:**
+- `disallow_untyped_defs`: All functions must have type hints
+- `disallow_any_generics`: `list` not allowed, must be `list[int]`
+- `warn_return_any`: Functions returning `Any` trigger warning
+- `no_implicit_optional`: `x: str = None` is error, must be `x: str | None`
+
+**Example:**
+```python
+# Without mypy, this runs but is wrong
+def add(a, b):  # mypy error: Missing type hints
+    return a + b
+
+result = add("hello", 5)  # Runtime error: can't add str + int
+
+# With mypy
+def add(a: int, b: int) -> int:
+    return a + b
+
+result = add("hello", 5)  # mypy error: Expected int, got str
+```
+
+**Trade-offs:**
+- **Pro:** Catches bugs early, better IDE support, self-documenting
+- **Con:** More verbose, requires learning type system (generics, unions, etc.)
+
+**Use case in risk-service:** `strict = true` ensures all code is fully typed, no `Any` escapes.
+
+---
+
+### Q6: What is the difference between `async def` and `def` in Python?
+
+**Answer:**
+**`async def`** defines a coroutine function (asynchronous).
+
+**Key differences:**
+
+| `def` (sync) | `async def` (async) |
+|-------------|---------------------|
+| Blocks thread | Yields to event loop |
+| Returns value | Returns coroutine object |
+| Call with `func()` | Call with `await func()` |
+| Can't use `await` | Can use `await` |
+
+**When to use async:**
+- I/O-bound operations: database queries, HTTP requests, file reads
+- High concurrency (many requests at once)
+- FastAPI with async endpoints
+
+**When NOT to use async:**
+- CPU-bound operations (use multiprocessing instead)
+- Libraries that don't support async (blocking code)
+- Simple scripts (async adds complexity)
+
+**Example:**
+```python
+# Sync (blocks for 5 seconds)
+def fetch_data():
+    time.sleep(5)
+    return "data"
+
+# Async (yields to event loop)
+async def fetch_data():
+    await asyncio.sleep(5)  # Other tasks can run during this
+    return "data"
+
+# Usage
+result = fetch_data()  # Sync: blocks
+result = await fetch_data()  # Async: concurrent
+```
+
+**In risk-service:**
+- Database queries: `async def fetch_pool_snapshots()` → `await db.pool.fetch(...)`
+- FastAPI endpoints: `async def list_risk_scores()` → handles many requests concurrently
+
+---
+
+### Q7: What is pandas and when should you use it?
+
+**Answer:**
+**pandas** is a Python library for data manipulation and analysis.
+
+**Core concepts:**
+- **Series:** 1D array with labels (like a column)
+- **DataFrame:** 2D table (rows + columns)
+
+**When to use pandas:**
+- ✅ Data cleaning and transformation
+- ✅ Statistical analysis
+- ✅ CSV/Excel/SQL data loading
+- ✅ Time-series analysis
+- ✅ Exploratory data analysis
+
+**When NOT to use pandas:**
+- ❌ Real-time APIs (overhead for single-row operations)
+- ❌ Large-scale data (>1GB in memory → use Dask/Polars)
+- ❌ Simple calculations (NumPy or plain Python is faster)
+
+**Example:**
+```python
+import pandas as pd
+
+# Create DataFrame
+data = {"pool_id": ["A", "B", "C"], "apy": [5.0, 10.0, 15.0]}
+df = pd.DataFrame(data)
+
+# Filter
+high_apy = df[df["apy"] > 7.5]
+
+# Aggregate
+mean_apy = df["apy"].mean()
+```
+
+**In risk-service:**
+- **Not used in production code** (risk_engine.py uses plain Python for speed)
+- **Could be used** for batch analysis, historical backtesting, or exploratory notebooks
+
+---
+
+### Q8: What is scikit-learn's IsolationForest and how does it work?
+
+**Answer:**
+**IsolationForest** is an unsupervised anomaly detection algorithm.
+
+**How it works:**
+1. Build random trees that recursively split data
+2. Anomalies are easier to isolate (fewer splits needed)
+3. Score = path length to isolate a point
+4. Short path = anomaly, long path = normal
+
+**Intuition:**
+- Normal points are clustered → hard to isolate
+- Outliers are far from clusters → easy to isolate
+
+**Parameters:**
+- `contamination`: Expected fraction of anomalies (e.g., 0.05 = 5%)
+- `random_state`: Seed for reproducibility
+
+**Example:**
+```python
+from sklearn.ensemble import IsolationForest
+import numpy as np
+
+# Data: 100 normal + 5 outliers
+X = np.concatenate([np.random.randn(100, 2), np.random.randn(5, 2) * 5])
+
+model = IsolationForest(contamination=0.05, random_state=42)
+predictions = model.fit_predict(X)
+# predictions: 1 = normal, -1 = anomaly
+```
+
+**In risk-service:**
+- Detects pools with unusual combinations of TVL, APY, volatility
+- Requires ≥10 pools for meaningful results
+- Flags ~5% as anomalies (configurable)
+
+**Limitations:**
+- No interpretability (doesn't explain *why* it's an outlier)
+- Sensitive to feature scaling
+- Needs enough data for statistical significance
+
+---
+
+### Q9: What is the difference between `list[str]` and `list[str] | None` in Python type hints?
+
+**Answer:**
+**Type union syntax:**
+
+| Syntax | Meaning | Accepts | Rejects |
+|--------|---------|---------|---------|
+| `list[str]` | List of strings | `["a", "b"]`, `[]` | `None`, `["a", 1]` |
+| `list[str] \| None` | List or None | `["a"]`, `None` | `["a", 1]`, `1` |
+| `list[str \| None]` | List of str/None | `["a", None]` | `None` (the list itself), `[1]` |
+
+**Before Python 3.10:**
+```python
+from typing import Optional, Union
+
+x: Optional[list[str]]  # list[str] | None
+y: Union[int, str]      # int | str
+```
+
+**Python 3.10+ (preferred):**
+```python
+x: list[str] | None  # Cleaner syntax
+y: int | str
+```
+
+**Example:**
+```python
+def fetch_pools(ids: list[str] | None = None) -> list[dict]:
+    if ids is None:
+        # Fetch all pools
+        return fetch_all()
+    else:
+        # Fetch specific pools
+        return fetch_by_ids(ids)
+```
+
+**In risk-service:**
+- API parameters: `pool_ids: list[str] | None` (optional filter)
+- Database results: `tvl_usd: Decimal | None` (nullable column)
+- mypy enforces null checks before using optional values
+
+---
+
+### Q10: What is pytest's `pytest.mark` and how do you use it?
+
+**Answer:**
+**`pytest.mark`** is a decorator for organizing and selecting tests.
+
+**Common markers:**
+- `@pytest.mark.unit`: Unit tests (no external dependencies)
+- `@pytest.mark.integration`: Integration tests (database, APIs)
+- `@pytest.mark.slow`: Tests that take >1 second
+- `@pytest.mark.asyncio`: Async tests (requires pytest-asyncio)
+- `@pytest.mark.skip(reason="...")`: Skip test
+- `@pytest.mark.parametrize`: Run test with multiple inputs
+
+**Configuration (pyproject.toml):**
+```toml
+[tool.pytest.ini_options]
+markers = [
+    "unit: Unit tests without external dependencies",
+    "integration: Integration tests requiring database",
+]
+```
+
+**Usage:**
+```python
+import pytest
+
+@pytest.mark.unit
+def test_calculation():
+    assert 2 + 2 == 4
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_database():
+    result = await db.fetch("SELECT 1")
+    assert result == [(1,)]
+
+@pytest.mark.parametrize("a,b,expected", [(1, 2, 3), (5, 5, 10)])
+def test_add(a, b, expected):
+    assert a + b == expected  # Runs 2 times
+```
+
+**Running specific markers:**
+```bash
+pytest -m unit              # Only unit tests
+pytest -m "not integration" # Exclude integration tests
+pytest -m "unit and slow"   # Both markers
+```
+
+**In risk-service:**
+- `pytest -m unit` in CI (fast, no database)
+- `pytest` locally (all tests, with DATABASE_URL)
+- `pytest -k "tvl"` (run tests matching "tvl")
+
+---
+
+## Phase 3 Completion Checklist
+
+- [x] Python 3.12 environment with modern tooling (ruff, mypy, pytest)
+- [x] FastAPI application with typed endpoints
+- [x] Pydantic v2 models for request/response validation
+- [x] asyncpg database connection with connection pooling
+- [x] Transparent risk scoring engine (7 signals + anomaly detection)
+- [x] Unit tests for each signal function (pytest)
+- [x] Integration tests for database operations
+- [x] API tests with httpx
+- [x] Docker multi-stage build (builder + runtime)
+- [x] CI/CD job (ruff, mypy, pytest)
+- [x] docker-compose integration (risk-service enabled)
+- [x] Smoke test: assert risk_scores > 0 and API calls succeed
+- [x] Comprehensive RISK_MODEL.md documentation
+- [x] Python learning Q&A (10 questions)
+
+**Test Results:**
+- Unit tests: Pending local run
+- Integration tests: Require DATABASE_URL
+- Smoke test: Pending CI run
+
+**Key Learnings:**
+- Async Python patterns (`async def`, `await`, asyncpg)
+- Modern Python tooling (ruff > black+flake8, pydantic v2, mypy strict)
+- FastAPI lifecycle management (startup/shutdown with `lifespan`)
+- Explainable ML (deterministic formulas > black-box models)
+- PostgreSQL connection pooling and prepared statements

@@ -1,0 +1,379 @@
+"""Unit tests for risk engine signal functions."""
+
+import pytest
+from uuid import uuid4
+
+from app.risk_engine import (
+    apy_volatility_signal,
+    calculate_risk_score,
+    compute_risk_scores_batch,
+    data_age_signal,
+    detect_anomaly,
+    il_risk_signal,
+    reward_ratio_signal,
+    stablecoin_signal,
+    tvl_drop_signal,
+    tvl_size_signal,
+)
+
+
+# === TVL Size Signal Tests ===
+
+
+@pytest.mark.unit
+def test_tvl_size_signal_no_data():
+    """TVL with no data should return maximum risk."""
+    assert tvl_size_signal(None) == 100.0
+    assert tvl_size_signal(0.0) == 100.0
+    assert tvl_size_signal(-100.0) == 100.0
+
+
+@pytest.mark.unit
+def test_tvl_size_signal_boundaries():
+    """TVL signal should handle boundary values correctly."""
+    # Below low threshold (1M)
+    assert tvl_size_signal(500_000.0) == 100.0
+
+    # Above high threshold (10M)
+    assert tvl_size_signal(15_000_000.0) == 0.0
+
+    # At low boundary
+    assert tvl_size_signal(1_000_000.0) == 100.0
+
+    # At high boundary
+    assert tvl_size_signal(10_000_000.0) == 0.0
+
+
+@pytest.mark.unit
+def test_tvl_size_signal_linear_interpolation():
+    """TVL signal should interpolate linearly between thresholds."""
+    # Midpoint (5.5M) should be 50% risk
+    midpoint = (1_000_000.0 + 10_000_000.0) / 2
+    score = tvl_size_signal(midpoint)
+    assert 45.0 <= score <= 55.0  # Allow small floating point error
+
+
+# === TVL Drop Signal Tests ===
+
+
+@pytest.mark.unit
+def test_tvl_drop_signal_no_data():
+    """TVL drop with no data should return medium risk."""
+    assert tvl_drop_signal(None) == 50.0
+
+
+@pytest.mark.unit
+def test_tvl_drop_signal_growth():
+    """TVL growth or stability should return zero risk."""
+    assert tvl_drop_signal(0.0) == 0.0
+    assert tvl_drop_signal(10.0) == 0.0
+    assert tvl_drop_signal(100.0) == 0.0
+
+
+@pytest.mark.unit
+def test_tvl_drop_signal_critical_drop():
+    """TVL drop >= critical threshold should return 100."""
+    assert tvl_drop_signal(-50.0) == 100.0
+    assert tvl_drop_signal(-80.0) == 100.0
+
+
+@pytest.mark.unit
+def test_tvl_drop_signal_warning_range():
+    """TVL drop in warning range should scale 50-100."""
+    # Drop at warning threshold (20%) should be 50
+    score_warning = tvl_drop_signal(-20.0)
+    assert 48.0 <= score_warning <= 52.0
+
+    # Drop between warning and critical should be 50-100
+    score_mid = tvl_drop_signal(-35.0)
+    assert 50.0 < score_mid < 100.0
+
+
+# === APY Volatility Signal Tests ===
+
+
+@pytest.mark.unit
+def test_apy_volatility_signal_stable():
+    """Stable APY should return low risk."""
+    score = apy_volatility_signal(apy=5.0, apy_sigma=0.5, apy_pct_7d=2.0)
+    assert score < 30.0
+
+
+@pytest.mark.unit
+def test_apy_volatility_signal_high_absolute():
+    """APY >100% should trigger penalty."""
+    score = apy_volatility_signal(apy=150.0, apy_sigma=5.0, apy_pct_7d=10.0)
+    assert score > 30.0
+
+
+@pytest.mark.unit
+def test_apy_volatility_signal_high_sigma():
+    """High APY sigma (coefficient of variation) should trigger penalty."""
+    score = apy_volatility_signal(apy=10.0, apy_sigma=30.0, apy_pct_7d=5.0)
+    # CV = 30/10 = 3.0, which is > z_threshold (2.5)
+    assert score > 30.0
+
+
+@pytest.mark.unit
+def test_apy_volatility_signal_spike():
+    """Recent APY spike should trigger penalty."""
+    score = apy_volatility_signal(apy=20.0, apy_sigma=2.0, apy_pct_7d=150.0)
+    assert score > 30.0
+
+
+# === Reward Ratio Signal Tests ===
+
+
+@pytest.mark.unit
+def test_reward_ratio_signal_no_data():
+    """No data should return medium risk."""
+    assert reward_ratio_signal(None, None) == 50.0
+    assert reward_ratio_signal(0.0, 5.0) == 50.0
+
+
+@pytest.mark.unit
+def test_reward_ratio_signal_low_dependency():
+    """Low reward ratio should return low risk."""
+    # 20% reward / 10% total = 0.2 ratio < 0.3 threshold
+    assert reward_ratio_signal(apy=10.0, apy_reward=2.0) == 0.0
+
+
+@pytest.mark.unit
+def test_reward_ratio_signal_high_dependency():
+    """High reward ratio should return high risk."""
+    # 8% reward / 10% total = 0.8 ratio > 0.7 threshold
+    assert reward_ratio_signal(apy=10.0, apy_reward=8.0) == 100.0
+
+
+@pytest.mark.unit
+def test_reward_ratio_signal_linear():
+    """Reward ratio in middle range should interpolate."""
+    # 5% reward / 10% total = 0.5 ratio (midpoint between 0.3 and 0.7)
+    score = reward_ratio_signal(apy=10.0, apy_reward=5.0)
+    assert 45.0 <= score <= 55.0
+
+
+# === Stablecoin Signal Tests ===
+
+
+@pytest.mark.unit
+def test_stablecoin_signal():
+    """Stablecoin flag should determine fixed risk."""
+    assert stablecoin_signal(True) == 0.0
+    assert stablecoin_signal(False) == 50.0
+
+
+# === IL Risk Signal Tests ===
+
+
+@pytest.mark.unit
+def test_il_risk_signal_no_data():
+    """No IL risk data should return zero (not an AMM)."""
+    assert il_risk_signal(None) == 0.0
+
+
+@pytest.mark.unit
+def test_il_risk_signal_low():
+    """Low IL risk should scale proportionally."""
+    assert il_risk_signal(0.0) == 0.0
+    assert il_risk_signal(0.25) == 25.0
+
+
+@pytest.mark.unit
+def test_il_risk_signal_high():
+    """IL risk above threshold should return 100."""
+    assert il_risk_signal(0.5) == 100.0
+    assert il_risk_signal(1.0) == 100.0
+
+
+# === Data Age Signal Tests ===
+
+
+@pytest.mark.unit
+def test_data_age_signal_no_data():
+    """No data count should return maximum risk."""
+    assert data_age_signal(None) == 100.0
+
+
+@pytest.mark.unit
+def test_data_age_signal_reliable():
+    """Data count >= min should return zero risk."""
+    assert data_age_signal(30) == 0.0
+    assert data_age_signal(100) == 0.0
+
+
+@pytest.mark.unit
+def test_data_age_signal_unreliable():
+    """Data count < warning should return 100."""
+    assert data_age_signal(5) == 100.0
+    assert data_age_signal(7) == 100.0
+
+
+@pytest.mark.unit
+def test_data_age_signal_linear():
+    """Data count between warning and min should interpolate."""
+    # Midpoint between 7 (warning) and 30 (min) = ~18.5
+    score = data_age_signal(18)
+    assert 40.0 <= score <= 60.0
+
+
+# === Anomaly Detection Tests ===
+
+
+@pytest.mark.unit
+def test_detect_anomaly_insufficient_data():
+    """Anomaly detection with <10 pools should return all False."""
+    snapshots = [{"pool_id": f"pool_{i}", "tvl_usd": 1000000, "apy": 5.0} for i in range(5)]
+    result = detect_anomaly(snapshots)
+    assert all(not is_anomaly for is_anomaly in result.values())
+
+
+@pytest.mark.unit
+def test_detect_anomaly_finds_outliers():
+    """Anomaly detection should flag statistical outliers."""
+    # Create 20 normal pools + 2 extreme outliers
+    snapshots = []
+    for i in range(20):
+        snapshots.append(
+            {
+                "pool_id": f"pool_{i}",
+                "tvl_usd": 5_000_000.0,
+                "apy": 10.0,
+                "apy_sigma": 1.0,
+                "tvl_change_7d_pct": 0.0,
+            }
+        )
+
+    # Add outliers
+    snapshots.append(
+        {
+            "pool_id": "outlier_1",
+            "tvl_usd": 100_000_000.0,  # 20x TVL
+            "apy": 500.0,  # 50x APY
+            "apy_sigma": 50.0,
+            "tvl_change_7d_pct": -90.0,
+        }
+    )
+
+    result = detect_anomaly(snapshots, contamination=0.05)
+
+    # At least one outlier should be detected
+    outliers = [pool_id for pool_id, is_anomaly in result.items() if is_anomaly]
+    assert len(outliers) > 0
+
+
+# === Calculate Risk Score Tests ===
+
+
+@pytest.mark.unit
+def test_calculate_risk_score_complete():
+    """Calculate risk score with complete data."""
+    snapshot = {
+        "id": uuid4(),
+        "pool_id": "test_pool",
+        "tvl_usd": 5_000_000.0,
+        "tvl_change_7d_pct": -10.0,
+        "apy": 15.0,
+        "apy_sigma": 2.0,
+        "apy_pct_7d": 5.0,
+        "apy_reward": 3.0,
+        "is_stablecoin": True,
+        "il_risk": 0.1,
+        "count": 50,
+    }
+
+    result = calculate_risk_score(snapshot)
+
+    assert "pool_id" in result
+    assert result["pool_id"] == "test_pool"
+    assert "total_risk_score" in result
+    assert 0.0 <= result["total_risk_score"] <= 100.0
+    assert "risk_category" in result
+    assert result["risk_category"] in ["low", "medium", "high", "critical"]
+    assert "tvl_score" in result
+    assert "model_version" in result
+
+
+@pytest.mark.unit
+def test_calculate_risk_score_low_risk():
+    """Calculate risk score for low-risk pool."""
+    snapshot = {
+        "id": uuid4(),
+        "pool_id": "safe_pool",
+        "tvl_usd": 50_000_000.0,  # High TVL
+        "tvl_change_7d_pct": 5.0,  # Growing
+        "apy": 8.0,  # Moderate
+        "apy_sigma": 0.5,  # Stable
+        "apy_pct_7d": 2.0,  # No spike
+        "apy_reward": 1.0,  # Low reward dependency
+        "is_stablecoin": True,  # Stablecoin
+        "il_risk": 0.0,  # No IL
+        "count": 100,  # Reliable data
+    }
+
+    result = calculate_risk_score(snapshot)
+
+    assert result["total_risk_score"] < 30.0
+    assert result["risk_category"] in ["low", "medium"]
+
+
+@pytest.mark.unit
+def test_calculate_risk_score_high_risk():
+    """Calculate risk score for high-risk pool."""
+    snapshot = {
+        "id": uuid4(),
+        "pool_id": "risky_pool",
+        "tvl_usd": 100_000.0,  # Low TVL
+        "tvl_change_7d_pct": -60.0,  # Sharp drop
+        "apy": 200.0,  # Extremely high
+        "apy_sigma": 50.0,  # Very volatile
+        "apy_pct_7d": 150.0,  # Recent spike
+        "apy_reward": 180.0,  # High reward dependency
+        "is_stablecoin": False,  # Volatile asset
+        "il_risk": 0.8,  # High IL
+        "count": 5,  # New pool
+    }
+
+    result = calculate_risk_score(snapshot)
+
+    assert result["total_risk_score"] > 70.0
+    assert result["risk_category"] in ["high", "critical"]
+
+
+# === Batch Computation Tests ===
+
+
+@pytest.mark.unit
+def test_compute_risk_scores_batch_empty():
+    """Batch computation with empty input should return empty list."""
+    result = compute_risk_scores_batch([])
+    assert result == []
+
+
+@pytest.mark.unit
+def test_compute_risk_scores_batch():
+    """Batch computation should process multiple pools."""
+    snapshots = []
+    for i in range(15):
+        snapshots.append(
+            {
+                "id": uuid4(),
+                "pool_id": f"pool_{i}",
+                "tvl_usd": 5_000_000.0,
+                "tvl_change_7d_pct": 0.0,
+                "apy": 10.0,
+                "apy_sigma": 1.0,
+                "apy_pct_7d": 2.0,
+                "apy_reward": 2.0,
+                "is_stablecoin": True,
+                "il_risk": 0.0,
+                "count": 50,
+            }
+        )
+
+    result = compute_risk_scores_batch(snapshots)
+
+    assert len(result) == 15
+    assert all("pool_id" in score for score in result)
+    assert all("is_anomaly" in score for score in result)
+    assert all("total_risk_score" in score for score in result)
