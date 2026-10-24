@@ -246,6 +246,8 @@ Extremely high, volatile, or spiking APY suggests:
 
 **What it measures:** Change in our SimpleVault's share price (losses in the vault's underlying strategy).
 
+**Applicability:** This signal applies **only to our SimpleVault contract**, not to general DeFiLlama pools. For non-vault pools (standard lending/AMM pools from DeFiLlama), this signal is **not applicable**.
+
 **Rationale:**
 - **Share price drops indicate actual losses** in the vault.
   - Unlike TVL drops (users withdrawing), share price drops mean existing shares lost value
@@ -254,16 +256,25 @@ Extremely high, volatile, or spiking APY suggests:
 - **Stable or growing share price = low risk.**
 
 **Formula:**
+- No vault data (non-vault pool): **Not applicable** (signal excluded, weights renormalized)
 - No drop or increase: **0 points**
 - Drop < 1% (warning threshold): **0-50 points** (linear scale)
 - Drop ≥ 1% but < 5%: **50-100 points** (linear scale)
 - Drop ≥ 5% (critical): **100 points**
 
 **Example:**
-- Share price +2%: 0 points
-- Share price -0.5%: 25 points
-- Share price -1.5%: 62 points
-- Share price -10%: 100 points
+- DeFiLlama lending pool (no vault data): Not applicable, weight redistributed to other signals
+- Our vault, share price +2%: 0 points
+- Our vault, share price -0.5%: 25 points
+- Our vault, share price -1.5%: 62 points
+- Our vault, share price -10%: 100 points
+
+**Weight Renormalization:**
+When this signal is not applicable (non-vault pools), its weight (0.16) is redistributed proportionally among the remaining 7 signals. This ensures non-vault pools are not artificially penalized.
+
+**Example weights:**
+- **With vault data:** TVL 0.12, APY 0.18, Vault 0.16, etc. (sum = 1.0)
+- **Without vault data (renormalized):** TVL 0.143, APY 0.214, Vault 0.0, etc. (sum = 1.0)
 
 **Limitations:**
 - Only applies to our SimpleVault (not all pools)
