@@ -39,7 +39,6 @@ export const riskScoreSchema = z.object({
   il_score: z.number(),
   data_age_score: z.number(),
   vault_score: z.number(),
-  vault_score_applicable: z.boolean().optional(),
   is_anomaly: z.boolean(),
   anomaly_reason: z.string().nullable(),
   model_version: z.string(),
@@ -67,7 +66,6 @@ export const poolWithRiskSchema = poolSnapshotSchema.merge(
   riskScoreSchema.pick({
     total_risk_score: true,
     risk_category: true,
-    vault_score_applicable: true,
   })
 );
 

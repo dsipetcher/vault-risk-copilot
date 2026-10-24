@@ -64,8 +64,7 @@ export async function getLatestPools(
     SELECT 
       ps.*,
       rs.total_risk_score,
-      rs.risk_category,
-      rs.vault_score_applicable
+      rs.risk_category
     FROM (${latestSnapshotsSubquery}) ps
     LEFT JOIN risk_scores rs ON rs.snapshot_id = ps.id
     ${whereClause}
@@ -102,7 +101,6 @@ export async function getPoolById(poolId: string): Promise<(PoolSnapshot & { ris
         'il_score', rs.il_score,
         'data_age_score', rs.data_age_score,
         'vault_score', rs.vault_score,
-        'vault_score_applicable', rs.vault_score_applicable,
         'is_anomaly', rs.is_anomaly,
         'anomaly_reason', rs.anomaly_reason,
         'model_version', rs.model_version,
