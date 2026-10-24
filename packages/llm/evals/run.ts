@@ -79,6 +79,11 @@ async function runEval(): Promise<void> {
         }
       }
 
+      // Fallback is always a FAIL
+      if (metadata.fallback) {
+        errors.push(`Fallback used: ${metadata.fallback_reason ?? 'unknown reason'}`);
+      }
+
       results.push({
         name: testCase.name,
         passed: errors.length === 0,

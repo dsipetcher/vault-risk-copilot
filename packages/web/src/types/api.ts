@@ -85,6 +85,8 @@ export interface ExplanationMetadata {
   model: string;
   timestamp: string;
   latency_ms: number | null;
+  fallback?: boolean;
+  fallback_reason?: string;
 }
 
 export interface ExplanationResponse {

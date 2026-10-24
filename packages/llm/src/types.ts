@@ -10,6 +10,8 @@ export interface LLMProvider {
       totalTokens?: number;
       latencyMs: number;
       costUsd?: number;
+      fallback?: boolean;
+      fallback_reason?: string;
     };
   }>;
 }

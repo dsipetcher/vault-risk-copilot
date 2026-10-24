@@ -82,7 +82,11 @@ export class OpenAIProvider implements LLMProvider {
             );
             continue;
           }
-          return this.getFallbackResponse(input, latencyMs, response.usage);
+          return this.getFallbackResponse(
+            input,
+            latencyMs,
+            `Response parsing failed: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+          );
         }
 
         const valid = this.validateNumberFidelity(input, parsed);
@@ -92,7 +96,11 @@ export class OpenAIProvider implements LLMProvider {
         }
 
         if (!valid) {
-          return this.getFallbackResponse(input, latencyMs, response.usage);
+          return this.getFallbackResponse(
+            input,
+            latencyMs,
+            'Number fidelity validation failed'
+          );
         }
 
         const costUsd = this.estimateCost(response.usage);
@@ -117,11 +125,11 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     const latencyMs = Date.now() - startTime;
-    return this.getFallbackResponse(input, latencyMs, {
-      prompt_tokens: 150,
-      completion_tokens: 200,
-      total_tokens: 350,
-    });
+    return this.getFallbackResponse(
+      input,
+      latencyMs,
+      lastError?.message ?? 'Unknown error after retries'
+    );
   }
 
   private buildSystemPrompt(): string {
@@ -225,27 +233,45 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
 
   private validateNumberFidelity(input: RiskInput, output: ExplanationOutput): boolean {
     const fullText = JSON.stringify(output);
+    
+    // Remove scale denominators and duration labels before extraction
+    const cleanedText = fullText
+      .replace(/\/100/g, '')  // Remove /100 scale
+      .replace(/\b\d+d\b/gi, '');  // Remove 7d, 30d duration labels
+    
+    // Match numbers with optional minus sign
+    const numberPattern = /-?\d+(?:\.\d+)?/g;
+    const numbersInOutput = cleanedText.match(numberPattern) || [];
 
-    const numberPattern = /\d+\.?\d*/g;
-    const numbersInOutput = fullText.match(numberPattern) || [];
-
-    const inputNumbers = new Set<string>();
+    const inputNumbers = new Set<number>();
     this.collectNumbers(input, inputNumbers);
 
-    for (const num of numbersInOutput) {
-      const normalized = parseFloat(num);
-      if (isNaN(normalized)) continue;
+    for (const numStr of numbersInOutput) {
+      const num = parseFloat(numStr);
+      if (isNaN(num)) continue;
+      
+      // Skip very small numbers (likely formatting)
+      if (Math.abs(num) < 0.1) continue;
 
       let found = false;
       for (const inputNum of inputNumbers) {
-        const inputNormalized = parseFloat(inputNum);
-        if (Math.abs(inputNormalized - normalized) < 0.01) {
+        // Direct match with tolerance
+        if (Math.abs(inputNum - num) < 0.1) {
           found = true;
           break;
         }
+        
+        // Allow simple derived numbers with 10% tolerance
+        if (inputNum !== 0) {
+          const ratio = num / inputNum;
+          if (ratio > 0.9 && ratio < 1.1) {
+            found = true;
+            break;
+          }
+        }
       }
 
-      if (!found && normalized > 1) {
+      if (!found) {
         return false;
       }
     }
@@ -253,11 +279,14 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
     return true;
   }
 
-  private collectNumbers(obj: unknown, numbers: Set<string>): void {
+  private collectNumbers(obj: unknown, numbers: Set<number>): void {
     if (typeof obj === 'number') {
-      numbers.add(obj.toString());
-      numbers.add(obj.toFixed(1));
-      numbers.add(obj.toFixed(2));
+      numbers.add(obj);
+      numbers.add(Math.abs(obj));
+      // Add common rounding variants
+      numbers.add(parseFloat(obj.toFixed(0)));
+      numbers.add(parseFloat(obj.toFixed(1)));
+      numbers.add(parseFloat(obj.toFixed(2)));
     } else if (typeof obj === 'object' && obj !== null) {
       for (const value of Object.values(obj)) {
         this.collectNumbers(value, numbers);
@@ -278,24 +307,25 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
   private getFallbackResponse(
     input: RiskInput,
     latencyMs: number,
-    usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+    reason: string
   ): {
     output: ExplanationOutput;
     metadata: {
       model: string;
-      promptTokens: number;
-      completionTokens: number;
-      totalTokens: number;
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
       latencyMs: number;
-      costUsd: number;
+      costUsd?: number;
+      fallback: boolean;
+      fallback_reason: string;
     };
   } {
-    const poolNameSafe = this.sanitizeInput(input.pool_name);
     const categoryLabel = input.risk_category.charAt(0).toUpperCase() + input.risk_category.slice(1);
 
     return {
       output: {
-        summary: `The ${poolNameSafe} pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. Due to data processing limitations, detailed analysis is temporarily unavailable.`,
+        summary: `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. Due to data processing limitations, detailed analysis is temporarily unavailable.`,
         key_factors: [
           {
             signal: 'Risk Score',
@@ -308,11 +338,9 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
       },
       metadata: {
         model: this.model,
-        promptTokens: usage.prompt_tokens,
-        completionTokens: usage.completion_tokens,
-        totalTokens: usage.total_tokens,
         latencyMs,
-        costUsd: this.estimateCost(usage),
+        fallback: true,
+        fallback_reason: reason,
       },
     };
   }

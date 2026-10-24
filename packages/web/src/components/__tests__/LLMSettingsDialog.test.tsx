@@ -56,7 +56,7 @@ describe('LLMSettingsDialog', () => {
 
   it('should update model and baseUrl when provider changes', async () => {
     vi.mocked(llmStorage.getDefaultModelForProvider).mockImplementation((provider) => {
-      if (provider === 'groq') return 'llama-3.3-70b-versatile';
+      if (provider === 'groq') return 'openai/gpt-oss-120b';
       return 'mock-v1';
     });
     

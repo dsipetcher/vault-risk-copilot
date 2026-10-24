@@ -74,6 +74,8 @@ export async function explanationsRoutes(app: FastifyInstance) {
                   model: { type: 'string' },
                   timestamp: { type: 'string' },
                   latency_ms: { type: 'number' },
+                  fallback: { type: 'boolean' },
+                  fallback_reason: { type: 'string' },
                 },
               },
               cached: { type: 'boolean' },

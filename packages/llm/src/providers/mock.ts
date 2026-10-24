@@ -173,6 +173,31 @@ export class MockProvider implements LLMProvider {
       });
     }
 
+    if (input.breakdown.stablecoin_score != null) {
+      const isStablecoin = input.pool_metrics.is_stablecoin;
+      const score = input.breakdown.stablecoin_score;
+      factors.push({
+        signal: 'Stablecoin Score',
+        value: `${score.toFixed(1)}/100 (${isStablecoin ? 'Stablecoin' : 'Non-stablecoin'})`,
+        explanation:
+          isStablecoin
+            ? 'Stablecoin assets reduce price volatility risk.'
+            : 'Volatile assets expose users to price risk in addition to protocol-specific risks.',
+      });
+    }
+
+    if (input.breakdown.vault_score != null) {
+      const score = input.breakdown.vault_score;
+      factors.push({
+        signal: 'Vault Score',
+        value: `${score.toFixed(1)}/100`,
+        explanation:
+          score > 50
+            ? 'Vault share price movements may indicate underlying strategy performance issues.'
+            : 'Stable vault share price indicates reliable strategy performance.',
+      });
+    }
+
     return factors;
   }
 

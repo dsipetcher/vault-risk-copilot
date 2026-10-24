@@ -69,6 +69,15 @@ export function ExplainPanel({ poolId }: ExplainPanelProps) {
             </div>
           )}
 
+          {/* Fallback warning */}
+          {explanation.metadata.fallback && (
+            <div className="bg-orange-50 border border-orange-200 rounded-md p-3" data-testid="fallback-warning">
+              <p className="text-sm text-orange-800">
+                <strong>⚠️ Limited Analysis:</strong> {explanation.metadata.fallback_reason}
+              </p>
+            </div>
+          )}
+
           {/* Summary */}
           <div>
             <h3 className="text-sm font-medium text-gray-700 mb-2">Summary</h3>

@@ -485,7 +485,7 @@ export const evalCases: Array<{
       },
     },
     checks: {
-      // numberFidelity disabled: new mock format uses "X.X/100" which includes synthetic "100"
+      numberFidelity: true,
       schemaValid: true,
       noBannedPhrases: true,
     },

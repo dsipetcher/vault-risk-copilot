@@ -130,7 +130,7 @@ describe('llm-storage', () => {
     it('should return correct default models', () => {
       expect(getDefaultModelForProvider('openai')).toBe('gpt-4o-mini');
       expect(getDefaultModelForProvider('openrouter')).toBe('openai/gpt-4o-mini');
-      expect(getDefaultModelForProvider('groq')).toBe('llama-3.3-70b-versatile');
+      expect(getDefaultModelForProvider('groq')).toBe('openai/gpt-oss-120b');
       expect(getDefaultModelForProvider('ollama')).toBe('llama3.2');
       expect(getDefaultModelForProvider('mock')).toBe('mock-v1');
     });

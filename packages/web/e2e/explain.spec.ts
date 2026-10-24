@@ -86,9 +86,9 @@ test.describe('LLM Explain Feature', () => {
     
     const factorElements = page.locator('[data-testid^="risk-factor-"]');
     const factorCount = await factorElements.count();
-    // Mock provider currently generates 6 factors (excludes stablecoin and vault)
-    expect(factorCount).toBeGreaterThanOrEqual(6);
-    console.log(`✅ Found ${factorCount} risk factors`);
+    // Must equal number of non-null signals (8)
+    expect(factorCount).toBe(8);
+    console.log(`✅ Found ${factorCount} risk factors (all 8 signals)`);
 
     // Verify first factor has signal, value, and explanation
     const firstFactor = factorElements.first();

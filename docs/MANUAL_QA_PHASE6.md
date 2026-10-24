@@ -41,7 +41,7 @@ Phase 6 adds AI-powered risk explanations with Bring-Your-Own-Key (BYOK) support
   - **Mock** (default, no key required) - Deterministic demo mode
   - **OpenAI** - gpt-4o-mini default
   - **OpenRouter** - openai/gpt-4o-mini default
-  - **Groq** - llama-3.3-70b-versatile default
+  - **Groq** - openai/gpt-oss-120b default (recommended)
   - **Ollama** - llama3.2 default, custom base URL
 - Fields:
   - Model (text input with defaults)
