@@ -5,9 +5,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-import numpy as np
-from sklearn.ensemble import IsolationForest
-
 from app.config import settings
 from app.models import RiskCategory
 
@@ -273,53 +270,87 @@ def data_age_signal(count: int | None) -> float:
     return max(0.0, min(100.0, score))
 
 
-# === Anomaly Detection ===
-
-
-def detect_anomaly(
-    pool_snapshots: list[dict[str, Any]],
-    contamination: float = 0.05,
-) -> dict[str, bool]:
+def vault_share_price_drop_signal(share_price_change_pct: float | None) -> float:
     """
-    Detect anomalous pools using Isolation Forest.
+    Calculate risk score based on our SimpleVault share price drop.
 
-    Rationale: Statistical outliers may indicate data quality issues,
-    manipulated metrics, or genuinely risky protocols.
+    Rationale: Share price drops indicate losses in the vault's underlying
+    strategy. Unlike TVL drops (users withdrawing), share price drops mean
+    the value of existing shares decreased.
+
+    Formula:
+    - No drop or increase: 0
+    - Drop < warning threshold (1%): linear scaling 0-50
+    - Drop >= warning threshold: 50
+    - Drop >= critical threshold (5%): 100
 
     Args:
-        pool_snapshots: List of pool snapshot dictionaries
-        contamination: Expected proportion of outliers (default 5%)
+        share_price_change_pct: Share price change percentage (negative = drop)
 
     Returns:
-        Dictionary mapping pool_id to is_anomaly boolean
+        Risk score (0-100)
     """
-    if len(pool_snapshots) < 10:
-        # Not enough data for anomaly detection
-        return {snap["pool_id"]: False for snap in pool_snapshots}
+    if share_price_change_pct is None:
+        return 50.0  # No data = medium risk
 
-    # Extract features for anomaly detection
-    features = []
-    pool_ids = []
+    if share_price_change_pct >= 0:
+        return 0.0  # Share price stable or growing = no risk
 
-    for snap in pool_snapshots:
-        tvl = decimal_to_float(snap.get("tvl_usd")) or 0
-        apy = decimal_to_float(snap.get("apy")) or 0
-        apy_sigma = decimal_to_float(snap.get("apy_sigma")) or 0
-        tvl_change = decimal_to_float(snap.get("tvl_change_7d_pct")) or 0
+    drop_magnitude = abs(share_price_change_pct)
+    warning = settings.thresholds.vault_price_drop_warning_pct
+    critical = settings.thresholds.vault_price_drop_critical_pct
 
-        features.append([tvl, apy, apy_sigma, tvl_change])
-        pool_ids.append(snap["pool_id"])
+    if drop_magnitude >= critical:
+        return 100.0
+    if drop_magnitude >= warning:
+        # Scale from 50 to 100 between warning and critical
+        ratio = (drop_magnitude - warning) / (critical - warning)
+        return 50.0 + 50.0 * ratio
+    # Scale from 0 to 50 between 0 and warning
+    return 50.0 * (drop_magnitude / warning)
 
-    # Replace zeros with small epsilon to avoid division issues
-    features_array = np.array(features, dtype=float)
-    features_array = np.where(features_array == 0, 1e-6, features_array)
 
-    # Fit Isolation Forest
-    iso_forest = IsolationForest(contamination=contamination, random_state=42)
-    predictions = iso_forest.fit_predict(features_array)
+# === Anomaly Detection (Rule-Based) ===
 
-    # -1 = anomaly, 1 = normal
-    return {pool_id: (pred == -1) for pool_id, pred in zip(pool_ids, predictions, strict=False)}
+
+def detect_anomaly_rule_based(risk_score: float, breakdown: dict[str, float]) -> tuple[bool, str | None]:
+    """
+    Detect anomalous risk patterns using deterministic rules.
+
+    Rationale: Pools with extreme combinations of risk factors or
+    very high individual signal scores may indicate data quality issues
+    or genuinely dangerous protocols.
+
+    Args:
+        risk_score: Total risk score (0-100)
+        breakdown: Dictionary of individual signal scores
+
+    Returns:
+        Tuple of (is_anomaly, reason)
+    """
+    # Rule 1: Multiple signals above critical threshold
+    critical_signals = sum(1 for score in breakdown.values() if score >= 90.0)
+    if critical_signals >= 3:
+        return True, f"{critical_signals} signals in critical range (≥90)"
+
+    # Rule 2: Extreme total risk with low TVL
+    if risk_score >= 85.0 and breakdown.get("tvl_score", 0) >= 80.0:
+        return True, "Extreme risk (≥85) + very low TVL"
+
+    # Rule 3: Contradictory signals (high risk but stablecoin with stable APY)
+    is_stable = breakdown.get("stablecoin_score", 50) == 0.0
+    apy_stable = breakdown.get("apy_volatility_score", 50) < 20.0
+    tvl_high = breakdown.get("tvl_score", 100) < 30.0
+    if is_stable and apy_stable and tvl_high and risk_score >= 60.0:
+        return True, "High risk despite stable fundamentals (possible data error)"
+
+    # Rule 4: New pool with extreme APY volatility
+    data_new = breakdown.get("data_age_score", 0) >= 80.0
+    apy_extreme = breakdown.get("apy_volatility_score", 0) >= 80.0
+    if data_new and apy_extreme:
+        return True, "New pool with extreme APY volatility"
+
+    return False, None
 
 
 # === Aggregate Risk Score ===
@@ -366,16 +397,21 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
     stable_score = stablecoin_signal(is_stablecoin)
     il_score = il_risk_signal(il_risk)
     age_score = data_age_signal(count)
+    
+    # Vault share price drop signal (if data available)
+    vault_price_change = decimal_to_float(snapshot.get("vault_share_price_change_pct"))
+    vault_score = vault_share_price_drop_signal(vault_price_change)
 
     # Weighted sum
     weights = {
-        "tvl": 0.15,
-        "tvl_volatility": 0.15,
-        "apy_volatility": 0.20,
-        "reward_ratio": 0.15,
-        "stablecoin": 0.10,
-        "il": 0.15,
-        "data_age": 0.10,
+        "tvl": 0.12,
+        "tvl_volatility": 0.12,
+        "apy_volatility": 0.18,
+        "reward_ratio": 0.13,
+        "stablecoin": 0.08,
+        "il": 0.13,
+        "data_age": 0.08,
+        "vault": 0.16,  # Vault share price is important indicator
     }
 
     total_risk_score = (
@@ -386,6 +422,7 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
         + weights["stablecoin"] * stable_score
         + weights["il"] * il_score
         + weights["data_age"] * age_score
+        + weights["vault"] * vault_score
     )
 
     # Determine risk category
@@ -409,9 +446,10 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
         "stablecoin_score": stable_score,
         "il_score": il_score,
         "data_age_score": age_score,
+        "vault_score": vault_score,
         "total_risk_score": total_risk_score,
         "risk_category": category,
-        "is_anomaly": False,  # Will be set by detect_anomaly
+        "is_anomaly": False,  # Will be set by detect_anomaly_rule_based
         "anomaly_reason": None,
         "model_version": settings.model_version,
         "calculated_at": datetime.now(UTC),
@@ -436,15 +474,20 @@ def compute_risk_scores_batch(
     # Calculate individual scores
     risk_scores = [calculate_risk_score(snap) for snap in pool_snapshots]
 
-    # Detect anomalies across the batch
-    anomaly_flags = detect_anomaly(pool_snapshots)
-
-    # Update anomaly flags
+    # Detect anomalies using rule-based logic
     for score in risk_scores:
-        pool_id = score["pool_id"]
-        is_anomaly = anomaly_flags.get(pool_id, False)
+        breakdown = {
+            "tvl_score": score["tvl_score"],
+            "tvl_volatility_score": score["tvl_volatility_score"],
+            "apy_volatility_score": score["apy_volatility_score"],
+            "reward_ratio_score": score["reward_ratio_score"],
+            "stablecoin_score": score["stablecoin_score"],
+            "il_score": score["il_score"],
+            "data_age_score": score["data_age_score"],
+            "vault_score": score["vault_score"],
+        }
+        is_anomaly, reason = detect_anomaly_rule_based(score["total_risk_score"], breakdown)
         score["is_anomaly"] = is_anomaly
-        if is_anomaly:
-            score["anomaly_reason"] = "Statistical outlier detected by Isolation Forest"
+        score["anomaly_reason"] = reason
 
     return risk_scores

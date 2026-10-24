@@ -126,6 +126,7 @@ class Database:
                 stablecoin_score,
                 il_score,
                 data_age_score,
+                vault_score,
                 total_risk_score,
                 risk_category,
                 is_anomaly,
@@ -133,7 +134,7 @@ class Database:
                 model_version,
                 calculated_at
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
             )
             ON CONFLICT (pool_id, snapshot_id) DO UPDATE SET
                 tvl_score = EXCLUDED.tvl_score,
@@ -143,6 +144,7 @@ class Database:
                 stablecoin_score = EXCLUDED.stablecoin_score,
                 il_score = EXCLUDED.il_score,
                 data_age_score = EXCLUDED.data_age_score,
+                vault_score = EXCLUDED.vault_score,
                 total_risk_score = EXCLUDED.total_risk_score,
                 risk_category = EXCLUDED.risk_category,
                 is_anomaly = EXCLUDED.is_anomaly,
@@ -163,6 +165,7 @@ class Database:
             risk_score["stablecoin_score"],
             risk_score["il_score"],
             risk_score["data_age_score"],
+            risk_score["vault_score"],
             risk_score["total_risk_score"],
             risk_score["risk_category"],
             risk_score["is_anomaly"],
@@ -206,6 +209,7 @@ class Database:
                 stablecoin_score,
                 il_score,
                 data_age_score,
+                vault_score,
                 total_risk_score,
                 risk_category,
                 is_anomaly,

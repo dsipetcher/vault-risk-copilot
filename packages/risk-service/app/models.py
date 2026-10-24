@@ -54,6 +54,7 @@ class RiskScoreBreakdown(BaseModel):
     stablecoin_score: float = Field(description="Asset type risk (0-100)")
     il_score: float = Field(description="Impermanent loss risk (0-100)")
     data_age_score: float = Field(description="Data reliability risk (0-100)")
+    vault_score: float = Field(description="Vault share price drop risk (0-100)")
 
 
 class RiskScore(BaseModel):
@@ -69,6 +70,7 @@ class RiskScore(BaseModel):
     stablecoin_score: Decimal
     il_score: Decimal
     data_age_score: Decimal
+    vault_score: Decimal
     total_risk_score: Decimal
     risk_category: RiskCategory
     is_anomaly: bool

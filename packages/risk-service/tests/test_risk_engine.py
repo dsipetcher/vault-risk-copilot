@@ -9,12 +9,13 @@ from app.risk_engine import (
     calculate_risk_score,
     compute_risk_scores_batch,
     data_age_signal,
-    detect_anomaly,
+    detect_anomaly_rule_based,
     il_risk_signal,
     reward_ratio_signal,
     stablecoin_signal,
     tvl_drop_signal,
     tvl_size_signal,
+    vault_share_price_drop_signal,
 )
 
 # === TVL Size Signal Tests ===
@@ -228,49 +229,78 @@ def test_data_age_signal_linear():
     assert 40.0 <= score <= 60.0
 
 
-# === Anomaly Detection Tests ===
+# === Vault Share Price Drop Signal Tests ===
 
 
 @pytest.mark.unit
-def test_detect_anomaly_insufficient_data():
-    """Anomaly detection with <10 pools should return all False."""
-    snapshots = [{"pool_id": f"pool_{i}", "tvl_usd": 1000000, "apy": 5.0} for i in range(5)]
-    result = detect_anomaly(snapshots)
-    assert all(not is_anomaly for is_anomaly in result.values())
+def test_vault_share_price_drop_signal_no_data():
+    """No vault data should return medium risk."""
+    assert vault_share_price_drop_signal(None) == 50.0
 
 
 @pytest.mark.unit
-def test_detect_anomaly_finds_outliers():
-    """Anomaly detection should flag statistical outliers."""
-    # Create 20 normal pools + 2 extreme outliers
-    snapshots = []
-    for i in range(20):
-        snapshots.append(
-            {
-                "pool_id": f"pool_{i}",
-                "tvl_usd": 5_000_000.0,
-                "apy": 10.0,
-                "apy_sigma": 1.0,
-                "tvl_change_7d_pct": 0.0,
-            }
-        )
+def test_vault_share_price_drop_signal_stable():
+    """Stable or growing share price should return zero risk."""
+    assert vault_share_price_drop_signal(0.0) == 0.0
+    assert vault_share_price_drop_signal(5.0) == 0.0
 
-    # Add outliers
-    snapshots.append(
-        {
-            "pool_id": "outlier_1",
-            "tvl_usd": 100_000_000.0,  # 20x TVL
-            "apy": 500.0,  # 50x APY
-            "apy_sigma": 50.0,
-            "tvl_change_7d_pct": -90.0,
-        }
-    )
 
-    result = detect_anomaly(snapshots, contamination=0.05)
+@pytest.mark.unit
+def test_vault_share_price_drop_signal_critical():
+    """Share price drop >=5% should return 100."""
+    assert vault_share_price_drop_signal(-5.0) == 100.0
+    assert vault_share_price_drop_signal(-10.0) == 100.0
 
-    # At least one outlier should be detected
-    outliers = [pool_id for pool_id, is_anomaly in result.items() if is_anomaly]
-    assert len(outliers) > 0
+
+@pytest.mark.unit
+def test_vault_share_price_drop_signal_warning():
+    """Share price drop in warning range should scale 0-100."""
+    # Drop at warning threshold (1%) should be ~50
+    score_warning = vault_share_price_drop_signal(-1.0)
+    assert 48.0 <= score_warning <= 52.0
+
+    # Drop between warning and critical should be 50-100
+    score_mid = vault_share_price_drop_signal(-3.0)
+    assert 50.0 < score_mid < 100.0
+
+
+# === Anomaly Detection Tests (Rule-Based) ===
+
+
+@pytest.mark.unit
+def test_detect_anomaly_rule_based_normal():
+    """Normal pool should not be flagged as anomaly."""
+    breakdown = {
+        "tvl_score": 20.0,
+        "tvl_volatility_score": 10.0,
+        "apy_volatility_score": 15.0,
+        "reward_ratio_score": 25.0,
+        "stablecoin_score": 0.0,
+        "il_score": 10.0,
+        "data_age_score": 5.0,
+        "vault_score": 10.0,
+    }
+    is_anomaly, reason = detect_anomaly_rule_based(30.0, breakdown)
+    assert not is_anomaly
+    assert reason is None
+
+
+@pytest.mark.unit
+def test_detect_anomaly_rule_based_multiple_critical():
+    """Multiple signals >=90 should trigger anomaly."""
+    breakdown = {
+        "tvl_score": 95.0,
+        "tvl_volatility_score": 92.0,
+        "apy_volatility_score": 91.0,
+        "reward_ratio_score": 20.0,
+        "stablecoin_score": 50.0,
+        "il_score": 10.0,
+        "data_age_score": 5.0,
+        "vault_score": 10.0,
+    }
+    is_anomaly, reason = detect_anomaly_rule_based(80.0, breakdown)
+    assert is_anomaly
+    assert "3 signals in critical range" in reason
 
 
 # === Calculate Risk Score Tests ===
@@ -291,6 +321,7 @@ def test_calculate_risk_score_complete():
         "is_stablecoin": True,
         "il_risk": 0.1,
         "count": 50,
+        "vault_share_price_change_pct": -0.5,
     }
 
     result = calculate_risk_score(snapshot)
@@ -302,6 +333,7 @@ def test_calculate_risk_score_complete():
     assert "risk_category" in result
     assert result["risk_category"] in ["low", "medium", "high", "critical"]
     assert "tvl_score" in result
+    assert "vault_score" in result
     assert "model_version" in result
 
 
@@ -320,6 +352,7 @@ def test_calculate_risk_score_low_risk():
         "is_stablecoin": True,  # Stablecoin
         "il_risk": 0.0,  # No IL
         "count": 100,  # Reliable data
+        "vault_share_price_change_pct": 0.1,  # Stable vault
     }
 
     result = calculate_risk_score(snapshot)
@@ -343,6 +376,7 @@ def test_calculate_risk_score_high_risk():
         "is_stablecoin": False,  # Volatile asset
         "il_risk": 0.8,  # High IL
         "count": 5,  # New pool
+        "vault_share_price_change_pct": -8.0,  # Vault losing value
     }
 
     result = calculate_risk_score(snapshot)
@@ -379,6 +413,7 @@ def test_compute_risk_scores_batch():
                 "is_stablecoin": True,
                 "il_risk": 0.0,
                 "count": 50,
+                "vault_share_price_change_pct": 0.0,
             }
         )
 
@@ -387,4 +422,5 @@ def test_compute_risk_scores_batch():
     assert len(result) == 15
     assert all("pool_id" in score for score in result)
     assert all("is_anomaly" in score for score in result)
+    assert all("vault_score" in score for score in result)
     assert all("total_risk_score" in score for score in result)
