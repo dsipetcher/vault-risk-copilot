@@ -47,10 +47,38 @@ export async function explanationsRoutes(app: FastifyInstance) {
           200: {
             type: 'object',
             properties: {
-              explanation: { type: 'object' },
-              metadata: { type: 'object' },
+              explanation: {
+                type: 'object',
+                properties: {
+                  summary: { type: 'string' },
+                  key_factors: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        signal: { type: 'string' },
+                        value: { type: 'string' },
+                        explanation: { type: 'string' },
+                      },
+                      required: ['signal', 'value', 'explanation'],
+                    },
+                  },
+                  disclaimer: { type: 'string' },
+                },
+                required: ['summary', 'key_factors', 'disclaimer'],
+              },
+              metadata: {
+                type: 'object',
+                properties: {
+                  provider: { type: 'string' },
+                  model: { type: 'string' },
+                  timestamp: { type: 'string' },
+                  latency_ms: { type: 'number' },
+                },
+              },
               cached: { type: 'boolean' },
             },
+            required: ['explanation', 'metadata', 'cached'],
           },
         },
       },
