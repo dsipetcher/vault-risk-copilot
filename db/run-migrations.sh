@@ -20,23 +20,13 @@ SQL
 
 echo "✓ Schema migrations table ready"
 
-# Baseline check: if schema exists but no migrations recorded, verify actual objects before recording
+# Baseline check: if schema exists but no migrations recorded, verify 002 objects
+# Note: 001 is idempotent, so we always run it (never baseline)
+# Only baseline 002 if its objects actually exist
 RECORDED_COUNT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT COUNT(*) FROM schema_migrations" 2>/dev/null || echo "0")
 RECORDED_COUNT=$(echo "$RECORDED_COUNT" | tr -d '[:space:]')
 
 if [ "$RECORDED_COUNT" = "0" ]; then
-  # Check if 001 objects exist (pool_snapshots table and its indexes)
-  HAS_001=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "
-    SELECT EXISTS (
-      SELECT FROM information_schema.tables 
-      WHERE table_schema = 'public' AND table_name = 'pool_snapshots'
-    ) AND EXISTS (
-      SELECT FROM pg_indexes 
-      WHERE schemaname = 'public' AND tablename = 'pool_snapshots' AND indexname = 'idx_pool_snapshots_pool_id'
-    );
-  " 2>/dev/null || echo "f")
-  HAS_001=$(echo "$HAS_001" | tr -d '[:space:]')
-  
   # Check if 002 objects exist (provider column and unique constraint)
   HAS_002=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "
     SELECT EXISTS (
@@ -49,19 +39,11 @@ if [ "$RECORDED_COUNT" = "0" ]; then
   " 2>/dev/null || echo "f")
   HAS_002=$(echo "$HAS_002" | tr -d '[:space:]')
   
-  if [ "$HAS_001" = "t" ] || [ "$HAS_002" = "t" ]; then
-    echo "⚠ Detected existing schema with no recorded migrations (upgrade path)"
-    
-    # Only record migrations whose objects actually exist
-    if [ "$HAS_001" = "t" ]; then
-      psql "$DB_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (version, name, applied_at) VALUES (1, '001_initial_schema', NOW());"
-      echo "✓ Recorded baseline: 001_initial_schema (objects verified)"
-    fi
-    
-    if [ "$HAS_002" = "t" ]; then
-      psql "$DB_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (version, name, applied_at) VALUES (2, '002_fix_explanation_cache_key', NOW());"
-      echo "✓ Recorded baseline: 002_fix_explanation_cache_key (objects verified)"
-    fi
+  if [ "$HAS_002" = "t" ]; then
+    echo "⚠ Detected existing schema with provider column (upgrade path)"
+    # Record 002 as baseline (001 will run below since it's idempotent)
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (version, name, applied_at) VALUES (2, '002_fix_explanation_cache_key', NOW());"
+    echo "✓ Recorded baseline: 002_fix_explanation_cache_key (objects verified)"
   fi
 fi
 

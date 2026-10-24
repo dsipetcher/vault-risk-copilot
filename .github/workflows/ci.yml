@@ -1002,3 +1002,88 @@ jobs:
           fi
           
           echo "✓ Partial schema test passed: 001 baseline, 002 executed with provider column"
+  
+  migration-only-pool-snapshots:
+    name: Migration Only pool_snapshots Table
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5436:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create only pool_snapshots table (no indexes, no other tables)
+        run: |
+          # Simulate partial 001: only the main table, missing indexes and other tables
+          PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -c "
+            CREATE TABLE pool_snapshots (
+              pool_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              pool_name VARCHAR(255) NOT NULL,
+              snapshot_at TIMESTAMP WITH TIME ZONE NOT NULL,
+              protocol VARCHAR(100),
+              chain VARCHAR(50),
+              tvl_usd DECIMAL(20,2),
+              apy DECIMAL(10,4),
+              il_risk DECIMAL(5,4),
+              is_stablecoin BOOLEAN,
+              count INTEGER,
+              data_source VARCHAR(50)
+            );
+          "
+          echo "✓ Created pool_snapshots table only (partial 001)"
+      
+      - name: Verify migrations run successfully
+        run: |
+          # Run migration runner - 001 should execute (idempotent), 002 should execute
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5436/vault_risk' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh
+          
+          # Verify 001 and 002 are recorded
+          COUNT_001=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
+          COUNT_002=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
+          
+          # Verify all 001 objects exist (indexes, risk_scores, explanations tables)
+          INDEX_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM pg_indexes WHERE indexname = 'idx_pool_snapshots_pool_id')")
+          RISK_SCORES_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'risk_scores')")
+          EXPLANATIONS_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'explanations')")
+          PROVIDER_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'explanations' AND column_name = 'provider')")
+          
+          if [ "$COUNT_001" != "1" ] || [ "$COUNT_002" != "1" ]; then
+            echo "ERROR: Migrations not recorded!"
+            exit 1
+          fi
+          
+          if [ "$(echo $INDEX_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: 001 index missing!"
+            exit 1
+          fi
+          
+          if [ "$(echo $RISK_SCORES_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: risk_scores table missing!"
+            exit 1
+          fi
+          
+          if [ "$(echo $EXPLANATIONS_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: explanations table missing!"
+            exit 1
+          fi
+          
+          if [ "$(echo $PROVIDER_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: provider column missing - 002 did not execute!"
+            exit 1
+          fi
+          
+          echo "✓ Only-pool_snapshots test passed: 001 executed (added missing objects), 002 executed"

@@ -334,6 +334,28 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
   }
 
   private validateNumberFidelity(input: RiskInput, output: ExplanationOutput): boolean {
+    // Build complete set of allowed numbers from all inputs
+    const allAllowedNumbers = new Set<number>();
+    
+    // Add all breakdown scores
+    for (const score of Object.values(input.breakdown)) {
+      if (score !== null) {
+        this.addNumberVariants(allAllowedNumbers, score);
+      }
+    }
+    
+    // Add all pool metrics
+    for (const value of Object.values(input.pool_metrics)) {
+      if (typeof value === 'number') {
+        this.addNumberVariants(allAllowedNumbers, value);
+      }
+    }
+    
+    // Validate summary against full input set
+    if (!this.validateTextNumbers({ text: output.summary, context: 'summary' }, allAllowedNumbers, input)) {
+      return false;
+    }
+    
     // Per-field structured validation: each key_factor must reference its own signal's numbers
     const signalMap: Record<string, number | null> = {
       'TVL Score': input.breakdown.tvl_score,
@@ -383,7 +405,7 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
       }
 
       // Validate factor explanation
-      if (!this.validateFactorNumbers(factor, allowedNumbers, input)) {
+      if (!this.validateTextNumbers({ text: `${factor.value} ${factor.explanation}`, context: `factor ${factor.signal}` }, allowedNumbers, input)) {
         return false;
       }
     }
@@ -391,12 +413,12 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
     return true;
   }
 
-  private validateFactorNumbers(
-    factor: { signal: string; value: string; explanation: string },
+  private validateTextNumbers(
+    item: { text: string; context: string },
     allowedNumbers: Set<number>,
     input: RiskInput
   ): boolean {
-    const factorText = `${factor.value} ${factor.explanation}`;
+    const factorText = item.text;
     
     // Normalize K/M/B units
     let normalized = factorText

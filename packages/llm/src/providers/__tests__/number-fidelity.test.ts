@@ -304,4 +304,70 @@ describe('Number Fidelity Validation', () => {
     const result = (provider as any).validateNumberFidelity(inputWith500K, output);
     expect(result).toBe(false);
   });
+
+  // === SUMMARY VALIDATION TESTS ===
+
+  it('REJECT: summary "APY volatility score is 88" (real 95)', () => {
+    const output: ExplanationOutput = {
+      summary: 'APY volatility score is 88',
+      key_factors: [
+        {
+          signal: 'APY Volatility',
+          value: '95/100',
+          explanation: 'High volatility.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(false);
+  });
+
+  it('REJECT: summary "TVL rose 35.2%" (real -35.2)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL rose 35.2%',
+      key_factors: [
+        {
+          signal: 'TVL Volatility',
+          value: '-35.2%',
+          explanation: 'Decline.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(false);
+  });
+
+  it('REJECT: summary "score 47 of 100" (invented)', () => {
+    const output: ExplanationOutput = {
+      summary: 'score 47 of 100',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '95/100',
+          explanation: 'Good.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(false);
+  });
+
+  it('REJECT: summary "TVL is $9M and risk 12" (9M invented, 12 invented)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL is $9M and risk 12',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '95/100',
+          explanation: 'Good.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(false);
+  });
 });
