@@ -12,101 +12,108 @@ import { riskRoutes } from './routes/risk.js';
 import { explanationsRoutes } from './routes/explanations.js';
 import { redactApiKey } from '@vault-risk-copilot/llm';
 
-const app = Fastify({
-  logger: {
-    level: env.LOG_LEVEL,
-    transport:
-      env.NODE_ENV === 'development'
-        ? {
-            target: 'pino-pretty',
-            options: {
-              translateTime: 'HH:MM:ss Z',
-              ignore: 'pid,hostname',
-            },
-          }
-        : undefined,
-  },
-  disableRequestLogging: false,
-});
-
-app.addHook('onRequest', async (request) => {
-  const apiKey = request.headers['x-llm-api-key'];
-  if (apiKey) {
-    (request.headers as any)['x-llm-api-key'] = redactApiKey(apiKey as string);
-  }
-});
-
-app.addHook('onResponse', async (request, reply) => {
-  const apiKey = request.raw.headers['x-llm-api-key'];
-  if (apiKey) {
-    request.log.info(
-      {
-        req: {
-          method: request.method,
-          url: request.url,
-          headers: {
-            ...request.headers,
-            'x-llm-api-key': redactApiKey(apiKey as string),
-          },
-        },
-        res: {
-          statusCode: reply.statusCode,
-        },
-      },
-      'Request completed'
-    );
-  }
-});
-
-app.setErrorHandler((error, request, reply) => {
-  const errorMessage = error.message.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]');
-  request.log.error({ ...error, message: errorMessage }, 'Request error');
-  reply.status(error.statusCode || 500).send({
-    error: errorMessage,
+export async function build() {
+  const app = Fastify({
+    logger: {
+      level: env.LOG_LEVEL,
+      transport:
+        env.NODE_ENV === 'development'
+          ? {
+              target: 'pino-pretty',
+              options: {
+                translateTime: 'HH:MM:ss Z',
+                ignore: 'pid,hostname',
+              },
+            }
+          : undefined,
+    },
+    disableRequestLogging: false,
   });
-});
 
-await app.register(helmet, {
-  contentSecurityPolicy: false,
-});
+  app.addHook('onRequest', async (request) => {
+    const apiKey = request.headers['x-llm-api-key'];
+    if (apiKey) {
+      (request.headers as any)['x-llm-api-key'] = redactApiKey(apiKey as string);
+    }
+  });
 
-await app.register(cors, {
-  origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
-  credentials: true,
-});
-
-await app.register(rateLimit, {
-  max: env.RATE_LIMIT_MAX,
-  timeWindow: env.RATE_LIMIT_WINDOW,
-});
-
-await app.register(apiReference, {
-  routePrefix: '/docs',
-  configuration: {
-    spec: {
-      content: {
-        openapi: '3.1.0',
-        info: {
-          title: 'Vault Risk Copilot API',
-          version: '1.0.0',
-          description: 'Node.js API for Vault Risk Copilot - aggregates pool data, risk scores, and vault state',
-        },
-        servers: [
-          {
-            url: `http://${env.HOST}:${env.PORT}`,
-            description: 'Development server',
+  app.addHook('onResponse', async (request, reply) => {
+    const apiKey = request.raw.headers['x-llm-api-key'];
+    if (apiKey) {
+      request.log.info(
+        {
+          req: {
+            method: request.method,
+            url: request.url,
+            headers: {
+              ...request.headers,
+              'x-llm-api-key': redactApiKey(apiKey as string),
+            },
           },
-        ],
+          res: {
+            statusCode: reply.statusCode,
+          },
+        },
+        'Request completed'
+      );
+    }
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    const errorMessage = error.message.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]');
+    request.log.error({ ...error, message: errorMessage }, 'Request error');
+    reply.status(error.statusCode || 500).send({
+      error: errorMessage,
+    });
+  });
+
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+  });
+
+  await app.register(cors, {
+    origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+    credentials: true,
+  });
+
+  await app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW,
+  });
+
+  await app.register(apiReference, {
+    routePrefix: '/docs',
+    configuration: {
+      spec: {
+        content: {
+          openapi: '3.1.0',
+          info: {
+            title: 'Vault Risk Copilot API',
+            version: '1.0.0',
+            description: 'Node.js API for Vault Risk Copilot - aggregates pool data, risk scores, and vault state',
+          },
+          servers: [
+            {
+              url: `http://${env.HOST}:${env.PORT}`,
+              description: 'Development server',
+            },
+          ],
+        },
       },
     },
-  },
-});
+  });
 
-await app.register(healthRoutes, { prefix: '/api' });
-await app.register(poolsRoutes, { prefix: '/api' });
-await app.register(vaultRoutes, { prefix: '/api' });
-await app.register(riskRoutes, { prefix: '/api' });
-await app.register(explanationsRoutes, { prefix: '/api' });
+  await app.register(healthRoutes, { prefix: '/api' });
+  await app.register(poolsRoutes, { prefix: '/api' });
+  await app.register(vaultRoutes, { prefix: '/api' });
+  await app.register(riskRoutes, { prefix: '/api' });
+  await app.register(explanationsRoutes, { prefix: '/api' });
+
+  return app;
+}
+
+const app = await build();
+
 
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 signals.forEach((signal) => {
