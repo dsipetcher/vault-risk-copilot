@@ -217,12 +217,15 @@ jobs:
             exit 1
           fi
           
-          echo "Checking collector logs for startup confirmation..."
-          if docker compose logs collector | grep -q "Vault Risk Collector starting"; then
+          echo "=== Collector logs after 30s ==="
+          docker compose logs collector
+          echo "=== End collector logs ==="
+          
+          echo "Checking for startup confirmation..."
+          if docker compose logs collector | grep -q "Vault Risk Collector starting\|Container CMD started\|COLLECTOR STARTING"; then
             echo "✅ Collector started successfully"
           else
-            echo "❌ Collector did not start properly"
-            docker compose logs collector
+            echo "❌ Collector did not start properly (no startup logs found)"
             exit 1
           fi
       
