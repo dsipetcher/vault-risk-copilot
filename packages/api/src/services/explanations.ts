@@ -125,11 +125,6 @@ export async function generateExplanation(
   const result = await provider.generate(riskInput);
 
   const effectiveProvider = providerConfig?.provider || 'mock';
-  const cacheKey = getCacheKey(
-    poolId,
-    effectiveProvider,
-    providerConfig?.model
-  );
 
   await cacheExplanation(
     poolData.risk_score.id,
@@ -138,8 +133,7 @@ export async function generateExplanation(
     {
       ...result.metadata,
       provider: effectiveProvider,
-    },
-    cacheKey
+    }
   );
 
   return {
@@ -149,13 +143,6 @@ export async function generateExplanation(
       provider: effectiveProvider,
     },
   };
-}
-
-function getCacheKey(poolId: string, provider?: string, model?: string): string {
-  const parts = [poolId];
-  if (provider) parts.push(provider);
-  if (model) parts.push(model);
-  return parts.join(':');
 }
 
 async function cacheExplanation(
@@ -170,8 +157,7 @@ async function cacheExplanation(
     totalTokens?: number;
     latencyMs: number;
     costUsd?: number;
-  },
-  cacheKey: string
+  }
 ): Promise<void> {
   const query = `
     INSERT INTO explanations (
