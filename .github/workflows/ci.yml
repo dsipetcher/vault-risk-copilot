@@ -844,6 +844,8 @@ jobs:
             postgres:16-alpine
           
           timeout 30 bash -c 'until docker exec postgres-migration-test pg_isready -U postgres; do sleep 1; done'
+          echo "Waiting for postgres to fully initialize..."
+          sleep 2
       
       - name: Set up schema_migrations table
         run: |
