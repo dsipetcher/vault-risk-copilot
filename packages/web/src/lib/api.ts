@@ -21,19 +21,23 @@ class ApiClient {
   }
 
   async getPools(): Promise<Pool[]> {
-    return this.request<Pool[]>('/api/pools');
+    const response = await this.request<{ data: Pool[] }>('/api/pools');
+    return response.data;
   }
 
   async getPoolDetail(id: string): Promise<PoolDetail> {
-    return this.request<PoolDetail>(`/api/pools/${id}`);
+    const response = await this.request<{ data: PoolDetail }>(`/api/pools/${id}`);
+    return response.data;
   }
 
   async getPoolHistory(id: string): Promise<PoolHistory[]> {
-    return this.request<PoolHistory[]>(`/api/pools/${id}/history`);
+    const response = await this.request<{ data: PoolHistory[] }>(`/api/pools/${id}/history`);
+    return response.data;
   }
 
   async getVaultState(): Promise<VaultState> {
-    return this.request<VaultState>('/api/vault/state');
+    const response = await this.request<{ data: VaultState }>('/api/vault/state');
+    return response.data;
   }
 
   async recomputeRisk(id: string): Promise<{ success: boolean; message: string }> {

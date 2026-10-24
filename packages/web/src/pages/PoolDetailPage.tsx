@@ -34,7 +34,7 @@ export function PoolDetailPage() {
     return <ErrorMessage message="Pool not found" />;
   }
 
-  const riskScore = pool.risk_score;
+  const riskScore = (pool as any).risk_score;
 
   return (
     <div className="space-y-6">
@@ -42,24 +42,24 @@ export function PoolDetailPage() {
         <a href="/pools" className="text-primary-600 hover:text-primary-900 text-sm">
           ← Back to pools
         </a>
-        <h1 className="mt-2 text-3xl font-bold text-gray-900">{pool.symbol}</h1>
+        <h1 className="mt-2 text-3xl font-bold text-gray-900">{pool.asset_symbol}</h1>
         <p className="mt-1 text-sm text-gray-500">
           {pool.protocol} • {pool.chain}
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="TVL" value={formatNumber(pool.tvl_usd)} />
-        <StatCard label="APY" value={formatPercentage(pool.apy)} />
+        <StatCard label="TVL" value={pool.tvl_usd !== null ? formatNumber(pool.tvl_usd) : 'N/A'} />
+        <StatCard label="APY" value={pool.apy !== null ? formatPercentage(pool.apy) : 'N/A'} />
         <StatCard
           label="Risk Score"
-          value={riskScore ? riskScore.score.toFixed(1) : 'N/A'}
+          value={riskScore?.total_risk_score ? riskScore.total_risk_score.toFixed(1) : 'N/A'}
         />
         <StatCard
           label="Risk Category"
           value={
-            riskScore ? (
-              <RiskBadge category={riskScore.category} />
+            riskScore?.risk_category ? (
+              <RiskBadge category={riskScore.risk_category} />
             ) : (
               <span className="text-gray-400">N/A</span>
             )
@@ -75,12 +75,12 @@ export function PoolDetailPage() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart
               data={[
-                { name: 'TVL Level', value: riskScore.factors.tvl_level },
-                { name: 'TVL Change', value: riskScore.factors.tvl_change },
-                { name: 'APY Volatility', value: riskScore.factors.apy_volatility },
-                { name: 'Reward Ratio', value: riskScore.factors.reward_ratio },
-                { name: 'IL Risk', value: riskScore.factors.il_risk },
-                { name: 'Anomaly', value: riskScore.factors.anomaly_score },
+                { name: 'TVL Score', value: riskScore.tvl_score },
+                { name: 'TVL Volatility', value: riskScore.tvl_volatility_score },
+                { name: 'APY Volatility', value: riskScore.apy_volatility_score },
+                { name: 'Reward Ratio', value: riskScore.reward_ratio_score },
+                { name: 'IL Risk', value: riskScore.il_score },
+                { name: 'Data Age', value: riskScore.data_age_score },
               ]}
             >
               <CartesianGrid strokeDasharray="3 3" />
@@ -92,28 +92,28 @@ export function PoolDetailPage() {
           </ResponsiveContainer>
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-gray-600">TVL Level:</span>{' '}
-              <span className="font-medium">{riskScore.factors.tvl_level.toFixed(2)}</span>
+              <span className="text-gray-600">TVL Score:</span>{' '}
+              <span className="font-medium">{riskScore.tvl_score.toFixed(2)}</span>
             </div>
             <div>
-              <span className="text-gray-600">TVL Change:</span>{' '}
-              <span className="font-medium">{riskScore.factors.tvl_change.toFixed(2)}</span>
+              <span className="text-gray-600">TVL Volatility:</span>{' '}
+              <span className="font-medium">{riskScore.tvl_volatility_score.toFixed(2)}</span>
             </div>
             <div>
               <span className="text-gray-600">APY Volatility:</span>{' '}
-              <span className="font-medium">{riskScore.factors.apy_volatility.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.apy_volatility_score.toFixed(2)}</span>
             </div>
             <div>
               <span className="text-gray-600">Reward Ratio:</span>{' '}
-              <span className="font-medium">{riskScore.factors.reward_ratio.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.reward_ratio_score.toFixed(2)}</span>
             </div>
             <div>
-              <span className="text-gray-600">IL Risk:</span>{' '}
-              <span className="font-medium">{riskScore.factors.il_risk.toFixed(2)}</span>
+              <span className="text-gray-600">IL Score:</span>{' '}
+              <span className="font-medium">{riskScore.il_score.toFixed(2)}</span>
             </div>
             <div>
-              <span className="text-gray-600">Anomaly Score:</span>{' '}
-              <span className="font-medium">{riskScore.factors.anomaly_score.toFixed(2)}</span>
+              <span className="text-gray-600">Data Age:</span>{' '}
+              <span className="font-medium">{riskScore.data_age_score.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -182,22 +182,20 @@ export function PoolDetailPage() {
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <dt className="text-sm font-medium text-gray-500">Pool ID</dt>
-            <dd className="mt-1 text-sm text-gray-900 break-all">{pool.id}</dd>
+            <dd className="mt-1 text-sm text-gray-900 break-all font-mono text-xs">{pool.pool_id}</dd>
           </div>
           <div>
             <dt className="text-sm font-medium text-gray-500">Last Updated</dt>
-            <dd className="mt-1 text-sm text-gray-900">{formatDate(pool.updated_at)}</dd>
+            <dd className="mt-1 text-sm text-gray-900">{formatDate(pool.created_at)}</dd>
           </div>
-          {pool.pool_meta.ilRisk && (
+          <div>
+            <dt className="text-sm font-medium text-gray-500">Stablecoin</dt>
+            <dd className="mt-1 text-sm text-gray-900">{pool.is_stablecoin ? 'Yes' : 'No'}</dd>
+          </div>
+          {pool.il_risk !== null && (
             <div>
               <dt className="text-sm font-medium text-gray-500">IL Risk</dt>
-              <dd className="mt-1 text-sm text-gray-900">{pool.pool_meta.ilRisk}</dd>
-            </div>
-          )}
-          {pool.pool_meta.exposure && (
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Exposure</dt>
-              <dd className="mt-1 text-sm text-gray-900">{pool.pool_meta.exposure}</dd>
+              <dd className="mt-1 text-sm text-gray-900">{pool.il_risk.toFixed(2)}</dd>
             </div>
           )}
         </dl>

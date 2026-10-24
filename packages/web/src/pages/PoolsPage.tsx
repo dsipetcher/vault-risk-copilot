@@ -25,14 +25,14 @@ export function PoolsPage() {
     if (searchTerm) {
       filtered = filtered.filter(
         (pool) =>
-          pool.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          pool.asset_symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
           pool.protocol.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (filterCategory !== 'all') {
       filtered = filtered.filter(
-        (pool) => (pool as Pool & { risk_score?: { category: string } }).risk_score?.category === filterCategory
+        (pool) => pool.risk_category === filterCategory
       );
     }
 
@@ -41,16 +41,16 @@ export function PoolsPage() {
 
       switch (sortField) {
         case 'tvl':
-          aVal = a.tvl_usd;
-          bVal = b.tvl_usd;
+          aVal = a.tvl_usd ?? 0;
+          bVal = b.tvl_usd ?? 0;
           break;
         case 'apy':
-          aVal = a.apy;
-          bVal = b.apy;
+          aVal = a.apy ?? 0;
+          bVal = b.apy ?? 0;
           break;
         case 'risk':
-          aVal = (a as Pool & { risk_score?: { score: number } }).risk_score?.score ?? 0;
-          bVal = (b as Pool & { risk_score?: { score: number } }).risk_score?.score ?? 0;
+          aVal = a.total_risk_score ?? 0;
+          bVal = b.total_risk_score ?? 0;
           break;
         default:
           return 0;
@@ -182,33 +182,31 @@ export function PoolsPage() {
 }
 
 function PoolRow({ pool }: { pool: Pool }) {
-  const riskScore = (pool as Pool & { risk_score?: { category: string; score: number } }).risk_score;
-
   return (
     <tr className="hover:bg-gray-50">
       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm">
-        <div className="font-medium text-gray-900">{pool.symbol}</div>
+        <div className="font-medium text-gray-900">{pool.asset_symbol}</div>
         <div className="text-gray-500">{pool.protocol}</div>
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
         {pool.chain}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-        {formatNumber(pool.tvl_usd)}
+        {pool.tvl_usd !== null ? formatNumber(pool.tvl_usd) : 'N/A'}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-        {formatPercentage(pool.apy)}
+        {pool.apy !== null ? formatPercentage(pool.apy) : 'N/A'}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm">
-        {riskScore ? (
-          <RiskBadge category={riskScore.category} score={riskScore.score} />
+        {pool.total_risk_score && pool.risk_category ? (
+          <RiskBadge category={pool.risk_category} score={pool.total_risk_score} />
         ) : (
           <span className="text-gray-400">N/A</span>
         )}
       </td>
       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium">
         <a
-          href={`/pools/${pool.id}`}
+          href={`/pools/${pool.pool_id}`}
           className="text-primary-600 hover:text-primary-900"
         >
           View

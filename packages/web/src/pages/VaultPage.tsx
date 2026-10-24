@@ -4,8 +4,8 @@ import { parseUnits, formatUnits } from 'viem';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { shortenAddress, formatNumber } from '@/lib/utils';
 
-const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || '') as `0x${string}`;
-const USDC_ADDRESS = (import.meta.env.VITE_USDC_ADDRESS || '') as `0x${string}`;
+const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+const USDC_ADDRESS = (import.meta.env.VITE_USDC_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
 
 const VAULT_ABI = [
   {
