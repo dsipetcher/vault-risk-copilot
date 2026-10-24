@@ -850,9 +850,15 @@ jobs:
           
           timeout 30 bash -c 'until docker exec postgres-migration-test pg_isready -U postgres; do sleep 1; done'
       
-      - name: Set up database schema
+      - name: Set up schema_migrations table
         run: |
-          docker exec postgres-migration-test psql -U postgres -d vault_risk -f /docker-entrypoint-initdb.d/001_initial_schema.sql || true
+          docker exec postgres-migration-test psql -U postgres -d vault_risk -c "
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+              version INTEGER PRIMARY KEY,
+              applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              name VARCHAR(255) NOT NULL
+            );
+          "
       
       - name: Test broken migration fails correctly
         run: |
@@ -862,8 +868,8 @@ jobs:
           # Enable the broken migration
           docker exec postgres-migration-test bash -c "mkdir -p /tmp/migrations && cp /tmp/999_test_broken.sql /tmp/migrations/"
           
-          # This MUST fail
-          if docker exec postgres-migration-test bash -c "DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=/tmp/migrations bash /tmp/run-migrations.sh"; then
+          # This MUST fail (note: inside container, postgres is at localhost:5432)
+          if docker exec postgres-migration-test bash -c "cd /tmp && DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=/tmp/migrations bash /tmp/run-migrations.sh"; then
             echo "ERROR: Broken migration should have failed but succeeded!"
             exit 1
           else
