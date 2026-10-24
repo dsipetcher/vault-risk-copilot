@@ -886,3 +886,63 @@ jobs:
         run: |
           docker stop postgres-migration-test || true
           docker rm postgres-migration-test || true
+  
+  migration-upgrade-path:
+    name: Migration Upgrade Path
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Start test postgres
+        run: |
+          docker run -d --name postgres-upgrade-test \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=vault_risk \
+            -p 5434:5432 \
+            postgres:16-alpine
+          
+          timeout 30 bash -c 'until docker exec postgres-upgrade-test pg_isready -U postgres; do sleep 1; done'
+          echo "Waiting for postgres to fully initialize..."
+          sleep 2
+      
+      - name: Apply old migrations via initdb (simulating pre-PR volumes)
+        run: |
+          # Simulate old deployment: 001 and 002 applied, no schema_migrations table
+          docker cp db/migrations/001_initial_schema.sql postgres-upgrade-test:/tmp/001.sql
+          docker cp db/migrations/002_fix_explanation_cache_key.sql postgres-upgrade-test:/tmp/002.sql
+          docker exec postgres-upgrade-test psql -U postgres -d vault_risk -f /tmp/001.sql
+          docker exec postgres-upgrade-test psql -U postgres -d vault_risk -f /tmp/002.sql
+          echo "✓ Old migrations applied (simulating pre-PR state)"
+      
+      - name: Verify baseline detection and migration runner
+        run: |
+          docker cp db/migrations postgres-upgrade-test:/migrations
+          docker cp db/run-migrations.sh postgres-upgrade-test:/run-migrations.sh
+          
+          # Run migration runner - should detect baseline and record 001+002
+          docker exec postgres-upgrade-test bash -c "cd / && DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' bash /run-migrations.sh"
+          
+          # Verify 001 and 002 are recorded
+          COUNT_001=$(docker exec postgres-upgrade-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
+          COUNT_002=$(docker exec postgres-upgrade-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
+          COUNT_003=$(docker exec postgres-upgrade-test psql -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 3")
+          
+          if [ "$COUNT_001" != "1" ] || [ "$COUNT_002" != "1" ]; then
+            echo "ERROR: Baseline migrations not recorded correctly!"
+            exit 1
+          fi
+          
+          if [ "$COUNT_003" != "1" ]; then
+            echo "ERROR: Migration 003 not applied!"
+            exit 1
+          fi
+          
+          echo "✓ Upgrade path works: baseline recorded, new migration applied"
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop postgres-upgrade-test || true
+          docker rm postgres-upgrade-test || true

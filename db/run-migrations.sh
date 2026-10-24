@@ -20,6 +20,20 @@ SQL
 
 echo "✓ Schema migrations table ready"
 
+# Baseline check: if schema exists but no migrations recorded, record already-applied ones
+RECORDED_COUNT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT COUNT(*) FROM schema_migrations")
+TABLE_EXISTS=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'pool_snapshots')")
+
+if [ "$RECORDED_COUNT" -eq "0" ] && [ "$TABLE_EXISTS" = "t" ]; then
+  echo "⚠ Detected existing schema with no recorded migrations (upgrade path)"
+  # Record 001 and 002 as baseline (they were applied by old initdb or docker-entrypoint)
+  psql "$DB_URL" -v ON_ERROR_STOP=1 <<SQL
+INSERT INTO schema_migrations (version, name, applied_at) VALUES (1, '001_initial_schema', NOW());
+INSERT INTO schema_migrations (version, name, applied_at) VALUES (2, '002_fix_explanation_cache_key', NOW());
+SQL
+  echo "✓ Recorded baseline migrations (001, 002)"
+fi
+
 # Detect migrations directory (local or copied to /tmp)
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-db/migrations}"
 if [ ! -d "$MIGRATIONS_DIR" ] && [ -d "/tmp/migrations" ]; then
@@ -42,6 +56,13 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
   
   if [ "$already_applied" -eq "0" ]; then
     echo "→ Applying migration $name..."
+    
+    # Check if migration contains its own BEGIN/COMMIT
+    if grep -qi "^\s*BEGIN" "$migration_file" || grep -qi "^\s*COMMIT" "$migration_file"; then
+      echo "✗ Migration $name contains BEGIN/COMMIT statements"
+      echo "  Migrations should not include transaction control (runner wraps them)"
+      exit 1
+    fi
     
     # Run migration and record in one transaction
     # We wrap the migration file content with BEGIN/INSERT/COMMIT

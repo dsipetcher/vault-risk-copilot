@@ -48,10 +48,10 @@ CREATE TABLE IF NOT EXISTS pool_snapshots (
     CONSTRAINT pool_snapshots_unique_snapshot UNIQUE (pool_id, snapshot_at)
 );
 
-CREATE INDEX idx_pool_snapshots_pool_id ON pool_snapshots(pool_id);
-CREATE INDEX idx_pool_snapshots_snapshot_at ON pool_snapshots(snapshot_at DESC);
-CREATE INDEX idx_pool_snapshots_protocol_chain ON pool_snapshots(protocol, chain);
-CREATE INDEX idx_pool_snapshots_tvl ON pool_snapshots(tvl_usd DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_pool_snapshots_pool_id ON pool_snapshots(pool_id);
+CREATE INDEX IF NOT EXISTS idx_pool_snapshots_snapshot_at ON pool_snapshots(snapshot_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pool_snapshots_protocol_chain ON pool_snapshots(protocol, chain);
+CREATE INDEX IF NOT EXISTS idx_pool_snapshots_tvl ON pool_snapshots(tvl_usd DESC NULLS LAST);
 
 -- Risk scores table: stores calculated risk metrics
 CREATE TABLE IF NOT EXISTS risk_scores (
@@ -88,10 +88,10 @@ CREATE TABLE IF NOT EXISTS risk_scores (
     CONSTRAINT risk_scores_unique_calculation UNIQUE (pool_id, snapshot_id)
 );
 
-CREATE INDEX idx_risk_scores_pool_id ON risk_scores(pool_id);
-CREATE INDEX idx_risk_scores_total_risk ON risk_scores(total_risk_score DESC);
-CREATE INDEX idx_risk_scores_calculated_at ON risk_scores(calculated_at DESC);
-CREATE INDEX idx_risk_scores_anomaly ON risk_scores(is_anomaly) WHERE is_anomaly = true;
+CREATE INDEX IF NOT EXISTS idx_risk_scores_pool_id ON risk_scores(pool_id);
+CREATE INDEX IF NOT EXISTS idx_risk_scores_total_risk ON risk_scores(total_risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_risk_scores_calculated_at ON risk_scores(calculated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_risk_scores_anomaly ON risk_scores(is_anomaly) WHERE is_anomaly = true;
 
 -- LLM explanations table: stores AI-generated risk explanations
 CREATE TABLE IF NOT EXISTS explanations (
@@ -123,9 +123,9 @@ CREATE TABLE IF NOT EXISTS explanations (
     CONSTRAINT explanations_unique_per_risk UNIQUE (risk_score_id)
 );
 
-CREATE INDEX idx_explanations_pool_id ON explanations(pool_id);
-CREATE INDEX idx_explanations_generated_at ON explanations(generated_at DESC);
-CREATE INDEX idx_explanations_model ON explanations(model_name);
+CREATE INDEX IF NOT EXISTS idx_explanations_pool_id ON explanations(pool_id);
+CREATE INDEX IF NOT EXISTS idx_explanations_generated_at ON explanations(generated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_explanations_model ON explanations(model_name);
 
 -- Vault state snapshots: on-chain state of our SimpleVault contract
 CREATE TABLE IF NOT EXISTS vault_state_snapshots (
@@ -156,9 +156,9 @@ CREATE TABLE IF NOT EXISTS vault_state_snapshots (
     CONSTRAINT vault_state_unique_snapshot UNIQUE (vault_address, block_number)
 );
 
-CREATE INDEX idx_vault_state_address ON vault_state_snapshots(vault_address);
-CREATE INDEX idx_vault_state_snapshot_at ON vault_state_snapshots(snapshot_at DESC);
-CREATE INDEX idx_vault_state_block ON vault_state_snapshots(block_number DESC);
+CREATE INDEX IF NOT EXISTS idx_vault_state_address ON vault_state_snapshots(vault_address);
+CREATE INDEX IF NOT EXISTS idx_vault_state_snapshot_at ON vault_state_snapshots(snapshot_at DESC);
+CREATE INDEX IF NOT EXISTS idx_vault_state_block ON vault_state_snapshots(block_number DESC);
 
 -- Comments for documentation
 COMMENT ON TABLE pool_snapshots IS 'Time-series snapshots of DeFi pool data from external APIs and on-chain reads';
