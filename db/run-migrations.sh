@@ -20,8 +20,14 @@ SQL
 
 echo "✓ Schema migrations table ready"
 
+# Detect migrations directory (local or copied to /tmp)
+MIGRATIONS_DIR="${MIGRATIONS_DIR:-db/migrations}"
+if [ ! -d "$MIGRATIONS_DIR" ] && [ -d "/tmp/migrations" ]; then
+  MIGRATIONS_DIR="/tmp/migrations"
+fi
+
 # Run each migration in order
-for migration_file in db/migrations/*.sql; do
+for migration_file in "$MIGRATIONS_DIR"/*.sql; do
   # Extract version number from filename (e.g., 001_initial_schema.sql -> 001)
   version=$(basename "$migration_file" | grep -oP '^\d+')
   name=$(basename "$migration_file" .sql)

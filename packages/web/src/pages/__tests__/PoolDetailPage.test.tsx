@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import PoolDetailPage from '../PoolDetailPage';
+import { PoolDetailPage } from '../PoolDetailPage';
 
 // Mock react-router-dom useParams
 vi.mock('react-router-dom', async () => {
@@ -13,7 +13,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock fetch
-global.fetch = vi.fn();
+global.fetch = vi.fn() as unknown as typeof fetch;
 
 describe('PoolDetailPage Risk Factor Chart', () => {
   it('should render all 8 risk factors in bar chart when all are non-null', async () => {
