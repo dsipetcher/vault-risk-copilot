@@ -149,6 +149,72 @@ jobs:
         working-directory: packages/collector
         run: npm run build
 
+  risk-service:
+    name: Risk Service (Python)
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: packages/risk-service/requirements-dev.txt
+      
+      - name: Install dependencies
+        working-directory: packages/risk-service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      
+      - name: Set up database schema
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+      
+      - name: Lint with ruff
+        working-directory: packages/risk-service
+        run: |
+          ruff check app/ tests/
+          ruff format --check app/ tests/
+      
+      - name: Type check with mypy
+        working-directory: packages/risk-service
+        run: mypy app/
+      
+      - name: Run unit tests
+        working-directory: packages/risk-service
+        run: pytest -m unit --cov=app --cov-report=term-missing --cov-report=xml
+      
+      - name: Run integration tests
+        working-directory: packages/risk-service
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
+        run: pytest -m integration -v
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./packages/risk-service/coverage.xml
+          flags: risk-service
+          name: risk-service-coverage
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
@@ -165,6 +231,15 @@ jobs:
           context: ./packages/collector
           push: false
           tags: vault-risk-collector:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build risk-service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/risk-service
+          push: false
+          tags: vault-risk-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -286,6 +361,83 @@ jobs:
             ORDER BY avg_tvl DESC
             LIMIT 10;
           "
+      
+      - name: Wait for risk-service to be healthy
+        run: |
+          echo "Waiting for risk-service to be healthy (up to 60 seconds)..."
+          timeout 60 bash -c 'until curl -sf http://localhost:8000/health > /dev/null; do sleep 2; done'
+          echo "✅ Risk service is healthy"
+      
+      - name: Test risk-service API
+        run: |
+          echo "=== Testing /health endpoint ==="
+          HEALTH=$(curl -s http://localhost:8000/health)
+          echo "$HEALTH" | jq .
+          
+          STATUS=$(echo "$HEALTH" | jq -r '.status')
+          if [ "$STATUS" != "healthy" ]; then
+            echo "❌ Risk service status is not healthy: $STATUS"
+            exit 1
+          fi
+          echo "✅ Risk service health check passed"
+      
+      - name: Trigger risk score computation
+        run: |
+          echo "=== Triggering risk score recomputation ==="
+          RECOMPUTE_RESULT=$(curl -s -X POST http://localhost:8000/recompute \
+            -H "Content-Type: application/json" \
+            -d '{"pool_ids": null, "force": true}')
+          
+          echo "$RECOMPUTE_RESULT" | jq .
+          
+          COMPUTED=$(echo "$RECOMPUTE_RESULT" | jq -r '.computed')
+          echo "Computed risk scores for $COMPUTED pools"
+          
+          if [ "$COMPUTED" -eq 0 ]; then
+            echo "❌ No risk scores were computed"
+            exit 1
+          fi
+          echo "✅ Risk score computation succeeded"
+      
+      - name: Verify risk_scores table
+        run: |
+          echo "=== Checking risk_scores table ==="
+          RISK_COUNT=$(docker compose exec -T postgres psql -U vault_user -d vault_risk_copilot -t -c "SELECT COUNT(*) FROM risk_scores;" | tr -d ' ')
+          
+          echo "Risk scores count: $RISK_COUNT"
+          
+          if [ "$RISK_COUNT" -eq 0 ]; then
+            echo "❌ No risk scores found in database"
+            exit 1
+          fi
+          echo "✅ Risk scores exist in database: $RISK_COUNT rows"
+          
+          echo "=== Sample risk scores ==="
+          docker compose exec -T postgres psql -U vault_user -d vault_risk_copilot -c "
+            SELECT 
+              pool_id,
+              ROUND(total_risk_score::numeric, 2) as risk_score,
+              risk_category,
+              is_anomaly
+            FROM risk_scores
+            ORDER BY total_risk_score DESC
+            LIMIT 5;
+          "
+      
+      - name: Test GET /scores endpoint
+        run: |
+          echo "=== Testing GET /scores endpoint ==="
+          SCORES=$(curl -s "http://localhost:8000/scores?limit=5")
+          echo "$SCORES" | jq .
+          
+          TOTAL=$(echo "$SCORES" | jq -r '.total')
+          echo "Total scores returned: $TOTAL"
+          
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "❌ No scores returned from API"
+            exit 1
+          fi
+          echo "✅ GET /scores endpoint works"
       
       - name: Cleanup
         if: always()

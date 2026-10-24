@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS risk_scores (
     stablecoin_score DECIMAL(5, 2),     -- Lower risk for stablecoins
     il_score DECIMAL(5, 2),             -- Impermanent loss risk score
     data_age_score DECIMAL(5, 2),       -- Score based on data history length
+    vault_score DECIMAL(5, 2),          -- Vault share price drop risk
     
     -- Aggregate risk score
     total_risk_score DECIMAL(5, 2) NOT NULL, -- Weighted sum of component scores (0-100)
