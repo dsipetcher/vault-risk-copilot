@@ -704,21 +704,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: vault_risk
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    
     steps:
       - uses: actions/checkout@v4
         with:
@@ -739,13 +724,29 @@ jobs:
         working-directory: packages/web
         run: npm ci
       
+      - name: Start Postgres
+        run: |
+          docker run -d \
+            --name postgres-e2e \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=vault_risk \
+            -p 5432:5432 \
+            postgres:16
+          
+          # Wait for Postgres to be ready
+          timeout 30 bash -c 'until docker exec postgres-e2e pg_isready -U postgres; do sleep 1; done'
+          echo "✅ Postgres is ready"
+      
       - name: Set up database schema
         run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+          docker cp db/migrations/001_initial_schema.sql postgres-e2e:/tmp/schema.sql
+          docker exec postgres-e2e psql -U postgres -d vault_risk -f /tmp/schema.sql
       
       - name: Seed E2E test data
         run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/e2e-seed.sql
+          docker cp db/e2e-seed.sql postgres-e2e:/tmp/seed.sql
+          docker exec postgres-e2e psql -U postgres -d vault_risk -f /tmp/seed.sql
       
       - name: Install Playwright browsers
         working-directory: packages/web
@@ -811,3 +812,9 @@ jobs:
           path: packages/web/anvil.log
           retention-days: 30
           if-no-files-found: ignore
+      
+      - name: Stop containers
+        if: always()
+        run: |
+          docker stop postgres-e2e || true
+          docker rm postgres-e2e || true
