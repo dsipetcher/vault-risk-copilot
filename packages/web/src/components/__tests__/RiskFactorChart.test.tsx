@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import PoolDetailPage from '@/pages/PoolDetailPage';
+import { PoolDetailPage } from '@/pages/PoolDetailPage';
 import { prepareChartData } from '@/utils/chartData';
-import type { RiskScore } from '@/types';
 
 // Mock react-router-dom params
 vi.mock('react-router-dom', async () => {
@@ -42,15 +41,16 @@ describe('Risk Factor Chart Rendering', () => {
     };
 
     // Mock fetch to return string scores
-    global.fetch = vi.fn((url: string) => {
-      if (url.includes('/api/risk/test-pool-id')) {
+    global.fetch = vi.fn((url: string | URL | Request) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+      if (urlString.includes('/api/risk/test-pool-id')) {
         return Promise.resolve({
           ok: true,
           json: async () => mockApiResponse,
         } as Response);
       }
       return Promise.reject(new Error('Not found'));
-    });
+    }) as any;
 
     const { container } = render(
       <BrowserRouter>
@@ -68,7 +68,7 @@ describe('Risk Factor Chart Rendering', () => {
     expect(bars.length).toBe(8);
 
     // Verify prepareChartData converts strings to numbers
-    const chartData = prepareChartData(mockApiResponse as unknown as RiskScore);
+    const chartData = prepareChartData(mockApiResponse as any);
     expect(chartData).toHaveLength(8);
     chartData.forEach(item => {
       expect(typeof item.value).toBe('number');
