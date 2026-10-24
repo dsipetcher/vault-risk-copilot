@@ -1,13 +1,6 @@
 -- E2E Test Seed Data
 -- Provides deterministic pool data for Playwright tests
-
--- Apply migration 002 if not already applied
-ALTER TABLE explanations ADD COLUMN IF NOT EXISTS provider VARCHAR(50) NOT NULL DEFAULT 'openai';
-DROP INDEX IF EXISTS idx_explanations_provider_model;
-CREATE INDEX IF NOT EXISTS idx_explanations_provider_model ON explanations(provider, model_name);
-ALTER TABLE explanations DROP CONSTRAINT IF EXISTS explanations_unique_per_risk;
-ALTER TABLE explanations DROP CONSTRAINT IF EXISTS explanations_unique_per_risk_provider_model;
-ALTER TABLE explanations ADD CONSTRAINT explanations_unique_per_risk_provider_model UNIQUE (risk_score_id, provider, model_name);
+-- NOTE: Run db/run-migrations.sh before this seed script
 
 -- Clear existing data
 TRUNCATE pool_snapshots, risk_scores CASCADE;

@@ -74,6 +74,9 @@ export async function explanationsRoutes(app: FastifyInstance) {
                   model: { type: 'string' },
                   timestamp: { type: 'string' },
                   latency_ms: { type: 'number' },
+                  prompt_tokens: { type: 'number' },
+                  completion_tokens: { type: 'number' },
+                  total_tokens: { type: 'number' },
                   fallback: { type: 'boolean' },
                   fallback_reason: { type: 'string' },
                 },
@@ -115,7 +118,14 @@ export async function explanationsRoutes(app: FastifyInstance) {
       if (cached) {
         return reply.send({
           explanation: cached.explanation,
-          metadata: cached.metadata,
+          metadata: {
+            ...cached.metadata,
+            timestamp: new Date().toISOString(),
+            latency_ms: cached.metadata.latencyMs,
+            prompt_tokens: cached.metadata.promptTokens,
+            completion_tokens: cached.metadata.completionTokens,
+            total_tokens: cached.metadata.totalTokens,
+          },
           cached: true,
         });
       }
@@ -125,7 +135,14 @@ export async function explanationsRoutes(app: FastifyInstance) {
 
         return reply.send({
           explanation: result.explanation,
-          metadata: result.metadata,
+          metadata: {
+            ...result.metadata,
+            timestamp: new Date().toISOString(),
+            latency_ms: result.metadata.latencyMs,
+            prompt_tokens: result.metadata.promptTokens,
+            completion_tokens: result.metadata.completionTokens,
+            total_tokens: result.metadata.totalTokens,
+          },
           cached: false,
         });
       } catch (error) {

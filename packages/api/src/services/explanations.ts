@@ -64,6 +64,7 @@ export async function getCachedExplanation(
       totalTokens: row.total_tokens,
       latencyMs: row.latency_ms,
       costUsd: row.cost_usd,
+      fallback: false, // Cached responses are never fallback (we don't cache fallbacks)
     },
   };
 }
@@ -126,15 +127,19 @@ export async function generateExplanation(
 
   const effectiveProvider = providerConfig?.provider || 'mock';
 
-  await cacheExplanation(
-    poolData.risk_score.id,
-    poolId,
-    result.output,
-    {
-      ...result.metadata,
-      provider: effectiveProvider,
-    }
-  );
+  // Only cache successful (non-fallback) responses
+  // Transient failures (rate limits, validation) must not stick
+  if (!result.metadata.fallback) {
+    await cacheExplanation(
+      poolData.risk_score.id,
+      poolId,
+      result.output,
+      {
+        ...result.metadata,
+        provider: effectiveProvider,
+      }
+    );
+  }
 
   return {
     explanation: result.output,

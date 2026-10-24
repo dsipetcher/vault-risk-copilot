@@ -26,37 +26,25 @@ export async function build() {
               },
             }
           : undefined,
-    },
-    disableRequestLogging: false,
-  });
-
-  app.addHook('onRequest', async (request) => {
-    const apiKey = request.headers['x-llm-api-key'];
-    if (apiKey) {
-      (request.headers as any)['x-llm-api-key'] = redactApiKey(apiKey as string);
-    }
-  });
-
-  app.addHook('onResponse', async (request, reply) => {
-    const apiKey = request.raw.headers['x-llm-api-key'];
-    if (apiKey) {
-      request.log.info(
-        {
-          req: {
+      serializers: {
+        req(request) {
+          return {
             method: request.method,
             url: request.url,
             headers: {
               ...request.headers,
-              'x-llm-api-key': redactApiKey(apiKey as string),
+              'x-llm-api-key': request.headers['x-llm-api-key']
+                ? redactApiKey(request.headers['x-llm-api-key'] as string)
+                : undefined,
             },
-          },
-          res: {
-            statusCode: reply.statusCode,
-          },
+            hostname: request.hostname,
+            remoteAddress: request.ip,
+            remotePort: request.socket?.remotePort,
+          };
         },
-        'Request completed'
-      );
-    }
+      },
+    },
+    disableRequestLogging: false,
   });
 
   app.setErrorHandler((error, request, reply) => {

@@ -743,6 +743,12 @@ jobs:
           docker cp db/migrations/001_initial_schema.sql postgres-e2e:/tmp/schema.sql
           docker exec postgres-e2e psql -U postgres -d vault_risk -f /tmp/schema.sql
       
+      - name: Run database migrations
+        run: |
+          docker cp db/migrations postgres-e2e:/tmp/migrations
+          docker cp db/run-migrations.sh postgres-e2e:/tmp/run-migrations.sh
+          docker exec postgres-e2e bash -c "DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' bash /tmp/run-migrations.sh"
+      
       - name: Seed E2E test data
         run: |
           docker cp db/e2e-seed.sql postgres-e2e:/tmp/seed.sql

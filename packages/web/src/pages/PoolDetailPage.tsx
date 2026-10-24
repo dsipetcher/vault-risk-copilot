@@ -83,13 +83,15 @@ export function PoolDetailPage() {
                 { name: 'TVL Volatility', value: riskScore.tvl_volatility_score },
                 { name: 'APY Volatility', value: riskScore.apy_volatility_score },
                 { name: 'Reward Ratio', value: riskScore.reward_ratio_score },
+                { name: 'Stablecoin', value: riskScore.stablecoin_score },
                 { name: 'IL Risk', value: riskScore.il_score },
                 { name: 'Data Age', value: riskScore.data_age_score },
-              ]}
+                { name: 'Vault Score', value: riskScore.vault_score },
+              ].filter(item => item.value !== null)}
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-              <YAxis />
+              <YAxis domain={[0, 100]} />
               <Tooltip />
               <Bar dataKey="value" fill="#0ea5e9" />
             </BarChart>
