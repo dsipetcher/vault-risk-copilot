@@ -44,12 +44,13 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
     echo "→ Applying migration $name..."
     
     # Run migration and record in one transaction
-    psql "$DB_URL" -v ON_ERROR_STOP=1 <<SQL
-BEGIN;
-\i $migration_file
-INSERT INTO schema_migrations (version, name) VALUES ($version, '$name');
-COMMIT;
-SQL
+    # We wrap the migration file content with BEGIN/INSERT/COMMIT
+    (
+      echo "BEGIN;"
+      cat "$migration_file"
+      echo "INSERT INTO schema_migrations (version, name) VALUES ($version, '$name');"
+      echo "COMMIT;"
+    ) | psql "$DB_URL" -v ON_ERROR_STOP=1
     
     if [ $? -ne 0 ]; then
       echo "✗ Migration $name FAILED"
