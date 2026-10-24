@@ -8,7 +8,19 @@ export async function poolsRoutes(app: FastifyInstance) {
     '/pools',
     {
       schema: {
-        querystring: paginationQuerySchema.merge(poolFiltersSchema),
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', minimum: 1, maximum: 100, default: 20 },
+            offset: { type: 'number', minimum: 0, default: 0 },
+            protocol: { type: 'string' },
+            chain: { type: 'string' },
+            is_stablecoin: { type: 'boolean' },
+            risk_category: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+            min_tvl: { type: 'number' },
+            max_tvl: { type: 'number' },
+          },
+        },
         response: {
           200: {
             type: 'object',
