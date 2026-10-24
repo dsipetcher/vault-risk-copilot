@@ -34,7 +34,7 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
   fi
   
   # Extract version number from filename (e.g., 001_initial_schema.sql -> 001)
-  version=$(basename "$migration_file" | grep -oP '^\d+')
+  version=$(basename "$migration_file" | sed -n 's/^\([0-9]\{1,\}\).*/\1/p')
   name=$(basename "$migration_file" .sql)
   
   # Check if already applied
