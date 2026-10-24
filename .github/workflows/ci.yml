@@ -545,13 +545,17 @@ jobs:
             exit 1
           fi
           echo "✅ Risk score computation succeeded"
+          
+          # Save first computed pool ID for explain test
+          COMPUTED_POOL_ID=$(echo "$RECOMPUTE_RESULT" | jq -r '.pool_ids[0]')
+          echo "COMPUTED_POOL_ID=$COMPUTED_POOL_ID" >> $GITHUB_ENV
       
       - name: Test LLM explain endpoint
         run: |
           echo "=== Testing LLM explain endpoint with mock provider ==="
           
-          # Get first pool ID
-          POOL_ID=$(curl -s http://localhost:3000/api/pools?limit=1 | jq -r '.data[0].id')
+          # Use pool ID from recompute result
+          POOL_ID="${COMPUTED_POOL_ID}"
           
           if [ -z "$POOL_ID" ] || [ "$POOL_ID" == "null" ]; then
             echo "❌ No pool ID available for testing"
