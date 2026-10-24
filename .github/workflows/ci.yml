@@ -528,6 +528,55 @@ jobs:
             exit 1
           fi
       
+      - name: Test LLM explain endpoint
+        run: |
+          echo "=== Testing LLM explain endpoint with mock provider ==="
+          
+          # Get first pool ID
+          POOL_ID=$(curl -s http://localhost:3000/api/pools?limit=1 | jq -r '.data[0].id')
+          
+          if [ -z "$POOL_ID" ] || [ "$POOL_ID" == "null" ]; then
+            echo "❌ No pool ID available for testing"
+            exit 1
+          fi
+          
+          echo "Testing explain endpoint for pool ID: $POOL_ID"
+          
+          # Call explain endpoint
+          EXPLAIN_RESPONSE=$(curl -s -X POST http://localhost:3000/api/pools/$POOL_ID/explain)
+          
+          # Check response structure
+          if echo "$EXPLAIN_RESPONSE" | jq -e '.explanation' > /dev/null; then
+            echo "✅ Explain endpoint returned valid response"
+            echo "$EXPLAIN_RESPONSE" | jq '.explanation | {summary, factors_count: (.key_factors | length), has_disclaimer: (.disclaimer != null)}'
+          else
+            echo "❌ Explain endpoint failed or returned invalid response"
+            echo "Response: $EXPLAIN_RESPONSE"
+            exit 1
+          fi
+          
+          # Verify explanation structure
+          SUMMARY=$(echo "$EXPLAIN_RESPONSE" | jq -r '.explanation.summary')
+          FACTORS_COUNT=$(echo "$EXPLAIN_RESPONSE" | jq '.explanation.key_factors | length')
+          HAS_DISCLAIMER=$(echo "$EXPLAIN_RESPONSE" | jq -e '.explanation.disclaimer' > /dev/null && echo "yes" || echo "no")
+          
+          if [ -z "$SUMMARY" ] || [ "$SUMMARY" == "null" ]; then
+            echo "❌ Explanation has no summary"
+            exit 1
+          fi
+          
+          if [ "$FACTORS_COUNT" -eq 0 ]; then
+            echo "❌ Explanation has no key factors"
+            exit 1
+          fi
+          
+          if [ "$HAS_DISCLAIMER" == "no" ]; then
+            echo "❌ Explanation has no disclaimer"
+            exit 1
+          fi
+          
+          echo "✅ LLM explain endpoint validated successfully"
+      
       - name: Trigger risk score computation
         run: |
           echo "=== Triggering risk score recomputation ==="

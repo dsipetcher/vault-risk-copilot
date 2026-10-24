@@ -77,8 +77,8 @@ services:
   # Node.js API - Phase 4
   api:
     build:
-      context: ./packages/api
-      dockerfile: Dockerfile
+      context: ./packages
+      dockerfile: api/Dockerfile
     container_name: vault-risk-api
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
