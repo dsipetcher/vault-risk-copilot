@@ -296,6 +296,7 @@ jobs:
           POSTGRES_DB=vault_risk_copilot
           POSTGRES_PORT=5432
           DATABASE_URL=postgresql://vault_user:vault_pass_ci@postgres:5432/vault_risk_copilot
+          RISK_SERVICE_URL=http://risk-service:8000
           DEFILLAMA_API_URL=https://yields.llama.fi
           COLLECTION_INTERVAL_MS=300000
           LOG_LEVEL=info
