@@ -97,29 +97,38 @@ Vault Risk Copilot is a full-stack DeFi application that:
 - Docker & Docker Compose
 - Git
 
-### Installation
+### Docker Compose (Recommended)
+
+**Current Phase 2 includes:** PostgreSQL + Collector service
 
 ```bash
 # Clone the repository
 git clone https://github.com/username/vault-risk-copilot.git
 cd vault-risk-copilot
 
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# Start all services
+# Start services (postgres + collector)
 docker compose up
+
+# Or run in background
+docker compose up -d
+
+# View logs
+docker compose logs -f collector
+
+# Verify data collection
+docker compose exec postgres psql -U vault_user -d vault_risk_copilot \
+  -c "SELECT COUNT(*) FROM pool_snapshots;"
 ```
 
-The application will be available at:
-- **Frontend:** http://localhost:5173
-- **API:** http://localhost:3000
-- **Risk Service:** http://localhost:8000
-- **MCP Server:** http://localhost:3001
+**Services running:**
+- **PostgreSQL:** localhost:5432 (auto-applies migrations on first start)
+- **Collector:** Runs every 5 minutes, fetches DeFiLlama pools + on-chain vault state
+
+**Future services** (Phase 3-5, currently commented in docker-compose.yml):
+- API (http://localhost:3000)
+- Risk Service (http://localhost:8000)
+- Frontend (http://localhost:5173)
+- MCP Server (http://localhost:3001)
 
 ### Running Tests
 
@@ -128,16 +137,51 @@ The application will be available at:
 cd contracts
 forge test
 
-# Backend tests
-npm run test:api
+# Collector tests
+cd packages/collector
+npm install
+npm test
 
-# Frontend tests
-npm run test:web
-
-# Python tests
-cd packages/risk-service
-pytest
+# Future services (not yet implemented)
+# npm run test:api
+# npm run test:web
+# pytest (in packages/risk-service)
 ```
+
+### Manual Development (without Docker)
+
+**Collector only:**
+```bash
+# 1. Start PostgreSQL
+docker run -d -p 5432:5432 \
+  -e POSTGRES_USER=vault_user \
+  -e POSTGRES_PASSWORD=vault_pass_local \
+  -e POSTGRES_DB=vault_risk_copilot \
+  postgres:16-alpine
+
+# 2. Apply migrations
+psql postgresql://vault_user:vault_pass_local@localhost:5432/vault_risk_copilot \
+  -f db/migrations/001_initial_schema.sql
+
+# 3. Run collector
+cd packages/collector
+npm install
+export DATABASE_URL="postgresql://vault_user:vault_pass_local@localhost:5432/vault_risk_copilot"
+npm run dev
+```
+
+## Project Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 0-1 | ✅ Complete | Smart contracts (ERC-4626 vault), tests, CI/CD |
+| Phase 2 | ✅ Complete | PostgreSQL schema, Docker Compose, TypeScript collector |
+| Phase 3 | 🚧 Planned | Python Risk Service (FastAPI, scikit-learn) |
+| Phase 4 | 🚧 Planned | Node.js API + React frontend |
+| Phase 5 | 🚧 Planned | LLM integration + MCP server |
+| Phase 6 | 🚧 Planned | DevOps hardening, Kubernetes |
+
+**See:** [docs/phases/](./docs/phases/) for detailed phase status and history
 
 ## Smart Contracts on Sepolia
 
