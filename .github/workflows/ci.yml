@@ -167,3 +167,107 @@ jobs:
           tags: vault-risk-collector:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  compose-smoke-test:
+    name: Compose Smoke Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          POSTGRES_USER=vault_user
+          POSTGRES_PASSWORD=vault_pass_ci
+          POSTGRES_DB=vault_risk_copilot
+          POSTGRES_PORT=5432
+          DATABASE_URL=postgresql://vault_user:vault_pass_ci@postgres:5432/vault_risk_copilot
+          DEFILLAMA_API_URL=https://yields.llama.fi
+          COLLECTION_INTERVAL_MS=300000
+          LOG_LEVEL=info
+          NODE_ENV=production
+          EOF
+      
+      - name: Start services
+        run: docker compose up -d --build
+      
+      - name: Wait for postgres to be healthy
+        run: |
+          echo "Waiting for postgres to be healthy..."
+          timeout 60 bash -c 'until docker compose exec -T postgres pg_isready -U vault_user; do sleep 2; done'
+          echo "✅ Postgres is healthy"
+      
+      - name: Verify migrations applied
+        run: |
+          echo "Checking if tables exist..."
+          docker compose exec -T postgres psql -U vault_user -d vault_risk_copilot -c "\dt" | grep pool_snapshots
+          echo "✅ Migrations applied successfully"
+      
+      - name: Wait for collector to collect data
+        id: wait_data
+        run: |
+          echo "Waiting for collector to insert data (up to 3 minutes)..."
+          START_TIME=$(date +%s)
+          TIMEOUT=180
+          
+          while true; do
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+            
+            if [ $ELAPSED -gt $TIMEOUT ]; then
+              echo "❌ Timeout waiting for data collection"
+              exit 1
+            fi
+            
+            COUNT=$(docker compose exec -T postgres psql -U vault_user -d vault_risk_copilot -t -c "SELECT COUNT(*) FROM pool_snapshots;" | tr -d ' ')
+            
+            echo "Current row count: $COUNT (elapsed: ${ELAPSED}s)"
+            
+            if [ "$COUNT" -gt 0 ] 2>/dev/null; then
+              echo "✅ Data collection successful! Found $COUNT rows"
+              echo "row_count=$COUNT" >> $GITHUB_OUTPUT
+              break
+            fi
+            
+            sleep 5
+          done
+      
+      - name: Show collector logs on success
+        if: success()
+        run: |
+          echo "=== Collector logs (last 50 lines) ==="
+          docker compose logs collector --tail 50
+      
+      - name: Show collector logs on failure
+        if: failure()
+        run: |
+          echo "=== Full collector logs ==="
+          docker compose logs collector
+          echo ""
+          echo "=== Container status ==="
+          docker compose ps -a
+          echo ""
+          echo "=== Postgres logs ==="
+          docker compose logs postgres --tail 20
+      
+      - name: Query sample data
+        if: success()
+        run: |
+          echo "=== Sample collected data ==="
+          docker compose exec -T postgres psql -U vault_user -d vault_risk_copilot -c "
+            SELECT 
+              protocol, 
+              chain, 
+              COUNT(*) as snapshots, 
+              ROUND(AVG(tvl_usd)::numeric, 0) as avg_tvl,
+              ROUND(AVG(apy)::numeric, 2) as avg_apy
+            FROM pool_snapshots
+            GROUP BY protocol, chain
+            ORDER BY avg_tvl DESC
+            LIMIT 10;
+          "
+      
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
