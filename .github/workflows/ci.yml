@@ -423,7 +423,20 @@ jobs:
       - name: Wait for API to be healthy
         run: |
           echo "Waiting for API to be healthy..."
-          timeout 60 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'
+          
+          # Try to wait for API with timeout
+          if timeout 60 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'; then
+            echo "✅ API responded to health check"
+          else
+            echo "❌ Timeout or error waiting for API health check"
+            echo ""
+            echo "=== API container status ==="
+            docker compose ps api
+            echo ""
+            echo "=== API logs ==="
+            docker compose logs api
+            exit 1
+          fi
           
           echo "Checking API health response..."
           HEALTH_RESPONSE=$(curl -s http://localhost:3000/api/health | jq -r '.status')
@@ -432,6 +445,8 @@ jobs:
             echo "✅ API is healthy (status: $HEALTH_RESPONSE)"
           else
             echo "❌ API health check failed (status: $HEALTH_RESPONSE)"
+            echo ""
+            echo "=== API logs ==="
             docker compose logs api
             exit 1
           fi
