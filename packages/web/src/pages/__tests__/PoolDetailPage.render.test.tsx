@@ -1,32 +1,21 @@
 import { describe, it, expect } from 'vitest';
+import { prepareChartData } from '@/utils/chartData';
 
 describe('PoolDetailPage Chart Data Processing', () => {
   it('should convert risk scores to numbers for chart rendering', () => {
-    // Simulate risk score data that might come as strings from API
+    // Simulate risk score data
     const riskScore = {
-      tvl_score: '15',
-      tvl_volatility_score: '20.5',
-      apy_volatility_score: '25',
-      reward_ratio_score: '30',
-      stablecoin_score: '10',
-      il_score: '35.5',
-      data_age_score: '40',
-      vault_score: '45',
+      tvl_score: 15,
+      tvl_volatility_score: 20.5,
+      apy_volatility_score: 25,
+      reward_ratio_score: 30,
+      stablecoin_score: 10,
+      il_score: 35.5,
+      data_age_score: 40,
+      vault_score: 45,
     };
 
-    // Process data like in PoolDetailPage
-    const chartData = [
-      { name: 'TVL Score', value: riskScore.tvl_score },
-      { name: 'TVL Volatility', value: riskScore.tvl_volatility_score },
-      { name: 'APY Volatility', value: riskScore.apy_volatility_score },
-      { name: 'Reward Ratio', value: riskScore.reward_ratio_score },
-      { name: 'Stablecoin', value: riskScore.stablecoin_score },
-      { name: 'IL Risk', value: riskScore.il_score },
-      { name: 'Data Age', value: riskScore.data_age_score },
-      { name: 'Vault Score', value: riskScore.vault_score },
-    ]
-      .filter(item => item.value !== null)
-      .map(item => ({ ...item, value: Number(item.value) }));
+    const chartData = prepareChartData(riskScore);
 
     // All values should be converted to numbers
     expect(chartData).toHaveLength(8);
@@ -54,18 +43,7 @@ describe('PoolDetailPage Chart Data Processing', () => {
       vault_score: 45,
     };
 
-    const chartData = [
-      { name: 'TVL Score', value: riskScore.tvl_score },
-      { name: 'TVL Volatility', value: riskScore.tvl_volatility_score },
-      { name: 'APY Volatility', value: riskScore.apy_volatility_score },
-      { name: 'Reward Ratio', value: riskScore.reward_ratio_score },
-      { name: 'Stablecoin', value: riskScore.stablecoin_score },
-      { name: 'IL Risk', value: riskScore.il_score },
-      { name: 'Data Age', value: riskScore.data_age_score },
-      { name: 'Vault Score', value: riskScore.vault_score },
-    ]
-      .filter(item => item.value !== null)
-      .map(item => ({ ...item, value: Number(item.value) }));
+    const chartData = prepareChartData(riskScore);
 
     // Only non-null values
     expect(chartData).toHaveLength(5);

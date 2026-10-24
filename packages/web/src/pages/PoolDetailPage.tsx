@@ -5,6 +5,7 @@ import { ErrorMessage } from '@/components/ErrorMessage';
 import { RiskBadge } from '@/components/RiskBadge';
 import { ExplainPanel } from '@/components/ExplainPanel';
 import { formatNumber, formatPercentage, formatDate } from '@/lib/utils';
+import { prepareChartData } from '@/utils/chartData';
 import type { Pool, PoolRiskScore } from '@/types/api';
 import {
   LineChart,
@@ -77,20 +78,7 @@ export function PoolDetailPage() {
             Risk Factor Breakdown
           </h2>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={[
-                { name: 'TVL Score', value: riskScore.tvl_score },
-                { name: 'TVL Volatility', value: riskScore.tvl_volatility_score },
-                { name: 'APY Volatility', value: riskScore.apy_volatility_score },
-                { name: 'Reward Ratio', value: riskScore.reward_ratio_score },
-                { name: 'Stablecoin', value: riskScore.stablecoin_score },
-                { name: 'IL Risk', value: riskScore.il_score },
-                { name: 'Data Age', value: riskScore.data_age_score },
-                { name: 'Vault Score', value: riskScore.vault_score },
-              ]
-                .filter(item => item.value !== null)
-                .map(item => ({ ...item, value: Number(item.value) }))}
-            >
+            <BarChart data={prepareChartData(riskScore)}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
               <YAxis domain={[0, 100]} />
