@@ -12,7 +12,7 @@ const testAccount = enableMockConnector
   : undefined;
 
 const connectors = enableMockConnector && testAccount
-  ? [mock({ accounts: [testAccount] })]
+  ? [mock({ accounts: [testAccount.address] })]
   : [
       injected(),
       ...(projectId ? [walletConnect({ projectId })] : []),
