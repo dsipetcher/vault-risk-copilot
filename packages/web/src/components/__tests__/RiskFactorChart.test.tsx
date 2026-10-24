@@ -1,7 +1,17 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { render } from '@testing-library/react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { render, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import PoolDetailPage from '@/pages/PoolDetailPage';
 import { prepareChartData } from '@/utils/chartData';
+
+// Mock react-router-dom params
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useParams: () => ({ id: 'test-pool-id' }),
+  };
+});
 
 describe('Risk Factor Chart Rendering', () => {
   beforeAll(() => {
@@ -13,42 +23,51 @@ describe('Risk Factor Chart Rendering', () => {
     };
   });
 
-  it('should render chart with numeric values from string scores', () => {
-    // Mock API response with string scores (simulating potential API behavior)
-    const mockRiskScore = {
-      tvl_score: 15,
-      tvl_volatility_score: 20.5,
-      apy_volatility_score: 25,
-      reward_ratio_score: 30,
-      stablecoin_score: 10,
-      il_score: 35.5,
-      data_age_score: 40,
-      vault_score: 45,
+  it('should render chart with numeric values from STRING scores (API response)', async () => {
+    // Mock API response with STRING scores (critical: this tests Number() conversion)
+    const mockApiResponse = {
+      pool_id: 'test-pool-id',
+      pool_name: 'Test Pool',
+      total_risk_score: '50',
+      risk_category: 'medium',
+      tvl_score: '15',
+      tvl_volatility_score: '20.5',
+      apy_volatility_score: '25',
+      reward_ratio_score: '30',
+      stablecoin_score: '10',
+      il_score: '35.5',
+      data_age_score: '40',
+      vault_score: '45',
     };
 
-    const chartData = prepareChartData(mockRiskScore);
+    // Mock fetch to return string scores
+    global.fetch = vi.fn((url: string) => {
+      if (url.includes('/api/risk/test-pool-id')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockApiResponse,
+        } as Response);
+      }
+      return Promise.reject(new Error('Not found'));
+    });
 
-    // Render the actual chart component
     const { container } = render(
-      <ResponsiveContainer width={400} height={300}>
-        <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="name" />
-          <YAxis domain={[0, 100]} />
-          <Bar dataKey="value" fill="#0ea5e9" />
-        </BarChart>
-      </ResponsiveContainer>
+      <BrowserRouter>
+        <PoolDetailPage />
+      </BrowserRouter>
     );
 
-    // Verify chart renders
-    expect(container.querySelector('.recharts-wrapper')).toBeInTheDocument();
-    expect(container.querySelector('.recharts-bar')).toBeInTheDocument();
+    // Wait for chart to render
+    await waitFor(() => {
+      expect(container.querySelector('.recharts-wrapper')).toBeInTheDocument();
+    });
 
-    // Verify all 8 bars are present
+    // Verify all 8 bars are present (test fails without Number() in prepareChartData)
     const bars = container.querySelectorAll('.recharts-bar-rectangle');
     expect(bars.length).toBe(8);
 
-    // Verify data is numeric
+    // Verify prepareChartData converts strings to numbers
+    const chartData = prepareChartData(mockApiResponse as any);
     expect(chartData).toHaveLength(8);
     chartData.forEach(item => {
       expect(typeof item.value).toBe('number');

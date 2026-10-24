@@ -54,6 +54,12 @@ describe('Explanations API Tests', () => {
   });
 
   afterAll(async () => {
+    // Clean up fixtures
+    const { pool } = await import('../database.js');
+    await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
+    await pool.query('DELETE FROM risk_scores WHERE pool_id = $1', [poolId]);
+    await pool.query('DELETE FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+    
     await app.close();
   });
 

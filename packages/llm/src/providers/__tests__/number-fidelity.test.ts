@@ -73,20 +73,20 @@ describe('Number Fidelity Validation', () => {
     expect(result).toBe(true);
   });
 
-  it('should accept numbers within 2% relative tolerance', () => {
+  it('REJECT: 93.2 vs input 95 (exact match required, rounding to 2 decimals)', () => {
     const output: ExplanationOutput = {
       summary: 'TVL score is high.',
       key_factors: [
         {
           signal: 'TVL Score',
           value: '93.2/100',
-          explanation: 'TVL score 93.2 is within tolerance of input value 95.',
+          explanation: 'TVL score 93.2 differs from input 95.',
         },
       ],
       disclaimer: 'Test',
     };
     const result = (provider as any).validateNumberFidelity(baseInput, output);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   it('should accept negative numbers with correct sign (-35.2)', () => {
@@ -285,7 +285,7 @@ describe('Number Fidelity Validation', () => {
     expect(result).toBe(false);
   });
 
-  it('REJECT: $510K vs input 500K (2% tolerance = 10K, so 510K fails)', () => {
+  it('REJECT: $510K vs input 500K (exact match required after unit normalization)', () => {
     const inputWith500K = {
       ...baseInput,
       pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 500000 },
@@ -295,8 +295,8 @@ describe('Number Fidelity Validation', () => {
       key_factors: [
         {
           signal: 'TVL Score',
-          value: '$511K',
-          explanation: 'TVL is $511K.',
+          value: '$510K',
+          explanation: 'TVL is $510K.',
         },
       ],
       disclaimer: 'Test',
@@ -369,5 +369,21 @@ describe('Number Fidelity Validation', () => {
     };
     const result = (provider as any).validateNumberFidelity(baseInput, output);
     expect(result).toBe(false);
+  });
+
+  it('ACCEPT: "TVL changed -35.2%, meaning higher risk" (higher modifies risk, not TVL)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL changed -35.2%, meaning higher risk',
+      key_factors: [
+        {
+          signal: 'TVL Volatility',
+          value: '-35.2%',
+          explanation: 'Decline indicates higher risk.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
   });
 });
