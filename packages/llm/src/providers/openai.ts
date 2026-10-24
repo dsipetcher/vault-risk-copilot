@@ -328,8 +328,7 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
     const numbersInOutput = cleanedText.match(numberPattern) || [];
 
     const inputNumbers = new Set<number>();
-    const inputNumbersWithSign = new Map<number, boolean>(); // track if negative
-    this.collectNumbers(input, inputNumbers, inputNumbersWithSign);
+    this.collectNumbers(input, inputNumbers);
 
     for (const numStr of numbersInOutput) {
       const num = parseFloat(numStr);
@@ -337,19 +336,23 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
 
       let found = false;
       for (const inputNum of inputNumbers) {
-        // Exact match or 2% relative tolerance
+        // Sign must match
+        if ((inputNum < 0) !== (num < 0)) continue;
+        
+        // 2% relative tolerance
         const tolerance = Math.abs(inputNum) * 0.02;
-        if (Math.abs(inputNum - num) <= Math.max(tolerance, 0.01)) {
-          // Sign must match for negative numbers
-          if (inputNum < 0 && num > 0) continue;
-          if (inputNum > 0 && num < 0) continue;
-          
+        const diff = Math.abs(inputNum - num);
+        if (diff <= Math.max(tolerance, 0.01)) {
           found = true;
           break;
         }
       }
 
       if (!found) {
+        // Debug logging
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`[Number Fidelity] Number ${num} not found in input. Input numbers:`, Array.from(inputNumbers).sort((a,b) => a-b));
+        }
         return false;
       }
     }
@@ -357,27 +360,16 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
     return true;
   }
 
-  private collectNumbers(obj: unknown, numbers: Set<number>, withSign?: Map<number, boolean>): void {
+  private collectNumbers(obj: unknown, numbers: Set<number>): void {
     if (typeof obj === 'number') {
       numbers.add(obj);
-      if (withSign && obj < 0) {
-        withSign.set(obj, true);
-      }
-      // Add common rounding variants but preserve sign
-      const rounded0 = parseFloat(obj.toFixed(0));
-      const rounded1 = parseFloat(obj.toFixed(1));
-      const rounded2 = parseFloat(obj.toFixed(2));
-      numbers.add(rounded0);
-      numbers.add(rounded1);
-      numbers.add(rounded2);
-      if (withSign && obj < 0) {
-        withSign.set(rounded0, true);
-        withSign.set(rounded1, true);
-        withSign.set(rounded2, true);
-      }
+      // Add common rounding variants
+      numbers.add(parseFloat(obj.toFixed(0)));
+      numbers.add(parseFloat(obj.toFixed(1)));
+      numbers.add(parseFloat(obj.toFixed(2)));
     } else if (typeof obj === 'object' && obj !== null) {
       for (const value of Object.values(obj)) {
-        this.collectNumbers(value, numbers, withSign);
+        this.collectNumbers(value, numbers);
       }
     }
   }

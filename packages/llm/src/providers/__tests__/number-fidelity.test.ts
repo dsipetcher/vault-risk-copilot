@@ -75,12 +75,12 @@ describe('Number Fidelity Validation', () => {
 
   it('should accept numbers within 2% relative tolerance', () => {
     const output: ExplanationOutput = {
-      summary: 'TVL score is 94.1 (input: 95, within 2%).',
+      summary: 'TVL score is high.',
       key_factors: [
         {
           signal: 'TVL',
-          value: '94.1/100',
-          explanation: 'Test',
+          value: '93.2/100',
+          explanation: 'Within tolerance of input value.',
         },
       ],
       disclaimer: 'Test',
