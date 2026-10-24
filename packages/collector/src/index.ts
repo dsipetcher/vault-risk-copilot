@@ -55,6 +55,10 @@ async function collectData() {
 }
 
 async function main() {
+  // Force immediate stdout output (before logger initialization)
+  process.stdout.write('COLLECTOR STARTING (raw stdout)\n');
+  console.log('COLLECTOR STARTING (console.log)');
+  
   logger.info('🚀 Collector main() started');
   logger.info({
     DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET',

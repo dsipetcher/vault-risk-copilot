@@ -21,4 +21,6 @@ COPY --from=base /app/dist ./dist
 
 USER node
 
-CMD ["node", "dist/index.js"]
+ENV NODE_OPTIONS="--no-warnings"
+
+CMD ["node", "--trace-warnings", "dist/index.js"]
