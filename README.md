@@ -61,13 +61,31 @@ Vault Risk Copilot is a full-stack DeFi application that:
 - Slither static analysis
 
 ### Frontend
-- **React 19** + **TypeScript 7** + **Vite 8**
+- **React 19** + **TypeScript 5.9** + **Vite 7**
 - **wagmi 3.7** + **viem 2.57** for Web3 interactions
+- **Playwright** E2E tests with screenshot capture
 - TanStack Query for data fetching
 - Recharts for visualization
 
+## Screenshots
+
+### Pools Dashboard
+![Pools Page](docs/screenshots/01-pools-page.png)
+
+### Vault Interface - Connected
+![Vault Connected](docs/screenshots/03-vault-connected.png)
+
+### After Minting Test USDC
+![After Mint](docs/screenshots/04-after-mint.png)
+
+### After Approving USDC
+![After Approve](docs/screenshots/05-after-approve.png)
+
+### Final Vault State
+![Final State](docs/screenshots/08-final-state.png)
+
 ### Backend
-- **Node.js 22** + **TypeScript 7**
+- **Node.js 22** + **TypeScript 5.9**
 - **Fastify 5** API with zod validation
 - OpenAPI documentation
 - Rate limiting & security headers
