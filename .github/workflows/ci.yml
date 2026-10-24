@@ -744,11 +744,6 @@ jobs:
           timeout 30 bash -c 'until docker exec postgres-e2e pg_isready -U postgres; do sleep 1; done'
           echo "✅ Postgres is ready"
       
-      - name: Set up database schema
-        run: |
-          docker cp db/migrations/001_initial_schema.sql postgres-e2e:/tmp/schema.sql
-          docker exec postgres-e2e psql -U postgres -d vault_risk -f /tmp/schema.sql
-      
       - name: Run database migrations
         run: |
           docker cp db/migrations postgres-e2e:/tmp/migrations
