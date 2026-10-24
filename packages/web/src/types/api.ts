@@ -84,7 +84,7 @@ export interface ExplanationMetadata {
   provider: string;
   model: string;
   timestamp: string;
-  latency_ms: number;
+  latency_ms: number | null;
 }
 
 export interface ExplanationResponse {
