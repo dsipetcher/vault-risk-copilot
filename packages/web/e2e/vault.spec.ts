@@ -41,6 +41,17 @@ test.describe('Vault E2E Flow', () => {
   test('complete vault workflow with on-chain verification', async ({ page }) => {
     test.setTimeout(120000); // 2 minutes for the whole test
     
+    // Capture console logs and errors
+    page.on('console', msg => {
+      const type = msg.type();
+      const text = msg.text();
+      console.log(`[PAGE ${type.toUpperCase()}]:`, text);
+    });
+    
+    page.on('pageerror', err => {
+      console.log('[PAGE ERROR]:', err.message);
+    });
+    
     // Navigate to Pools page
     await page.goto('/');
     await expect(page.getByTestId('pools-title')).toBeVisible({ timeout: 10000 });
@@ -87,67 +98,56 @@ test.describe('Vault E2E Flow', () => {
     console.log('USDC Balance after mint:', usdcBalanceText);
 
     // Try to approve and deposit
-    let depositWorked = false;
-    try {
-      await page.getByTestId('deposit-amount-input').fill('500');
-      await page.waitForTimeout(1000);
-      
-      // Check if approve button exists
-      const approveButton = page.getByTestId('approve-button');
-      const isApproveVisible = await approveButton.isVisible().catch(() => false);
-      
-      if (isApproveVisible) {
-        console.log('Approving USDC...');
-        await approveButton.click();
-        await expect(page.getByTestId('approve-success')).toBeVisible({ timeout: 30000 });
-        await page.waitForTimeout(3000);
-        await takeScreenshot(page, '05-after-approve');
-      }
-
-      // Deposit
-      const depositButton = page.getByTestId('deposit-button');
-      await expect(depositButton).toBeVisible();
-      await depositButton.click();
-      
-      await expect(page.getByTestId('deposit-success')).toBeVisible({ timeout: 30000 });
-      await page.waitForTimeout(3000);
-      await takeScreenshot(page, '06-after-deposit');
-      depositWorked = true;
-
-      // Verify shares balance
-      const sharesText = await page.getByTestId('vault-shares').textContent();
-      console.log('Vault Shares:', sharesText);
-      expect(parseFloat(sharesText || '0')).toBeGreaterThan(0);
-
-      // Verify on-chain balance
-      const onChainShares = await publicClient.readContract({
-        address: VAULT_ADDRESS,
-        abi: VAULT_ABI,
-        functionName: 'balanceOf',
-        args: ['0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'],
-      });
-      console.log('On-chain shares:', formatUnits(onChainShares, 18));
-      expect(onChainShares).toBeGreaterThan(0n);
-
-      // Redeem half
-      const sharesToRedeem = Math.floor(parseFloat(sharesText || '0') / 2);
-      await page.getByTestId('redeem-amount-input').fill(sharesToRedeem.toString());
-      await page.getByTestId('redeem-button').click();
-      
-      await expect(page.getByTestId('redeem-success')).toBeVisible({ timeout: 30000 });
-      await page.waitForTimeout(3000);
-      await takeScreenshot(page, '07-after-redeem');
-
-      console.log('✅ E2E test completed successfully');
-    } catch (error) {
-      console.error('❌ Deposit/Redeem failed:', error);
-      await takeScreenshot(page, '99-error-state');
-      if (depositWorked) {
-        throw error; // Only fail if deposit actually worked but redeem failed
-      } else {
-        console.log('⚠️ Continuing despite deposit failure to capture screenshots');
-      }
+    // Deposit
+    await page.getByTestId('deposit-amount-input').fill('500');
+    
+    // Check if approve button exists
+    const approveButton = page.getByTestId('approve-button');
+    const isApproveVisible = await approveButton.isVisible().catch(() => false);
+    
+    if (isApproveVisible) {
+      console.log('Approving USDC...');
+      await approveButton.click();
+      await expect(page.getByTestId('approve-success')).toBeVisible({ timeout: 30000 });
+      await page.waitForTimeout(2000);
+      await takeScreenshot(page, '05-after-approve');
     }
+
+    // Deposit
+    const depositButton = page.getByTestId('deposit-button');
+    await expect(depositButton).toBeVisible();
+    await expect(depositButton).toBeEnabled();
+    await depositButton.click();
+    
+    await expect(page.getByTestId('deposit-success')).toBeVisible({ timeout: 30000 });
+    await page.waitForTimeout(2000);
+    await takeScreenshot(page, '06-after-deposit');
+
+    // Verify shares balance
+    const sharesText = await page.getByTestId('vault-shares').textContent();
+    console.log('Vault Shares:', sharesText);
+    expect(parseFloat(sharesText || '0')).toBeGreaterThan(0);
+
+    // Verify on-chain balance
+    const onChainShares = await publicClient.readContract({
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: 'balanceOf',
+      args: ['0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'],
+    });
+    console.log('On-chain shares:', formatUnits(onChainShares, 18));
+    expect(onChainShares).toBeGreaterThan(0n);
+
+    // Redeem half
+    const sharesToRedeem = Math.floor(parseFloat(sharesText || '0') / 2);
+    await page.getByTestId('redeem-amount-input').fill(sharesToRedeem.toString());
+    await page.getByTestId('redeem-button').click();
+    
+    await expect(page.getByTestId('redeem-success')).toBeVisible({ timeout: 30000 });
+    await page.waitForTimeout(2000);
+    await takeScreenshot(page, '07-after-redeem');
+
+    console.log('✅ E2E test completed successfully');
     
     // Final state screenshot
     await takeScreenshot(page, '08-final-state');

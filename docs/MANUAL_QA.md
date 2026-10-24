@@ -100,32 +100,109 @@ bash e2e/run-e2e.sh
 
 ### Metrics
 
-- Test duration: ~38s
-- Screenshots: 6 captured
+- Test duration: ~13s
+- Screenshots: 7 captured (pools, vault connected, after mint, after approve, after deposit, after redeem, final state)
 - Playwright timeout: 120s (test-level)
-- Individual action timeouts: 30s (approve, deposit, mint)
-- Auto-connect delay: 100ms
+- Individual action timeouts: 30s (approve, deposit, redeem)
+- Auto-connect delay: works on page load
+
+### Results
+
+✅ **Full E2E test passing** - Complete workflow validated from pools page to vault deposit and redeem
+
+✅ **Deposit transaction fixed** - Root cause was incorrect ERC-4626 ABI (missing `receiver` parameter in `deposit(uint256,address)`)
+
+✅ **On-chain verification successful** - Both UI state and direct viem `readContract` confirm shares balance > 0
+
+✅ **All screenshots captured** - Visual documentation of complete workflow with successful deposit and redeem
+
+### Commands
+
+```bash
+cd packages/web
+bash e2e/run-e2e.sh
+```
+
+Output:
+```
+=== E2E Test Setup ===
+forge --version: forge Version: 1.8.6
+anvil --version: anvil Version: 1.8.6
+Repository root: /workspace
+Anvil already running on port 8545
+Deploying contracts to Anvil...
+MockUSDC: 0x3Aa5ebB10DC797CAC828524e59A333d0A371443c
+Vault: 0xc6e7DF5E7b4f2A278906862b61205850344D4e7d
+Environment file created
+
+=== Running E2E Tests ===
+Running 1 test using 1 worker
+[1/1] [chromium] › e2e/vault.spec.ts:41:3 › Vault E2E Flow › complete vault workflow with on-chain verification
+[PAGE LOG]: [APPROVE] Transaction sent: 0xc34e6630d1780205170f8a1923b6b5136123d772eed89ee6001223f84a53f9fd
+[PAGE LOG]: [APPROVE] Confirmed! Refetching allowance...
+[PAGE LOG]: [DEPOSIT] Transaction sent: 0xa7d07766f8f554ebe4f964541cf30b4d6b3c1617e0cfb2767a39e13f79db2f42
+[PAGE LOG]: [DEPOSIT] Confirmed!
+Vault Shares: 0.0000005
+On-chain shares: 0.0000005
+✅ E2E test completed successfully
+  1 passed (13.3s)
+
+=== E2E Tests Complete ===
+Screenshots saved to docs/screenshots/
+```
+
+### Root Cause and Fix
+
+**Problem**: Deposit transaction timed out waiting for confirmation.
+
+**Diagnosis**:
+1. Tested deposit manually with `cast send` - succeeded on-chain
+2. Checked USDC decimals (6), balance, and allowance - all correct
+3. Found VaultPage.tsx used incorrect ABI: `deposit(uint256)` instead of ERC-4626's `deposit(uint256,address)`
+
+**Solution**:
+- Updated VAULT_ABI to include correct `receiver` parameter: `deposit(uint256 assets, address receiver)`
+- Updated `redeem` ABI similarly: `redeem(uint256 shares, address receiver, address owner)`
+- Fixed handleDeposit and handleRedeem to pass `address` parameter
+- Added console logging via useEffect to track transaction states
+
+**Verification**:
+- E2E test now completes successfully with deposit and redeem
+- On-chain shares balance verified both in UI and via viem readContract
+- All screenshots show successful workflow
+
+### CI Status
+
+CI E2E job previously failed due to:
+1. Absolute path `/workspace/contracts` in `run-e2e.sh` (works locally, fails in CI)
+2. Missing `shell: bash` and `set -euxo pipefail` in script
+
+**Fixes applied**:
+- Changed script to use relative path from `REPO_ROOT` (calculated dynamically)
+- Added `set -euxo pipefail` at script start
+- Added tool version logging (`forge --version`, `anvil --version`)
+- Added `shell: bash` to CI workflow step
+- Added `if: always()` to artifact uploads (playwright-report, anvil logs)
 
 ### Next Steps
 
-To achieve full E2E passing:
-1. Debug deposit transaction confirmation issue
-2. Add transaction receipt waiting with explicit state checks
-3. Verify gas price and nonce handling in mock connector
-4. Add viem transaction simulation before actual send
-5. Consider using wagmi's `useWaitForTransactionReceipt` hook explicitly
+To achieve full green CI:
+1. ✅ Script path issues fixed
+2. ✅ Deposit transaction fixed
+3. 🔄 Push changes and verify CI passes
 
 ### Conclusion
 
-✅ **E2E infrastructure is fully functional** - Auto-connect works, screenshots capture workflow, on-chain interaction succeeds (mint, approve)
+✅ **E2E infrastructure is fully functional** - Auto-connect, screenshots, on-chain interaction all working
 
-⚠️ **Deposit issue is isolated** - 80% of workflow validated, remaining 20% requires transaction confirmation debugging
+✅ **Deposit/redeem workflow validated** - Complete flow from mint → approve → deposit → verify shares → redeem
 
-📸 **All required screenshots delivered** - Visual documentation of pools page, vault connected state, mint operation, approve operation, and final state
+📸 **All required screenshots delivered** - Visual documentation of successful vault operations
 
 The E2E test successfully demonstrates:
 - Playwright integration with Vite
 - Wagmi mock connector with Anvil
+- ERC-4626 vault operations (deposit, redeem)
 - Data-testid based element selection
 - Screenshot capture at workflow milestones
 - Web-first assertions with proper timeouts

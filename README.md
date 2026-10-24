@@ -81,6 +81,12 @@ Vault Risk Copilot is a full-stack DeFi application that:
 ### After Approving USDC
 ![After Approve](docs/screenshots/05-after-approve.png)
 
+### After Depositing USDC to Vault
+![After Deposit](docs/screenshots/06-after-deposit.png)
+
+### After Redeeming Vault Shares
+![After Redeem](docs/screenshots/07-after-redeem.png)
+
 ### Final Vault State
 ![Final State](docs/screenshots/08-final-state.png)
 

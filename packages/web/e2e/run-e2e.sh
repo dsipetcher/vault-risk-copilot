@@ -1,7 +1,15 @@
 #!/bin/bash
-set -e
+set -euxo pipefail
 
 echo "=== E2E Test Setup ==="
+
+# Verify Foundry installation
+forge --version
+anvil --version
+
+# Get repository root (2 levels up from packages/web/e2e)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
+echo "Repository root: $REPO_ROOT"
 
 # Check if anvil is running
 if lsof -Pi :8545 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
@@ -16,7 +24,7 @@ else
 fi
 
 echo "Deploying contracts to Anvil..."
-cd /workspace/contracts
+cd "$REPO_ROOT/contracts"
 
 # Set deployer private key for the script
 export DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
@@ -41,7 +49,7 @@ echo "MockUSDC: $MOCK_USDC_ADDRESS"
 echo "Vault: $VAULT_ADDRESS"
 
 # Write .env.e2e.local for Vite
-cd /workspace/packages/web
+cd "$REPO_ROOT/packages/web"
 cat > .env.e2e.local <<EOF
 VITE_MOCK_USDC_ADDRESS=$MOCK_USDC_ADDRESS
 VITE_VAULT_ADDRESS=$VAULT_ADDRESS
@@ -65,7 +73,12 @@ npm run test:e2e
 echo ""
 echo "=== E2E Tests Complete ==="
 echo "Screenshots saved to docs/screenshots/"
-ls -lh ../../docs/screenshots/ 2>/dev/null || echo "No screenshots found"
+ls -lh "$REPO_ROOT/docs/screenshots/" 2>/dev/null || echo "No screenshots found"
+
+# Save anvil log for CI artifacts
+if [ -f /tmp/anvil.log ]; then
+  cp /tmp/anvil.log "$REPO_ROOT/packages/web/" || true
+fi
 
 # Cleanup
 if [ ! -z "$ANVIL_PID" ]; then

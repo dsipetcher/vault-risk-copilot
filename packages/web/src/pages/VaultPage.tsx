@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, type Address } from 'viem';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { shortenAddress, formatNumber } from '@/lib/utils';
 
@@ -23,14 +23,21 @@ const VAULT_ABI = [
     type: 'function',
   },
   {
-    inputs: [{ name: 'assets', type: 'uint256' }],
+    inputs: [
+      { name: 'assets', type: 'uint256' },
+      { name: 'receiver', type: 'address' }
+    ],
     name: 'deposit',
     outputs: [{ type: 'uint256' }],
     stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    inputs: [{ name: 'shares', type: 'uint256' }],
+    inputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'receiver', type: 'address' },
+      { name: 'owner', type: 'address' }
+    ],
     name: 'redeem',
     outputs: [{ type: 'uint256' }],
     stateMutability: 'nonpayable',
@@ -151,6 +158,31 @@ export function VaultPage() {
     hash: mintHash,
   });
 
+  // Log transaction states for debugging
+  useEffect(() => {
+    if (depositHash) {
+      console.log('[DEPOSIT] Transaction sent:', depositHash);
+    }
+    if (isDepositConfirming) {
+      console.log('[DEPOSIT] Waiting for confirmation...');
+    }
+    if (isDepositSuccess) {
+      console.log('[DEPOSIT] Confirmed!');
+    }
+  }, [depositHash, isDepositConfirming, isDepositSuccess]);
+
+  useEffect(() => {
+    if (approveHash) {
+      console.log('[APPROVE] Transaction sent:', approveHash);
+    }
+    if (isApproveConfirming) {
+      console.log('[APPROVE] Waiting for confirmation...');
+    }
+    if (isApproveSuccess) {
+      console.log('[APPROVE] Confirmed! Refetching allowance...');
+    }
+  }, [approveHash, isApproveConfirming, isApproveSuccess]);
+
   if (isApproveSuccess || isDepositSuccess || isRedeemSuccess || isMintSuccess) {
     setTimeout(() => {
       refetchUsdcBalance();
@@ -181,7 +213,7 @@ export function VaultPage() {
       address: VAULT_ADDRESS,
       abi: VAULT_ABI,
       functionName: 'deposit',
-      args: [amount],
+      args: [amount, address as Address],
     });
   };
 
@@ -192,7 +224,7 @@ export function VaultPage() {
       address: VAULT_ADDRESS,
       abi: VAULT_ABI,
       functionName: 'redeem',
-      args: [amount],
+      args: [amount, address as Address, address as Address],
     });
   };
 
