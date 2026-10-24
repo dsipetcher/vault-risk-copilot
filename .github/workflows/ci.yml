@@ -153,6 +153,21 @@ jobs:
     name: Risk Service (Python)
     runs-on: ubuntu-latest
     
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -168,6 +183,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       
+      - name: Set up database schema
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+      
       - name: Lint with ruff
         working-directory: packages/risk-service
         run: |
@@ -181,6 +200,12 @@ jobs:
       - name: Run unit tests
         working-directory: packages/risk-service
         run: pytest -m unit --cov=app --cov-report=term-missing --cov-report=xml
+      
+      - name: Run integration tests
+        working-directory: packages/risk-service
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
+        run: pytest -m integration -v
       
       - name: Upload coverage
         uses: codecov/codecov-action@v4

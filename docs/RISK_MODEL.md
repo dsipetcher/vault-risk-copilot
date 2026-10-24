@@ -242,55 +242,106 @@ Extremely high, volatile, or spiking APY suggests:
 
 ---
 
+### 8. Vault Share Price Drop Signal
+
+**What it measures:** Change in our SimpleVault's share price (losses in the vault's underlying strategy).
+
+**Rationale:**
+- **Share price drops indicate actual losses** in the vault.
+  - Unlike TVL drops (users withdrawing), share price drops mean existing shares lost value
+  - Critical indicator of vault strategy performance
+  - Direct measure of user losses
+- **Stable or growing share price = low risk.**
+
+**Formula:**
+- No drop or increase: **0 points**
+- Drop < 1% (warning threshold): **0-50 points** (linear scale)
+- Drop ≥ 1% but < 5%: **50-100 points** (linear scale)
+- Drop ≥ 5% (critical): **100 points**
+
+**Example:**
+- Share price +2%: 0 points
+- Share price -0.5%: 25 points
+- Share price -1.5%: 62 points
+- Share price -10%: 100 points
+
+**Limitations:**
+- Only applies to our SimpleVault (not all pools)
+- Depends on vault_state_snapshots data availability
+- Short-term fluctuations may not indicate long-term trend
+- Block-over-block comparison may be noisy
+
+---
+
 ## Aggregate Risk Score
 
 The **total risk score** is a weighted sum of all signals:
 
 ```
-Total = 0.15 × TVL_size
-      + 0.15 × TVL_drop
-      + 0.20 × APY_volatility
-      + 0.15 × Reward_ratio
-      + 0.10 × Stablecoin
-      + 0.15 × IL_risk
-      + 0.10 × Data_age
+Total = 0.12 × TVL_size
+      + 0.12 × TVL_drop
+      + 0.18 × APY_volatility
+      + 0.13 × Reward_ratio
+      + 0.08 × Stablecoin
+      + 0.13 × IL_risk
+      + 0.08 × Data_age
+      + 0.16 × Vault_price_drop
 ```
 
-**Weights rationale:**
-- **APY volatility (20%):** Highest weight because unsustainable yields are a primary risk
-- **TVL signals (15% each):** TVL size and drops are strong indicators of stability
-- **Reward ratio (15%):** Yield composition matters for sustainability
-- **IL risk (15%):** Significant for AMM pools
-- **Stablecoin (10%):** Binary signal, less nuanced
-- **Data age (10%):** Important but secondary to yield/TVL signals
+**Weights rationale (sum = 1.0):**
+- **APY volatility (18%):** High weight because unsustainable yields are a primary risk
+- **Vault price drop (16%):** Critical indicator of our vault's actual performance
+- **Reward ratio (13%):** Yield composition matters for sustainability
+- **IL risk (13%):** Significant for AMM pools
+- **TVL signals (12% each):** TVL size and drops are strong indicators of stability
+- **Stablecoin (8%):** Binary signal, less nuanced
+- **Data age (8%):** Important but secondary to yield/TVL/vault signals
 
 ---
 
-## Anomaly Detection
+## Anomaly Detection (Rule-Based)
 
-In addition to individual signals, the model uses **Isolation Forest** (scikit-learn) to detect statistical outliers across a batch of pools.
+In addition to individual signals, the model uses **deterministic rule-based detection** to flag pools with unusual risk patterns.
 
-**Features used:**
-- TVL (USD)
-- APY (%)
-- APY volatility (sigma)
-- 7-day TVL change (%)
+**Rules (all deterministic, no ML):**
 
-**Contamination:** 5% (assumes ~5% of pools are anomalies)
+1. **Multiple Critical Signals (≥3 signals ≥90):**
+   - Flags pools with 3+ individual signal scores in critical range
+   - Reason: "N signals in critical range (≥90)"
+
+2. **Extreme Risk + Low TVL (risk ≥85 AND tvl_score ≥80):**
+   - Very high total risk combined with very low TVL
+   - Reason: "Extreme risk (≥85) + very low TVL"
+
+3. **Contradictory Signals:**
+   - High total risk (≥60) despite stable fundamentals
+   - Stablecoin pool + stable APY + high TVL but high risk
+   - Reason: "High risk despite stable fundamentals (possible data error)"
+
+4. **New Pool + Extreme APY Volatility:**
+   - Short data history (data_age_score ≥80) + high APY volatility (≥80)
+   - Reason: "New pool with extreme APY volatility"
 
 **Flagging:**
-- Pools flagged as anomalies get `is_anomaly=true`
-- Reason: "Statistical outlier detected by Isolation Forest"
+- Pools matching rules get `is_anomaly=true`
+- Each rule has a specific human-readable reason
 
 **Use case:** Catches pools with unusual combinations of metrics that may indicate:
 - Data quality issues
 - Manipulated metrics
-- Genuinely risky or experimental protocols
+- Genuinely dangerous protocols
+
+**Advantages over ML:**
+- ✅ **Fully deterministic** (same input → same output)
+- ✅ **Explainable** (exact reason for each flag)
+- ✅ **No training data required**
+- ✅ **No scikit-learn dependency**
+- ✅ **Works with any number of pools**
 
 **Limitations:**
-- Requires ≥10 pools for meaningful detection
-- May flag legitimate high-yield opportunities as outliers
-- Sensitive to feature scaling and contamination parameter
+- Fixed rules may miss novel risk patterns
+- Thresholds are manually chosen (not data-driven)
+- May flag legitimate edge-case pools
 
 ---
 
