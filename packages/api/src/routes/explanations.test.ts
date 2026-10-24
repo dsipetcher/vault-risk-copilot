@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 
 describe('Explanations API Tests', () => {
   let app: FastifyInstance;
+  let poolId: string;
 
   beforeAll(async () => {
     process.env.DATABASE_URL =
@@ -11,6 +12,27 @@ describe('Explanations API Tests', () => {
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     process.env.LLM_PROVIDER = 'mock';
     app = await build();
+    
+    // Create test fixture: insert a pool snapshot and risk score
+    const { pool } = await import('../database.js');
+    const poolResult = await pool.query(`
+      INSERT INTO pool_snapshots (
+        pool_id, snapshot_at, protocol, chain, tvl_usd, apy, il_risk, is_stablecoin, count
+      ) VALUES (
+        gen_random_uuid(), NOW(), 'test-protocol', 'Ethereum', 1000000, 5.5, 0.05, false, 10
+      ) RETURNING pool_id
+    `);
+    poolId = poolResult.rows[0].pool_id;
+    
+    await pool.query(`
+      INSERT INTO risk_scores (
+        pool_id, calculated_at, total_risk_score, risk_category,
+        tvl_score, tvl_volatility_score, apy_volatility_score, reward_ratio_score,
+        stablecoin_score, il_score, data_age_score, vault_score
+      ) VALUES (
+        $1, NOW(), 50, 'medium', 75, 60, 55, null, null, 80, null, null
+      )
+    `, [poolId]);
   });
 
   afterAll(async () => {
@@ -18,10 +40,6 @@ describe('Explanations API Tests', () => {
   });
 
   it('should return explanation with all required fields in HTTP response', async () => {
-    // Use a pool ID that likely exists in the database
-    // If not found, the test will get a 404 which is fine for now
-    const poolId = '747c1d2a-c668-4682-b9f9-296708a3dd90';
-
     const response = await app.inject({
       method: 'POST',
       url: `/api/pools/${poolId}/explain`,
@@ -33,14 +51,7 @@ describe('Explanations API Tests', () => {
       }),
     });
 
-    // If pool not found, skip the test
-    if (response.statusCode === 404 || response.statusCode === 500) {
-      console.log(
-        `Skipping: Pool not found or error (status ${response.statusCode})`
-      );
-      return;
-    }
-
+    // Expect 200, fail on any other status
     expect(response.statusCode).toBe(200);
 
     const body = JSON.parse(response.body);
@@ -83,8 +94,6 @@ describe('Explanations API Tests', () => {
     // This is the actual bug: Fastify's fast-json-stringify strips properties
     // when schema declares `type: object` without `properties`
 
-    const poolId = '747c1d2a-c668-4682-b9f9-296708a3dd90';
-
     const response = await app.inject({
       method: 'POST',
       url: `/api/pools/${poolId}/explain`,
@@ -92,10 +101,7 @@ describe('Explanations API Tests', () => {
       headers: { 'content-type': 'application/json' },
     });
 
-    if (response.statusCode !== 200) {
-      console.log(`Skipping: Non-200 status ${response.statusCode}`);
-      return;
-    }
+    expect(response.statusCode).toBe(200);
 
     const body = JSON.parse(response.body);
 
@@ -111,8 +117,6 @@ describe('Explanations API Tests', () => {
   it('CRITICAL: should pass original API key to provider (not redacted)', async () => {
     // Regression test: onRequest hook was mutating request.headers['x-llm-api-key'] 
     // in place, so provider received '[REDACTED]' and BYOK calls failed
-    
-    const poolId = '747c1d2a-c668-4682-b9f9-296708a3dd90';
     const testKey = 'sk-test-1234567890abcdef';
 
     const response = await app.inject({
@@ -129,18 +133,10 @@ describe('Explanations API Tests', () => {
 
     // Mock provider doesn't validate keys, but a real provider would fail with 401
     // if it received '[REDACTED]' instead of the original key
+    expect(response.statusCode).toBe(200);
     
-    // If we got 200, the provider received the key successfully
-    // If we got 404/500, pool doesn't exist (acceptable for this test)
-    // Any other status would indicate a real problem
-    
-    expect([200, 404, 500]).toContain(response.statusCode);
-    
-    // If successful, verify response structure
-    if (response.statusCode === 200) {
-      const body = JSON.parse(response.body);
-      expect(body).toHaveProperty('explanation');
-      expect(body).toHaveProperty('metadata');
-    }
+    const body = JSON.parse(response.body);
+    expect(body).toHaveProperty('explanation');
+    expect(body).toHaveProperty('metadata');
   });
 });
