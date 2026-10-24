@@ -704,6 +704,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
     steps:
       - uses: actions/checkout@v4
         with:
@@ -724,16 +739,53 @@ jobs:
         working-directory: packages/web
         run: npm ci
       
+      - name: Set up database schema
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+      
+      - name: Seed E2E test data
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/e2e-seed.sql
+      
       - name: Install Playwright browsers
         working-directory: packages/web
         run: npx playwright install --with-deps chromium
       
+      - name: Build and start API service
+        run: |
+          cd packages/llm
+          npm ci
+          npm run build
+          
+          cd ../api
+          npm ci
+          npm run build
+          
+          # Start API in background with mock LLM provider
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/vault_risk \
+          LLM_PROVIDER=mock \
+          NODE_ENV=test \
+          PORT=3000 \
+          nohup node dist/index.js > /tmp/api.log 2>&1 &
+          
+          # Wait for API to be ready
+          timeout 30 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 1; done'
+          echo "✅ API is ready"
+      
       - name: Run E2E tests
         working-directory: packages/web
         shell: bash
+        env:
+          VITE_API_URL: http://localhost:3000
         run: |
           export PATH="$PATH:$HOME/.foundry/bin"
           bash e2e/run-e2e.sh
+      
+      - name: Show API logs on failure
+        if: failure()
+        run: |
+          echo "=== API Logs ==="
+          cat /tmp/api.log || echo "No API logs found"
       
       - name: Upload screenshots
         if: always()

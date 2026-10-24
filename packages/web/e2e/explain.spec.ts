@@ -7,15 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function takeScreenshot(page: Page, name: string) {
-  try {
-    await page.screenshot({
-      path: join(__dirname, '../../../docs/screenshots', `${name}.png`),
-      fullPage: true,
-    });
-    console.log(`✅ Screenshot saved: ${name}.png`);
-  } catch (error) {
-    console.error(`❌ Failed to save screenshot ${name}:`, error);
-  }
+  await page.screenshot({
+    path: join(__dirname, '../../../docs/screenshots', `${name}.png`),
+    fullPage: true,
+  });
+  console.log(`✅ Screenshot saved: ${name}.png`);
 }
 
 test.describe('LLM Explain Feature', () => {
@@ -42,11 +38,8 @@ test.describe('LLM Explain Feature', () => {
     const poolCount = await poolRows.count();
     console.log(`Found ${poolCount} pool rows`);
 
-    if (poolCount === 0) {
-      console.log('⚠️ No pools available, skipping explain test');
-      test.skip();
-      return;
-    }
+    // Must have at least one pool - no skip allowed
+    expect(poolCount).toBeGreaterThan(0);
 
     // Click first pool
     await poolRows.first().click();
