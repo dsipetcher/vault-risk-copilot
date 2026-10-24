@@ -1111,12 +1111,10 @@ jobs:
       
       - name: Test 3 - Allow END inside $$ blocks
         run: |
-          cat > db/migrations/998_test_plpgsql.sql << 'EOF'
-DO $$
-BEGIN
-  CREATE TABLE test(i int);
-END $$;
-EOF
+          echo 'DO $$' > db/migrations/998_test_plpgsql.sql
+          echo 'BEGIN' >> db/migrations/998_test_plpgsql.sql
+          echo '  CREATE TABLE test(i int);' >> db/migrations/998_test_plpgsql.sql
+          echo 'END $$;' >> db/migrations/998_test_plpgsql.sql
           
           # Should succeed (no error about END)
           if DATABASE_URL='postgresql://fake/db' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh 2>&1 | grep -i "contains END"; then
