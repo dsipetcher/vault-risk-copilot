@@ -215,6 +215,35 @@ jobs:
           flags: risk-service
           name: risk-service-coverage
 
+  api:
+    name: API Service (Node.js)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/api/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: packages/api
+        run: npm ci
+      
+      - name: Type check
+        working-directory: packages/api
+        run: npm run typecheck
+      
+      - name: Run unit tests
+        working-directory: packages/api
+        run: npm test
+      
+      - name: Build
+        working-directory: packages/api
+        run: npm run build
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
@@ -242,6 +271,15 @@ jobs:
           tags: vault-risk-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      
+      - name: Build api image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/api
+          push: false
+          tags: vault-risk-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   compose-smoke-test:
     name: Compose Smoke Test
@@ -258,6 +296,7 @@ jobs:
           POSTGRES_DB=vault_risk_copilot
           POSTGRES_PORT=5432
           DATABASE_URL=postgresql://vault_user:vault_pass_ci@postgres:5432/vault_risk_copilot
+          RISK_SERVICE_URL=http://risk-service:8000
           DEFILLAMA_API_URL=https://yields.llama.fi
           COLLECTION_INTERVAL_MS=300000
           LOG_LEVEL=info
@@ -380,6 +419,51 @@ jobs:
             exit 1
           fi
           echo "✅ Risk service health check passed"
+      
+      - name: Wait for API to be healthy
+        run: |
+          echo "Waiting for API to be healthy..."
+          
+          # Try to wait for API with timeout
+          if timeout 60 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'; then
+            echo "✅ API responded to health check"
+          else
+            echo "❌ Timeout or error waiting for API health check"
+            echo ""
+            echo "=== API container status ==="
+            docker compose ps api
+            echo ""
+            echo "=== API logs ==="
+            docker compose logs api
+            exit 1
+          fi
+          
+          echo "Checking API health response..."
+          HEALTH_RESPONSE=$(curl -s http://localhost:3000/api/health | jq -r '.status')
+          
+          if [ "$HEALTH_RESPONSE" == "healthy" ] || [ "$HEALTH_RESPONSE" == "degraded" ]; then
+            echo "✅ API is healthy (status: $HEALTH_RESPONSE)"
+          else
+            echo "❌ API health check failed (status: $HEALTH_RESPONSE)"
+            echo ""
+            echo "=== API logs ==="
+            docker compose logs api
+            exit 1
+          fi
+      
+      - name: Test API endpoints
+        run: |
+          echo "=== Testing API /api/pools endpoint ==="
+          POOLS_RESPONSE=$(curl -s http://localhost:3000/api/pools?limit=5)
+          
+          if echo "$POOLS_RESPONSE" | jq -e '.data' > /dev/null; then
+            POOL_COUNT=$(echo "$POOLS_RESPONSE" | jq '.data | length')
+            echo "✅ API returned $POOL_COUNT pools"
+          else
+            echo "❌ API /api/pools endpoint failed"
+            echo "Response: $POOLS_RESPONSE"
+            exit 1
+          fi
       
       - name: Trigger risk score computation
         run: |

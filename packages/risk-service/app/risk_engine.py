@@ -270,7 +270,7 @@ def data_age_signal(count: int | None) -> float:
     return max(0.0, min(100.0, score))
 
 
-def vault_share_price_drop_signal(share_price_change_pct: float | None) -> float:
+def vault_share_price_drop_signal(share_price_change_pct: float | None) -> float | None:
     """
     Calculate risk score based on our SimpleVault share price drop.
 
@@ -279,6 +279,7 @@ def vault_share_price_drop_signal(share_price_change_pct: float | None) -> float
     the value of existing shares decreased.
 
     Formula:
+    - No data: None (signal not applicable)
     - No drop or increase: 0
     - Drop < warning threshold (1%): linear scaling 0-50
     - Drop >= warning threshold: 50
@@ -288,10 +289,10 @@ def vault_share_price_drop_signal(share_price_change_pct: float | None) -> float
         share_price_change_pct: Share price change percentage (negative = drop)
 
     Returns:
-        Risk score (0-100)
+        Risk score (0-100) or None if not applicable (non-vault pool)
     """
     if share_price_change_pct is None:
-        return 50.0  # No data = medium risk
+        return None  # Signal not applicable (non-vault pool)
 
     if share_price_change_pct >= 0:
         return 0.0  # Share price stable or growing = no risk
@@ -403,8 +404,9 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
     # Vault share price drop signal (if data available)
     vault_price_change = decimal_to_float(snapshot.get("vault_share_price_change_pct"))
     vault_score = vault_share_price_drop_signal(vault_price_change)
+    vault_score_applicable = vault_score is not None
 
-    # Weighted sum
+    # Define base weights (sum to 1.0)
     weights = {
         "tvl": 0.12,
         "tvl_volatility": 0.12,
@@ -416,6 +418,27 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
         "vault": 0.16,  # Vault share price is important indicator
     }
 
+    # If vault score is not applicable (None), renormalize remaining weights
+    if vault_score is None:
+        # Redistribute vault weight proportionally among other signals
+        vault_weight = weights["vault"]
+        total_other_weights = 1.0 - vault_weight
+        scale_factor = 1.0 / total_other_weights
+
+        # Renormalized weights (vault excluded)
+        weights = {
+            "tvl": weights["tvl"] * scale_factor,
+            "tvl_volatility": weights["tvl_volatility"] * scale_factor,
+            "apy_volatility": weights["apy_volatility"] * scale_factor,
+            "reward_ratio": weights["reward_ratio"] * scale_factor,
+            "stablecoin": weights["stablecoin"] * scale_factor,
+            "il": weights["il"] * scale_factor,
+            "data_age": weights["data_age"] * scale_factor,
+            "vault": 0.0,  # Not applicable
+        }
+        vault_score = 0.0  # Use 0 for calculation (weight is already 0)
+
+    # Weighted sum
     total_risk_score = (
         weights["tvl"] * tvl_score
         + weights["tvl_volatility"] * tvl_vol_score
@@ -448,7 +471,8 @@ def calculate_risk_score(snapshot: dict[str, Any]) -> dict[str, Any]:
         "stablecoin_score": stable_score,
         "il_score": il_score,
         "data_age_score": age_score,
-        "vault_score": vault_score,
+        "vault_score": vault_score if vault_score is not None else 0.0,
+        "vault_score_applicable": vault_score_applicable,
         "total_risk_score": total_risk_score,
         "risk_category": category,
         "is_anomaly": False,  # Will be set by detect_anomaly_rule_based
