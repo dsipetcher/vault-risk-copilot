@@ -134,12 +134,10 @@ export class MockProvider implements LLMProvider {
     if (input.breakdown.reward_ratio_score != null) {
       const base = input.pool_metrics.apy_base ?? 0;
       const reward = input.pool_metrics.apy_reward ?? 0;
-      const total = base + reward;
-      const ratio = total > 0 ? (reward / total) * 100 : 0;
       const score = input.breakdown.reward_ratio_score;
       factors.push({
         signal: 'Reward Ratio',
-        value: `${score.toFixed(1)}/100 (${ratio.toFixed(0)}% from incentives)`,
+        value: `${score.toFixed(1)}/100 (base: ${base.toFixed(2)}%, reward: ${reward.toFixed(2)}%)`,
         explanation:
           score > 50
             ? 'Heavy reliance on reward tokens creates sustainability risk when incentive programs end.'

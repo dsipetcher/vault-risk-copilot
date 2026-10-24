@@ -236,10 +236,11 @@ Explain this pool's risk in plain language using ONLY the numbers above.`;
   private validateNumberFidelity(input: RiskInput, output: ExplanationOutput): boolean {
     const fullText = JSON.stringify(output);
     
-    // Remove scale denominators and duration labels before extraction
+    // Remove scale denominators, duration labels, and percentage signs before extraction
     const cleanedText = fullText
       .replace(/\/100/g, '')  // Remove /100 scale
-      .replace(/\b\d+d\b/gi, '');  // Remove 7d, 30d duration labels
+      .replace(/\b\d+d\b/gi, '')  // Remove 7d, 30d duration labels
+      .replace(/-?\d+(?:\.\d+)?%/g, (match) => ` ${match.slice(0, -1)} `);  // Remove % but keep number
     
     // Match numbers with optional minus sign
     const numberPattern = /-?\d+(?:\.\d+)?/g;
