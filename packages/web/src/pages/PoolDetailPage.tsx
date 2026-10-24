@@ -97,27 +97,27 @@ export function PoolDetailPage() {
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-600">TVL Score:</span>{' '}
-              <span className="font-medium">{riskScore.tvl_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.tvl_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">TVL Volatility:</span>{' '}
-              <span className="font-medium">{riskScore.tvl_volatility_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.tvl_volatility_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">APY Volatility:</span>{' '}
-              <span className="font-medium">{riskScore.apy_volatility_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.apy_volatility_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">Reward Ratio:</span>{' '}
-              <span className="font-medium">{riskScore.reward_ratio_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.reward_ratio_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">IL Score:</span>{' '}
-              <span className="font-medium">{riskScore.il_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.il_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">Data Age:</span>{' '}
-              <span className="font-medium">{riskScore.data_age_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.data_age_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
           </div>
         </div>
