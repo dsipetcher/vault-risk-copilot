@@ -229,9 +229,9 @@ jobs:
       - name: Wait for collector to collect data
         id: wait_data
         run: |
-          echo "Waiting for collector to insert data (up to 3 minutes with 60s fetch timeout)..."
+          echo "Waiting for collector to insert data (up to 5 minutes with 120s fetch timeout)..."
           START_TIME=$(date +%s)
-          TIMEOUT=180
+          TIMEOUT=300
           
           while true; do
             CURRENT_TIME=$(date +%s)

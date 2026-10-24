@@ -51,7 +51,7 @@ export async function fetchDefiLlamaPools(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     const response = await fetch(url, {
       headers: {
