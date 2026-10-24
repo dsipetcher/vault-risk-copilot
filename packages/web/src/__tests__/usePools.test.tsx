@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePools } from '@/hooks/usePools';
 import type { Pool } from '@/types/api';
+import * as apiModule from '@/lib/api';
 
 const mockPools: Pool[] = [
   {
@@ -27,7 +28,7 @@ const mockPools: Pool[] = [
   },
 ];
 
-describe.skip('usePools', () => {
+describe('usePools', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -42,12 +43,8 @@ describe.skip('usePools', () => {
     vi.clearAllMocks();
   });
 
-  // TODO: Fix mock to match actual API response structure { data: Pool[] }
   it('fetches pools successfully', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockPools,
-    }) as unknown as typeof fetch;
+    vi.spyOn(apiModule.apiClient, 'getPools').mockResolvedValueOnce(mockPools);
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -60,14 +57,13 @@ describe.skip('usePools', () => {
     });
 
     expect(result.current.data).toEqual(mockPools);
+    expect(apiModule.apiClient.getPools).toHaveBeenCalledTimes(1);
   });
 
   it('handles fetch errors', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({ error: 'Server error' }),
-    }) as unknown as typeof fetch;
+    vi.spyOn(apiModule.apiClient, 'getPools').mockRejectedValueOnce(
+      new Error('Server error')
+    );
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -78,5 +74,7 @@ describe.skip('usePools', () => {
     await waitFor(() => {
       expect(result.current.isError).toBe(true);
     });
+
+    expect(apiModule.apiClient.getPools).toHaveBeenCalledTimes(1);
   });
 });
