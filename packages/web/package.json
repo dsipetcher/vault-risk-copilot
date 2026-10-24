@@ -11,8 +11,14 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.5",
+    "@tanstack/react-table": "^9.3.1",
+    "autoprefixer": "^10.6.1",
+    "clsx": "^2.1.1",
+    "postcss": "^8.5.31",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "recharts": "^3.10.1",
+    "tailwindcss": "^4.3.3",
     "viem": "^2.57.11",
     "wagmi": "^3.7.9"
   },
