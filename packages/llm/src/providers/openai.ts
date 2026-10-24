@@ -49,11 +49,13 @@ export class OpenAIProvider implements LLMProvider {
     output: ExplanationOutput;
     metadata: {
       model: string;
-      promptTokens: number;
-      completionTokens: number;
-      totalTokens: number;
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
       latencyMs: number;
-      costUsd: number;
+      costUsd?: number;
+      fallback?: boolean;
+      fallback_reason?: string;
     };
   }> {
     const startTime = Date.now();
