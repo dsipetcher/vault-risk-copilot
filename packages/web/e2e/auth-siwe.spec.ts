@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { privateKeyToAccount } from 'viem/accounts';
-import { hashMessage } from 'viem';
 
 /**
  * E2E test for Sign-In With Ethereum (SIWE) authentication flow.
@@ -15,7 +14,9 @@ const testAccount = privateKeyToAccount(TEST_PRIVATE_KEY);
 test.describe('SIWE Authentication E2E', () => {
   test.beforeEach(async ({ page }) => {
     // Inject mock EIP-1193 provider before page loads
-    await page.addInitScript((accountAddress: string, privateKey: string) => {
+    await page.addInitScript({
+      accountAddress: testAccount.address,
+    }, ({ accountAddress }: { accountAddress: string }) => {
       // Mock EIP-1193 provider
       const ethereum = {
         isMetaMask: true,
@@ -49,6 +50,7 @@ test.describe('SIWE Authentication E2E', () => {
               const mockSignature = '0x' + '00'.repeat(65); // Placeholder
               
               // Store the message for verification
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (window as any).__lastSignedMessage = message;
               
               return mockSignature;
@@ -63,8 +65,8 @@ test.describe('SIWE Authentication E2E', () => {
           }
         },
         
-        on(event: string, handler: (...args: unknown[]) => void) {
-          console.log('[Mock Ethereum] on', event);
+        on(_event: string, _handler: (...args: unknown[]) => void) {
+          console.log('[Mock Ethereum] on', _event);
         },
         
         removeListener() {
@@ -72,8 +74,9 @@ test.describe('SIWE Authentication E2E', () => {
         },
       };
       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).ethereum = ethereum;
-    }, testAccount.address, TEST_PRIVATE_KEY);
+    });
   });
 
   test('complete SIWE auth flow: sign in → save key → explain → sign out', async ({ page }) => {
