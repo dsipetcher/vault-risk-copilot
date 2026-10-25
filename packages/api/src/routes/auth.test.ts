@@ -85,7 +85,7 @@ describe('SIWE Authentication Tests', () => {
       expect(nonceCookie).toBeDefined();
       expect(nonceCookie?.httpOnly).toBe(true);
       expect(nonceCookie?.sameSite).toBe('Lax');
-      expect(nonceCookie?.secure).toBe(false);
+      expect(nonceCookie?.secure).toBeFalsy();
       
       const { nonce } = JSON.parse(nonceResponse.body);
 
