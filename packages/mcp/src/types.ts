@@ -17,8 +17,8 @@ export const poolSnapshotSchema = z.object({
   apy_pct_7d: z.number().nullable(),
   il_risk: z.number().nullable(),
   count: z.number().nullable(),
-  snapshot_at: z.string().datetime(),
-  created_at: z.string().datetime(),
+  snapshot_at: z.string().optional(),
+  created_at: z.string().optional(),
 });
 
 export const riskScoreSchema = z.object({
@@ -38,8 +38,8 @@ export const riskScoreSchema = z.object({
   is_anomaly: z.boolean(),
   anomaly_reason: z.string().nullable(),
   model_version: z.string(),
-  calculated_at: z.string().datetime(),
-  created_at: z.string().datetime(),
+  calculated_at: z.string().optional(),
+  created_at: z.string().optional(),
 });
 
 export const poolWithRiskSchema = poolSnapshotSchema.merge(
