@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { privateKeyToAccount } from 'viem/accounts';
-import type { Hex } from 'viem';
 
 /**
  * E2E test for Sign-In With Ethereum (SIWE) authentication flow.
