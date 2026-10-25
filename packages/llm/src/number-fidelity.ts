@@ -4,7 +4,7 @@
  */
 
 const UNICODE_HYPHENS = /[\u2010\u2011\u2012\u2013\u2014\u2212]/g;
-const VERSION_TOKEN = /-?\s*[vV]\d+\b/g;
+const VERSION_TOKEN = /-?\s*[vV]\d+(?:\.\d+)*\b/g;
 const WORD_OR_LETTER_SCALE =
   /\$?\s*(-?\d+(?:\.\d+)?)\s*(thousand|million|billion|trillion|bn|mn|[kmb])\b/gi;
 
@@ -64,7 +64,7 @@ export function expandScaledNumbers(text: string): string {
 /**
  * Pull comparable numbers from model text. Scaled phrases are consumed whole
  * so "$3.5 billion" becomes 3500000000 rather than leftover 3.
- * Version tokens (v3 / -v3 / ‑v3) and known identifiers are removed first.
+ * Version tokens (v3 / v3.2 / -v3 / ‑v3) and known identifiers are removed first.
  */
 export function collectExtractedNumbers(
   text: string,

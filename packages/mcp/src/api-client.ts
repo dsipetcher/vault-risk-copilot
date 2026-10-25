@@ -39,13 +39,14 @@ export class ApiClient {
 
   private async fetch<T>(
     path: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    timeoutMs = this.config.requestTimeoutMs
   ): Promise<T> {
     const url = `${this.config.apiBaseUrl}${path}`;
     const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort(),
-      this.config.requestTimeoutMs
+      timeoutMs
     );
 
     try {
@@ -136,11 +137,15 @@ export class ApiClient {
       headers['X-LLM-Api-Key'] = llmApiKey;
     }
 
-    const result = await this.fetch<unknown>(`/api/pools/${poolId}/explain`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(this.buildExplainBody()),
-    });
+    const result = await this.fetch<unknown>(
+      `/api/pools/${poolId}/explain`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(this.buildExplainBody()),
+      },
+      this.config.explainTimeoutMs
+    );
 
     return explanationSchema.parse(result);
   }

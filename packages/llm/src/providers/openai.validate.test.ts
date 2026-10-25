@@ -212,4 +212,46 @@ describe('OpenAIProvider rate limit handling', () => {
     await expect(call.call(provider, 's', 'u')).rejects.toBeInstanceOf(RateLimitError);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it('gives up immediately when Retry-After exceeds the remaining backoff budget', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response('daily limit', { status: 429, headers: { 'Retry-After': '666' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider({ apiKey: 'gsk_ok' });
+    const started = Date.now();
+    const result = await provider.generate(input);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.metadata.fallback_reason).toBe('rate_limited');
+    expect(result.output.summary).toMatch(/retry in ~11 min/i);
+  });
+
+  it('includes retry in ~15 min for a 913s Retry-After and does not burn the 30s budget', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response('daily limit', { status: 429, headers: { 'Retry-After': '913' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider({ apiKey: 'gsk_ok' });
+    const started = Date.now();
+    const result = await provider.generate(input);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.output.summary).toMatch(/retry in ~15 min/i);
+  });
+
+  it('gives up immediately when Groq reset headers exceed the remaining budget', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response('daily limit', {
+        status: 429,
+        headers: { 'x-ratelimit-reset-requests': '11m' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider({ apiKey: 'gsk_ok' });
+    const result = await provider.generate(input);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.metadata.fallback_reason).toBe('rate_limited');
+    expect(result.output.summary).toMatch(/retry in ~11 min/i);
+  });
 });

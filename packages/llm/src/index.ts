@@ -11,7 +11,11 @@ export {
   RateLimitError,
   isRateLimitError,
   parseRetryAfterMs,
+  parseDurationHeaderMs,
+  requestedWaitMs,
+  exceedsBackoffBudget,
   backoffWaitMs,
+  formatRetryIn,
   describeFallbackReason,
 } from './rate-limit.js';
 export {

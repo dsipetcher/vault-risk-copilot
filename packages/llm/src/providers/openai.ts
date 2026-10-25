@@ -9,6 +9,8 @@ import {
   backoffWaitMs,
   sleep,
   describeFallbackReason,
+  requestedWaitMs,
+  exceedsBackoffBudget,
   RATE_LIMIT_HTTP_ATTEMPTS,
   RATE_LIMIT_TOTAL_WAIT_CAP_MS,
 } from '../rate-limit.js';
@@ -162,6 +164,7 @@ export class OpenAIProvider implements LLMProvider {
 
     const latencyMs = Date.now() - startTime;
     const sanitizedReason = this.sanitizeFallbackReason(lastError);
+    const retryAfterMs = lastError instanceof RateLimitError ? lastError.retryAfterMs : undefined;
     const providerHost = new URL(this.baseUrl).hostname;
     
     // Log full error server-side with key redacted
@@ -172,7 +175,7 @@ export class OpenAIProvider implements LLMProvider {
       sanitizedReason,
     });
     
-    return this.getFallbackResponse(input, latencyMs, sanitizedReason);
+    return this.getFallbackResponse(input, latencyMs, sanitizedReason, retryAfterMs);
   }
 
   private sanitizeFallbackReason(error: Error | null): string {
@@ -325,10 +328,14 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
         throw new InvalidKeyError();
       }
 
-      if (response.status === 429 && attempt < RATE_LIMIT_HTTP_ATTEMPTS - 1) {
+      if (response.status === 429) {
         const remaining = RATE_LIMIT_TOTAL_WAIT_CAP_MS - waitedMs;
-        if (remaining <= 0) {
-          throw new RateLimitError();
+        const requested = requestedWaitMs(response.headers);
+        if (remaining <= 0 || exceedsBackoffBudget(requested, remaining)) {
+          throw new RateLimitError(undefined, requested ?? undefined);
+        }
+        if (attempt >= RATE_LIMIT_HTTP_ATTEMPTS - 1) {
+          throw new RateLimitError(undefined, requested ?? undefined);
         }
         const waitMs = backoffWaitMs(attempt, response.headers.get('retry-after'), remaining);
         didBackoff = true;
@@ -336,10 +343,6 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
         await sleep(waitMs);
         waitedMs += waitMs;
         continue;
-      }
-
-      if (response.status === 429) {
-        throw new RateLimitError();
       }
 
       throw new Error(`${providerHost} API error: ${response.status} ${lastErrorText}`);
@@ -616,7 +619,8 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
   private getFallbackResponse(
     input: RiskInput,
     latencyMs: number,
-    reason: string
+    reason: string,
+    retryAfterMs?: number
   ): {
     output: ExplanationOutput;
     metadata: {
@@ -661,7 +665,7 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
       output: {
         summary:
           reason === 'rate_limited'
-            ? `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. ${describeFallbackReason('rate_limited')}`
+            ? `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. ${describeFallbackReason('rate_limited', retryAfterMs)}`
             : `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. Due to data processing limitations, detailed analysis is temporarily unavailable.`,
         key_factors: factors,
         disclaimer:

@@ -44,6 +44,14 @@ describe('expandScaledNumbers / collectTextNumbers', () => {
     expect(collectTextNumbers('Aave v3 has TVL of $22.5bn')).toEqual([22_500_000_000]);
   });
 
+  it('strips dotted version tokens so aave v3.2 does not leave a stray 2', () => {
+    expect(stripVersionTokens('aave v3.2')).not.toMatch(/\d/);
+    expect(collectTextNumbers('aave v3.2')).toEqual([]);
+    expect(collectTextNumbers('aave v3.2')).not.toContain(2);
+    expect(collectTextNumbers('Aave v3.2.1')).toEqual([]);
+    expect(collectTextNumbers('aave v3.2 TVL is $22.5bn')).toEqual([22_500_000_000]);
+  });
+
   it('strips known identifiers so pool/protocol digits are ignored', () => {
     expect(
       collectTextNumbers('Aave v3 USDC on Ethereum has APY 2.8%.', ['Aave v3 USDC', 'Aave', 'Ethereum'])

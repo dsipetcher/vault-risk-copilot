@@ -237,7 +237,8 @@ describe('Tools', () => {
     it('surfaces rate_limited as a clear provider message', async () => {
       vi.mocked(mockApiClient.explainPoolRisk).mockResolvedValue({
         explanation: {
-          summary: 'Fallback explanation',
+          summary:
+            'This pool has a low risk rating with a score of 10.0/100. Rate limited by the provider; retry in ~11 min.',
           key_factors: [],
           disclaimer: 'Not financial advice',
         },
@@ -256,7 +257,9 @@ describe('Tools', () => {
         pool_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
+      expect(result.isError).toBe(true);
       expect(result.content[0].text).toMatch(/Rate limited by the provider/i);
+      expect(result.content[0].text).toMatch(/retry in ~11 min/i);
       expect(result.content[0].text).not.toMatch(/Using fallback explanation \(rate_limited\)/);
     });
   });
@@ -310,5 +313,12 @@ describe('safeErrorMessage / toolErrorResult', () => {
     expect(safeErrorMessage(new VaultNotConfiguredError())).toBe(
       'Vault not configured: set VAULT_ADDRESS/RPC'
     );
+    expect(
+      safeErrorMessage(
+        new ApiError('rate limited', 429, {
+          message: 'Rate limited by the provider; retry in ~11 min.',
+        })
+      )
+    ).toMatch(/retry in ~11 min/i);
   });
 });

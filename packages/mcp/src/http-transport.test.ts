@@ -10,6 +10,7 @@ const baseConfig: Config = {
   httpHost: '127.0.0.1',
   httpAuthToken: 'test-token-secret',
   requestTimeoutMs: 5000,
+  explainTimeoutMs: 45000,
   logLevel: 'error',
 };
 

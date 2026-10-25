@@ -631,6 +631,28 @@ describe('Number Fidelity Validation', () => {
     expect(validateNumberFidelity(provider, input, tvlOutput('$3.5billion'))).toBe(true);
   });
 
+  it('ACCEPT: dotted aave v3.2 does not leave a stray 2', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_name: 'Aave v3.2 USDC',
+      protocol: 'Aave v3.2',
+      chain: 'Ethereum',
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 22_532_735_702 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'aave v3.2 quotes TVL of $22.5bn.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$22.5bn',
+          explanation: 'aave v3.2 TVL of $22.5bn is large.',
+        },
+      ],
+      disclaimer: 'Educational only.',
+    };
+    expect(validateNumberFidelity(provider, input, output)).toBe(true);
+  });
+
   it('ACCEPT: Aave v3 / Uniswap-v4 / Aave‑v3 version tokens are not the number 3 or 4', () => {
     const input: RiskInput = {
       ...baseInput,

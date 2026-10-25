@@ -50,6 +50,16 @@ export function safeErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.statusCode === 404) return 'Not found: no pool with that id';
     if (error.statusCode === 408) return 'Request to the risk API timed out';
+    if (error.statusCode === 429) {
+      const details = error.details;
+      if (details && typeof details === 'object') {
+        const record = details as { message?: unknown; error?: unknown; fallback_reason?: unknown };
+        for (const value of [record.message, record.error]) {
+          if (typeof value === 'string' && /rate limited/i.test(value)) return value;
+        }
+      }
+      return 'Rate limited by the provider. Wait a moment and try again.';
+    }
     if (error.statusCode === 0) return 'Risk API is unreachable';
     if (error.statusCode && error.statusCode >= 500) return 'Risk API server error';
     return `Risk API rejected the request (HTTP ${error.statusCode})`;
@@ -201,6 +211,17 @@ export async function comparePoolsTool(
   };
 }
 
+export function rateLimitedErrorText(explanation: {
+  explanation: { summary: string };
+  metadata: { fallback_reason?: string };
+}): string {
+  const summary = explanation.explanation.summary.trim();
+  if (/rate limited/i.test(summary)) {
+    return summary;
+  }
+  return 'Rate limited by the provider. Wait a moment and try again.';
+}
+
 export async function explainPoolRiskTool(
   apiClient: ApiClient,
   args: Record<string, unknown>,
@@ -209,10 +230,15 @@ export async function explainPoolRiskTool(
   const validated = explainPoolRiskInputSchema.parse(args);
   const explanation = await apiClient.explainPoolRisk(validated.pool_id, llmApiKey);
 
+  if (explanation.metadata.fallback && explanation.metadata.fallback_reason === 'rate_limited') {
+    return {
+      isError: true,
+      content: [{ type: 'text' as const, text: rateLimitedErrorText(explanation) }],
+    };
+  }
+
   const fallbackNote = explanation.metadata.fallback
-    ? explanation.metadata.fallback_reason === 'rate_limited'
-      ? '\n\nRate limited by the provider. Wait a moment and try again.'
-      : `\n\n⚠️  Note: Using fallback explanation (${explanation.metadata.fallback_reason})`
+    ? `\n\n⚠️  Note: Using fallback explanation (${explanation.metadata.fallback_reason})`
     : '';
 
   const summary =

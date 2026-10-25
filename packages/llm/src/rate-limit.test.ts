@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   RATE_LIMIT_DEFAULT_WAIT_MS,
   RATE_LIMIT_PER_WAIT_CAP_MS,
+  RATE_LIMIT_TOTAL_WAIT_CAP_MS,
   RATE_LIMIT_WAIT_CAP_MS,
   RateLimitError,
   backoffWaitMs,
   describeFallbackReason,
+  exceedsBackoffBudget,
+  formatRetryIn,
   isRateLimitError,
+  parseDurationHeaderMs,
   parseRetryAfterMs,
+  requestedWaitMs,
 } from './rate-limit.js';
 
 describe('parseRetryAfterMs', () => {
@@ -42,15 +47,59 @@ describe('backoffWaitMs', () => {
   });
 });
 
+describe('parseDurationHeaderMs / requestedWaitMs', () => {
+  it('parses integer seconds without capping daily-limit Retry-After values', () => {
+    expect(parseDurationHeaderMs('666')).toBe(666_000);
+    expect(parseDurationHeaderMs('913')).toBe(913_000);
+  });
+
+  it('parses Groq reset durations like 7m26.56s', () => {
+    expect(parseDurationHeaderMs('7m26.56s')).toBeCloseTo(446_560, 0);
+    expect(parseDurationHeaderMs('2s')).toBe(2_000);
+    expect(parseDurationHeaderMs('11m')).toBe(660_000);
+  });
+
+  it('prefers the longest hinted wait from Retry-After or reset headers', () => {
+    const headers = new Headers({
+      'Retry-After': '666',
+      'x-ratelimit-reset-requests': '7m26.56s',
+      'x-ratelimit-reset-tokens': '2s',
+    });
+    expect(requestedWaitMs(headers)).toBe(666_000);
+    expect(
+      requestedWaitMs(new Headers({ 'x-ratelimit-reset-requests': '7m26.56s' }))
+    ).toBeCloseTo(446_560, 0);
+  });
+
+  it('treats a wait longer than the remaining budget as exceeding it', () => {
+    expect(exceedsBackoffBudget(666_000, RATE_LIMIT_TOTAL_WAIT_CAP_MS)).toBe(true);
+    expect(exceedsBackoffBudget(2_000, RATE_LIMIT_TOTAL_WAIT_CAP_MS)).toBe(false);
+    expect(exceedsBackoffBudget(null, RATE_LIMIT_TOTAL_WAIT_CAP_MS)).toBe(false);
+  });
+});
+
+describe('formatRetryIn', () => {
+  it('formats daily-limit waits as minutes', () => {
+    expect(formatRetryIn(666_000)).toBe('retry in ~11 min');
+    expect(formatRetryIn(913_000)).toBe('retry in ~15 min');
+  });
+});
+
 describe('describeFallbackReason', () => {
   it('explains rate_limited clearly', () => {
     expect(describeFallbackReason('rate_limited')).toMatch(/Rate limited by the provider/i);
+  });
+
+  it('includes retry in ~11 min when Retry-After is a daily-limit wait', () => {
+    expect(describeFallbackReason('rate_limited', 666_000)).toMatch(/retry in ~11 min/i);
+    expect(describeFallbackReason('rate_limited', 913_000)).toMatch(/retry in ~15 min/i);
   });
 });
 
 describe('isRateLimitError', () => {
   it('recognizes RateLimitError and message fallbacks', () => {
     expect(isRateLimitError(new RateLimitError())).toBe(true);
+    expect(new RateLimitError(undefined, 666_000).message).toMatch(/retry in ~11 min/i);
     expect(isRateLimitError(new Error('429 too many requests'))).toBe(true);
     expect(isRateLimitError(new Error('boom'))).toBe(false);
   });
