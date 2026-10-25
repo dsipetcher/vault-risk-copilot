@@ -794,7 +794,11 @@ jobs:
           cd ../api
           npm ci
           rm -rf dist  # Ensure clean build
+          echo "=== Checking source before build ==="
+          grep "provider.*enum" src/routes/llm-credentials.ts || echo "Pattern not found!"
           npm run build
+          echo "=== Checking compiled output ==="
+          grep -r "allowedValues" dist/ || echo "No allowedValues found"
           
           # Generate encryption key for E2E SIWE auth
           export LLM_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)
