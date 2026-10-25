@@ -4,6 +4,8 @@ import {
   generateExplanation,
   getCachedExplanation,
 } from '../services/explanations.js';
+import { getAuthenticatedUser } from './auth.js';
+import { getStoredCredential } from './llm-credentials.js';
 
 export async function explanationsRoutes(app: FastifyInstance) {
   app.post<{
@@ -92,13 +94,28 @@ export async function explanationsRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const body = request.body || {};
 
-      const apiKey = (request.headers['x-llm-api-key'] as string) || undefined;
+      let apiKey = (request.headers['x-llm-api-key'] as string) || undefined;
 
+      const user = await getAuthenticatedUser(request);
+      
       let providerConfig = undefined;
-      if (body.provider || apiKey) {
+      if (body.provider || apiKey || user) {
+        const provider = body.provider || 'openai';
+        
+        if (user && !apiKey) {
+          const storedKey = await getStoredCredential(user.address, provider);
+          if (storedKey) {
+            apiKey = storedKey;
+            request.log.info(
+              { wallet: user.address, provider },
+              'Using stored credential for authenticated user'
+            );
+          }
+        }
+        
         try {
           providerConfig = llmProviderConfigSchema.parse({
-            provider: body.provider || 'openai',
+            provider,
             model: body.model,
             baseUrl: body.baseUrl,
           });

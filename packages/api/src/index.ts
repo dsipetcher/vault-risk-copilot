@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import cookie from '@fastify/cookie';
 import apiReference from '@scalar/fastify-api-reference';
 import { env } from './config.js';
 import { pool } from './database.js';
@@ -10,9 +11,18 @@ import { poolsRoutes } from './routes/pools.js';
 import { vaultRoutes } from './routes/vault.js';
 import { riskRoutes } from './routes/risk.js';
 import { explanationsRoutes } from './routes/explanations.js';
+import { authRoutes } from './routes/auth.js';
+import { llmCredentialsRoutes } from './routes/llm-credentials.js';
 import { redactApiKey } from '@vault-risk-copilot/llm';
+import { initEncryption, isEncryptionEnabled } from './lib/encryption.js';
 
 export async function build() {
+  initEncryption(env.LLM_KEY_ENCRYPTION_KEY);
+  
+  if (!isEncryptionEnabled()) {
+    console.warn('⚠️  LLM_KEY_ENCRYPTION_KEY not set - server-side key storage disabled');
+  }
+
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -63,6 +73,8 @@ export async function build() {
     origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
     credentials: true,
   });
+  
+  await app.register(cookie);
 
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
@@ -96,6 +108,8 @@ export async function build() {
   await app.register(vaultRoutes, { prefix: '/api' });
   await app.register(riskRoutes, { prefix: '/api' });
   await app.register(explanationsRoutes, { prefix: '/api' });
+  await app.register(authRoutes, { prefix: '/api' });
+  await app.register(llmCredentialsRoutes, { prefix: '/api' });
 
   return app;
 }

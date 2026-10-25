@@ -16,11 +16,13 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.5",
+    "@wagmi/core": "^3.6.7",
     "clsx": "^2.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.1",
     "recharts": "^2.15.0",
+    "siwe": "^3.0.0",
     "viem": "^2.57.11",
     "wagmi": "^3.7.9"
   },

@@ -267,6 +267,7 @@ jobs:
         working-directory: packages/api
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
+          LLM_KEY_ENCRYPTION_KEY: ${{ secrets.LLM_KEY_ENCRYPTION_KEY || 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' }}
         run: npm test
       
       - name: Build
