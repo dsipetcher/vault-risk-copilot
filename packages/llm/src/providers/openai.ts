@@ -465,10 +465,15 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
   ): boolean {
     const factorText = item.text;
     
-    // Normalize K/M/B units
+    // Normalize K/M/B units and word scales (Groq writes "$5 M" and "$5 million")
+    // Word scales first so "$5 million" is not consumed as "$5 m" + "illion".
     let normalized = factorText
-      .replace(/\$(\d+(?:\.\d+)?)([KMB])/gi, (match, num, unit) => {
-        const multipliers: Record<string, number> = { K: 1000, M: 1000000, B: 1000000000 };
+      .replace(/\$?(\d+(?:\.\d+)?)\s*(million|billion)\b/gi, (_match, num, unit) => {
+        const multipliers: Record<string, number> = { million: 1_000_000, billion: 1_000_000_000 };
+        return `$${parseFloat(num) * multipliers[unit.toLowerCase()]}`;
+      })
+      .replace(/\$(\d+(?:\.\d+)?)\s*([KMB])\b/gi, (_match, num, unit) => {
+        const multipliers: Record<string, number> = { K: 1000, M: 1_000_000, B: 1_000_000_000 };
         return `$${parseFloat(num) * multipliers[unit.toUpperCase()]}`;
       })
       .replace(/\$(\d+),(\d+)/g, '$1$2');

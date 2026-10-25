@@ -526,6 +526,82 @@ describe('Number Fidelity Validation', () => {
     expect(result).toBe(true);
   });
 
+  it('ACCEPT: "$5M" compact unit', () => {
+    const input = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 5_000_000 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'TVL is $5M.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$5M',
+          explanation: 'TVL of $5M is healthy.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    expect((provider as any).validateNumberFidelity(input, output)).toBe(true);
+  });
+
+  it('ACCEPT: "$5 M" with a space (Groq/gpt-oss)', () => {
+    const input = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 5_000_000 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'TVL is $5 M.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$5 M',
+          explanation: 'TVL of $5 M is healthy.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    expect((provider as any).validateNumberFidelity(input, output)).toBe(true);
+  });
+
+  it('ACCEPT: "$5 million" word scale', () => {
+    const input = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 5_000_000 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'TVL is $5 million.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$5 million',
+          explanation: 'TVL of $5 million is healthy.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    expect((provider as any).validateNumberFidelity(input, output)).toBe(true);
+  });
+
+  it('ACCEPT: "$1.2 billion" word scale', () => {
+    const input = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 1_200_000_000 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'TVL is $1.2 billion.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$1.2 billion',
+          explanation: 'TVL of $1.2 billion is healthy.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    expect((provider as any).validateNumberFidelity(input, output)).toBe(true);
+  });
+
   it('ACCEPT: grouped thousands without a $ prefix (520,000)', () => {
     const output: ExplanationOutput = {
       summary: 'TVL is 520,000 USD.',
