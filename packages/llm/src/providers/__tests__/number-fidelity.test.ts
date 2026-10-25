@@ -422,4 +422,24 @@ describe('Number Fidelity Validation', () => {
     const result = (provider as any).validateNumberFidelity(baseInput, output);
     expect(result).toBe(true);
   });
+
+  it('ACCEPT: "score of 100" (strip scale phrases)', () => {
+    const inputWith100 = {
+      ...baseInput,
+      breakdown: { ...baseInput.breakdown, vault_score: 100 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Vault has a score of 100',
+      key_factors: [
+        {
+          signal: 'Vault Score',
+          value: '100 out of 100',
+          explanation: 'Perfect vault score of 100.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(inputWith100, output);
+    expect(result).toBe(true);
+  });
 });

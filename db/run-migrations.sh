@@ -70,14 +70,17 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
   if [ "$already_applied" -eq "0" ]; then
     echo "→ Applying migration $name..."
     
-    # Check if migration contains transaction control statements (outside $$ blocks)
+    # Check if migration contains transaction control statements (outside $$ blocks and comments)
     # PL/pgSQL blocks (DO $$ ... $$) are allowed
+    # SQL comments (-- and /* */) are allowed
     # Reject: BEGIN;/COMMIT;/END;/ROLLBACK; anywhere in a line (not just start)
     # Also reject: START TRANSACTION/BEGIN TRANSACTION
     
-    # Remove $$ blocks to avoid false positives
+    # Remove $$ blocks and SQL comments to avoid false positives
     temp_file=$(mktemp)
-    sed 's/\$\$[^$]*\$\$//' "$migration_file" > "$temp_file"
+    sed 's/\$\$[^$]*\$\$//' "$migration_file" | \
+      sed 's/--.*$//' | \
+      sed 's|/\*.*\*/||g' > "$temp_file"
     
     for keyword in "BEGIN" "COMMIT" "END" "ROLLBACK"; do
       if grep -iE "\b${keyword}[[:space:]]*;" "$temp_file" > /dev/null; then

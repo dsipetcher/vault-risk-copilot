@@ -1149,3 +1149,37 @@ jobs:
             rm -f "$temp_file" /tmp/test_end.sql
             exit 1
           fi
+      
+      - name: Test 5 - Allow COMMIT in SQL comment
+        run: |
+          echo "CREATE TABLE test(i int); -- commit;" > /tmp/test_comment.sql
+          
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_comment.sql | sed 's/--.*$//' | sed 's|/\*.*\*/||g' > "$temp_file"
+          
+          # Should succeed (commit is in comment)
+          if grep -iE "\bCOMMIT[[:space:]]*;" "$temp_file"; then
+            echo "✗ Test 5 failed: False positive on -- commit;"
+            rm -f "$temp_file" /tmp/test_comment.sql
+            exit 1
+          else
+            echo "✓ Test 5 passed: -- commit; ignored"
+            rm -f "$temp_file" /tmp/test_comment.sql
+          fi
+      
+      - name: Test 6 - Allow ROLLBACK in block comment
+        run: |
+          echo "SELECT 1; /* rollback; */" > /tmp/test_block_comment.sql
+          
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_block_comment.sql | sed 's/--.*$//' | sed 's|/\*.*\*/||g' > "$temp_file"
+          
+          # Should succeed (rollback is in block comment)
+          if grep -iE "\bROLLBACK[[:space:]]*;" "$temp_file"; then
+            echo "✗ Test 6 failed: False positive on /* rollback; */"
+            rm -f "$temp_file" /tmp/test_block_comment.sql
+            exit 1
+          else
+            echo "✓ Test 6 passed: /* rollback; */ ignored"
+            rm -f "$temp_file" /tmp/test_block_comment.sql
+          fi

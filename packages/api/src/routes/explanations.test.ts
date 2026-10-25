@@ -56,9 +56,27 @@ describe('Explanations API Tests', () => {
   afterAll(async () => {
     // Clean up fixtures
     const { pool } = await import('../database.js');
+    
+    // Get counts before cleanup
+    const beforeExplanations = await pool.query('SELECT COUNT(*) FROM explanations WHERE pool_id = $1', [poolId]);
+    const beforeRiskScores = await pool.query('SELECT COUNT(*) FROM risk_scores WHERE pool_id = $1', [poolId]);
+    const beforePoolSnapshots = await pool.query('SELECT COUNT(*) FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+    
+    // Delete fixtures
     await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
     await pool.query('DELETE FROM risk_scores WHERE pool_id = $1', [poolId]);
     await pool.query('DELETE FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+    
+    // Verify counts return to zero
+    const afterExplanations = await pool.query('SELECT COUNT(*) FROM explanations WHERE pool_id = $1', [poolId]);
+    const afterRiskScores = await pool.query('SELECT COUNT(*) FROM risk_scores WHERE pool_id = $1', [poolId]);
+    const afterPoolSnapshots = await pool.query('SELECT COUNT(*) FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+    
+    if (afterExplanations.rows[0].count !== '0' || 
+        afterRiskScores.rows[0].count !== '0' || 
+        afterPoolSnapshots.rows[0].count !== '0') {
+      throw new Error(`Fixture cleanup failed: ${beforeExplanations.rows[0].count} explanations, ${beforeRiskScores.rows[0].count} risk_scores, ${beforePoolSnapshots.rows[0].count} pool_snapshots were not deleted`);
+    }
     
     await app.close();
   });
