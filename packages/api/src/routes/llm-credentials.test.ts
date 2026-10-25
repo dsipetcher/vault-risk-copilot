@@ -133,14 +133,18 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'openai', apiKey: firstKey },
       });
 
       const updateResponse = await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'openai', apiKey: secondKey },
       });
 
@@ -172,7 +176,9 @@ describe('LLM Credentials Tests', () => {
       const response = await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: {
           provider: 'invalid-provider',
           apiKey: 'sk-test',
@@ -186,7 +192,9 @@ describe('LLM Credentials Tests', () => {
       const response = await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: {
           provider: 'openai',
           apiKey: '',
@@ -202,14 +210,18 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'openai', apiKey: 'sk-test-openai-key' },
       });
 
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'anthropic', apiKey: 'sk-test-anthropic-key' },
       });
     });
@@ -218,7 +230,9 @@ describe('LLM Credentials Tests', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       expect(response.statusCode).toBe(200);
@@ -237,7 +251,9 @@ describe('LLM Credentials Tests', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       expect(response.statusCode).toBe(200);
@@ -250,20 +266,26 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie2 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie2}`,
+        },
         payload: { provider: 'openai', apiKey: 'sk-wallet2-key' },
       });
 
       const response1 = await app.inject({
         method: 'GET',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       const response2 = await app.inject({
         method: 'GET',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie2 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie2}`,
+        },
       });
 
       expect(response1.statusCode).toBe(200);
@@ -289,7 +311,9 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'openai', apiKey: 'test-key' },
       });
 
@@ -299,7 +323,9 @@ describe('LLM Credentials Tests', () => {
         headers: {
           origin: 'https://evil.example',
         },
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       expect(response.statusCode).toBe(403);
@@ -313,7 +339,9 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'openai', apiKey: 'sk-test-key' },
       });
     });
@@ -322,7 +350,9 @@ describe('LLM Credentials Tests', () => {
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/llm-credentials?provider=openai',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       expect(response.statusCode).toBe(200);
@@ -340,14 +370,18 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie2 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie2}`,
+        },
         payload: { provider: 'openai', apiKey: 'sk-wallet2-key' },
       });
 
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/llm-credentials?provider=openai',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       expect(response.statusCode).toBe(200);
@@ -363,7 +397,9 @@ describe('LLM Credentials Tests', () => {
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/llm-credentials?provider=groq',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       expect(response.statusCode).toBe(404);
@@ -375,7 +411,9 @@ describe('LLM Credentials Tests', () => {
       const response = await app.inject({
         method: 'DELETE',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
       });
 
       expect(response.statusCode).toBe(400);
@@ -398,7 +436,9 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'mock', apiKey: 'stored-mock-key' },
       });
 
@@ -423,7 +463,9 @@ describe('LLM Credentials Tests', () => {
       const explainResponse = await app.inject({
         method: 'POST',
         url: `/api/pools/${poolId}/explain`,
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'mock' },
       });
 
@@ -441,7 +483,9 @@ describe('LLM Credentials Tests', () => {
       await app.inject({
         method: 'PUT',
         url: '/api/llm-credentials',
-        cookies: { vault_session: sessionCookie1 },
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'groq', apiKey: 'gsk-test-groq-key' },
       });
 
@@ -467,7 +511,9 @@ describe('LLM Credentials Tests', () => {
         const explainResponse = await app.inject({
           method: 'POST',
           url: `/api/pools/${poolId}/explain`,
-          cookies: { vault_session: sessionCookie1 },
+          headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
           payload: {
             provider: 'groq',
             baseUrl: 'https://api.openai.com/v1',

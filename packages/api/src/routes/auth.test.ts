@@ -108,8 +108,8 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
-        cookies: {
-          siwe_nonce: nonceCookie!.value,
+        headers: {
+          'cookie': `siwe_nonce=${nonceCookie!.value}`,
         },
         payload: {
           message,
@@ -411,8 +411,8 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
-        cookies: {
-          siwe_nonce: nonceCookie!.value,
+        headers: {
+          'cookie': `siwe_nonce=${nonceCookie!.value}`,
         },
         payload: { message, signature },
       });
@@ -454,8 +454,8 @@ describe('SIWE Authentication Tests', () => {
       const meResponse = await app.inject({
         method: 'GET',
         url: '/api/auth/me',
-        cookies: {
-          vault_session: sessionCookie!.value,
+        headers: {
+          'cookie': `vault_session=${sessionCookie!.value}`,
         },
       });
 
@@ -509,8 +509,8 @@ describe('SIWE Authentication Tests', () => {
       const logoutResponse = await app.inject({
         method: 'POST',
         url: '/api/auth/logout',
-        cookies: {
-          vault_session: sessionCookie!.value,
+        headers: {
+          'cookie': `vault_session=${sessionCookie!.value}`,
         },
       });
 
@@ -527,8 +527,8 @@ describe('SIWE Authentication Tests', () => {
       const meResponse = await app.inject({
         method: 'GET',
         url: '/api/auth/me',
-        cookies: {
-          vault_session: sessionCookie!.value,
+        headers: {
+          'cookie': `vault_session=${sessionCookie!.value}`,
         },
       });
       expect(meResponse.statusCode).toBe(401);
