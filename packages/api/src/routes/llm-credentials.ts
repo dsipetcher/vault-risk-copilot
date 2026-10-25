@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { env } from '../config.js';
 
 const putCredentialSchema = z.object({
-  provider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'anthropic']),
+  provider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'anthropic', 'mock']),
   apiKey: z.string().min(1),
 });
 
