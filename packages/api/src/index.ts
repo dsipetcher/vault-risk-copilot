@@ -83,7 +83,7 @@ export async function build() {
     } else {
       request.log.warn({ message: errorMessage }, 'Request error');
     }
-    reply.status(statusCode).send({
+    return reply.status(statusCode).send({
       error: errorMessage,
       message: errorMessage,
     });
