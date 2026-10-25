@@ -111,7 +111,7 @@ export class ApiClient {
     if (params.sort === 'tvl') {
       sortedPools = validatedPools.sort((a, b) => (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0));
     } else if (params.sort === 'risk') {
-      sortedPools = validatedPools.sort((a, b) => b.total_risk_score - a.total_risk_score);
+      sortedPools = validatedPools.sort((a, b) => (b.total_risk_score ?? 0) - (a.total_risk_score ?? 0));
     } else if (params.sort === 'apy') {
       sortedPools = validatedPools.sort((a, b) => (b.apy ?? 0) - (a.apy ?? 0));
     }

@@ -101,7 +101,7 @@ export async function getPoolRiskTool(
 
     const summary =
       `Pool: ${pool.protocol} ${pool.asset_symbol} on ${pool.chain}\n` +
-      `Risk Score: ${pool.risk_score?.total_risk_score.toFixed(2) ?? 'N/A'} ` +
+      `Risk Score: ${pool.risk_score?.total_risk_score != null ? pool.risk_score.total_risk_score.toFixed(2) : 'N/A'} ` +
       `(${pool.risk_score?.risk_category ?? 'unknown'})\n` +
       `TVL: $${pool.tvl_usd?.toLocaleString() ?? 'N/A'} | ` +
       `APY: ${pool.apy?.toFixed(2) ?? 'N/A'}%`;
