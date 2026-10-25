@@ -92,6 +92,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
         </label>
         <select
           id="server-provider"
+          data-testid="server-provider-select"
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -101,6 +102,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
           <option value="openrouter">OpenRouter</option>
           <option value="groq">Groq</option>
           <option value="ollama">Ollama</option>
+          <option value="mock">Mock (Testing)</option>
         </select>
       </div>
 
@@ -110,6 +112,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
         </label>
         <input
           id="server-api-key"
+          data-testid="server-api-key-input"
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
@@ -119,21 +122,23 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
       </div>
 
       {stored.length > 0 && (
-        <ul className="text-xs text-gray-700" data-testid="stored-keys">
+        <ul className="text-xs text-gray-700" data-testid="stored-keys-list">
           {stored.map((c) => (
-            <li key={c.provider}>{c.provider}: {c.maskedKey}</li>
+            <li key={c.provider} data-testid={`stored-key-${c.provider}`}>
+              {c.provider}: {c.maskedKey}
+            </li>
           ))}
         </ul>
       )}
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg" data-testid="server-key-error">
           <p className="text-sm text-red-800">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg" data-testid="server-key-success">
           <p className="text-sm text-green-800">API key saved successfully!</p>
         </div>
       )}
@@ -141,12 +146,14 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
       <div className="flex justify-end gap-3">
         <button
           onClick={onClose}
+          data-testid="server-key-cancel-button"
           className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
+          data-testid="server-key-save-button"
           disabled={isLoading}
           className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
