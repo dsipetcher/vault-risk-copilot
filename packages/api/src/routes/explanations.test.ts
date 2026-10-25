@@ -1,13 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { build } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { execSync } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const workspaceRoot = resolve(__dirname, '../../../..');
+import { pool } from '../database.js';
 
 describe('Explanations API Tests', () => {
   let app: FastifyInstance;
@@ -21,14 +15,6 @@ describe('Explanations API Tests', () => {
       process.env.DATABASE_URL ||
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     process.env.LLM_PROVIDER = 'mock';
-    
-    // Run migrations before tests (CI provides fresh postgres via services)
-    const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
-    const migrationsDir = resolve(workspaceRoot, 'db/migrations');
-    execSync(`bash ${migrationsScript}`, {
-      env: { ...process.env, MIGRATIONS_DIR: migrationsDir },
-      stdio: 'inherit',
-    });
     
     app = await build();
     

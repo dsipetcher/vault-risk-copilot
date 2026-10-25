@@ -1,16 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { build } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { execSync } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import { SiweMessage } from 'siwe';
 import { Wallet } from 'ethers';
 import { pool } from '../database.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const workspaceRoot = resolve(__dirname, '../../../..');
 
 describe('LLM Credentials Tests', () => {
   let app: FastifyInstance;
@@ -24,13 +17,6 @@ describe('LLM Credentials Tests', () => {
       process.env.DATABASE_URL ||
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     process.env.LLM_KEY_ENCRYPTION_KEY = Buffer.from('a'.repeat(32)).toString('base64');
-
-    const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
-    const migrationsDir = resolve(workspaceRoot, 'db/migrations');
-    execSync(`bash ${migrationsScript}`, {
-      env: { ...process.env, MIGRATIONS_DIR: migrationsDir },
-      stdio: 'inherit',
-    });
 
     app = await build();
     wallet1 = Wallet.createRandom();
