@@ -8,7 +8,7 @@ import {
   deleteSession,
 } from '../lib/siwe.js';
 import { z } from 'zod';
-import { env, getAllowedSiweChainIds } from '../config.js';
+import { env, getAllowedSiweChainIds, isCookieSecure } from '../config.js';
 import { SiweMessage } from 'siwe';
 
 const SESSION_COOKIE_NAME = 'vault_session';
@@ -22,7 +22,7 @@ const siweMessageSchema = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
-  const cookieSecure = env.NODE_ENV === 'production' || env.COOKIE_SAMESITE === 'none';
+  const cookieSecure = isCookieSecure();
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
   
   function checkOrigin(request: FastifyRequest, reply: any) {

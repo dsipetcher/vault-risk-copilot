@@ -63,3 +63,11 @@ export function getAllowedSiweChainIds(
 ): number[] {
   return parseSiweChainIds(values.SIWE_CHAIN_IDS, values.SIWE_CHAIN_ID);
 }
+
+/** 'none' is cross-site and must be Secure; production cookies are always Secure. */
+export function isCookieSecure(
+  nodeEnv: Env['NODE_ENV'] = env.NODE_ENV,
+  sameSite: Env['COOKIE_SAMESITE'] = env.COOKIE_SAMESITE
+): boolean {
+  return nodeEnv === 'production' || sameSite === 'none';
+}
