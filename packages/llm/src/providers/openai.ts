@@ -2,8 +2,16 @@ import type { LLMProvider } from '../types.js';
 import type { RiskInput, ExplanationOutput } from '../schemas.js';
 import { explanationOutputSchema } from '../schemas.js';
 import { InvalidKeyError } from '../errors.js';
-import { collectTextNumbers, numbersMatch } from '../number-fidelity.js';
-import { RateLimitError, isRateLimitError, parseRetryAfterMs, sleep } from '../rate-limit.js';
+import { collectExtractedNumbers, numbersMatch } from '../number-fidelity.js';
+import {
+  RateLimitError,
+  isRateLimitError,
+  backoffWaitMs,
+  sleep,
+  describeFallbackReason,
+  RATE_LIMIT_HTTP_ATTEMPTS,
+  RATE_LIMIT_TOTAL_WAIT_CAP_MS,
+} from '../rate-limit.js';
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -66,14 +74,15 @@ export class OpenAIProvider implements LLMProvider {
     const systemPrompt = this.buildSystemPrompt();
     const userPrompt = this.buildUserPrompt(input);
 
-    let attempts = 0;
     let lastError: Error | null = null;
+    let allowValidationRetry = true;
 
-    while (attempts < 2) {
-      attempts++;
-
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const response = await this.callOpenAI(systemPrompt, userPrompt);
+        const { response, didBackoff } = await this.callOpenAI(systemPrompt, userPrompt);
+        if (didBackoff) {
+          allowValidationRetry = false;
+        }
         const latencyMs = Date.now() - startTime;
 
         let parsed: ExplanationOutput;
@@ -81,27 +90,24 @@ export class OpenAIProvider implements LLMProvider {
           const json = JSON.parse(response.choices[0].message.content);
           parsed = explanationOutputSchema.parse(json);
         } catch (parseError) {
-          if (attempts < 2) {
-            lastError = new Error(
-              `Failed to parse or validate response: ${parseError instanceof Error ? parseError.message : String(parseError)}`
-            );
+          lastError = new Error(
+            `Failed to parse or validate response: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+          );
+          if (allowValidationRetry && attempt === 0) {
             continue;
           }
-          
           console.error('[LLM Parse Error]', {
             provider: 'openai',
             model: this.model,
             error: parseError instanceof Error ? parseError.message : String(parseError),
           });
-          
           return this.getFallbackResponse(input, latencyMs, 'validation_failed');
         }
 
-        // Validate factor count matches non-null signals
         const nonNullSignals = Object.values(input.breakdown).filter(v => v !== null).length;
         if (parsed.key_factors.length !== nonNullSignals) {
-          if (attempts < 2) {
-            lastError = new Error(`Factor count mismatch: expected ${nonNullSignals}, got ${parsed.key_factors.length}`);
+          lastError = new Error(`Factor count mismatch: expected ${nonNullSignals}, got ${parsed.key_factors.length}`);
+          if (allowValidationRetry && attempt === 0) {
             continue;
           }
           console.error('[LLM Factor Count Mismatch]', {
@@ -114,12 +120,11 @@ export class OpenAIProvider implements LLMProvider {
         }
 
         const valid = this.validateNumberFidelity(input, parsed);
-        if (!valid && attempts < 2) {
-          lastError = new Error('Number fidelity validation failed');
-          continue;
-        }
-
         if (!valid) {
+          lastError = new Error('Number fidelity validation failed');
+          if (allowValidationRetry && attempt === 0) {
+            continue;
+          }
           console.error('[LLM Number Fidelity Failed]', {
             provider: new URL(this.baseUrl).hostname,
             model: this.model,
@@ -146,13 +151,10 @@ export class OpenAIProvider implements LLMProvider {
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-
-        // Rate limits already did a bounded HTTP retry — do not burn a validation attempt.
         if (isRateLimitError(lastError) || lastError instanceof InvalidKeyError) {
           break;
         }
-
-        if (attempts < 2) {
+        if (allowValidationRetry && attempt === 0) {
           continue;
         }
       }
@@ -284,7 +286,7 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
   private async callOpenAI(
     systemPrompt: string,
     userPrompt: string
-  ): Promise<OpenAIChatCompletionResponse> {
+  ): Promise<{ response: OpenAIChatCompletionResponse; didBackoff: boolean }> {
     const requestBody: OpenAIChatCompletionRequest = {
       model: this.model,
       messages: [
@@ -295,55 +297,55 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
       temperature: 0.3,
     };
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const providerHost = new URL(this.baseUrl).hostname;
+    let waitedMs = 0;
+    let didBackoff = false;
+    let lastErrorText = '';
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      const providerHost = new URL(this.baseUrl).hostname;
+    for (let attempt = 0; attempt < RATE_LIMIT_HTTP_ATTEMPTS; attempt++) {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (response.ok) {
+        return {
+          response: (await response.json()) as OpenAIChatCompletionResponse,
+          didBackoff,
+        };
+      }
+
+      lastErrorText = await response.text();
 
       if (response.status === 401 || response.status === 403) {
         throw new InvalidKeyError();
       }
 
-      if (response.status === 429) {
-        const waitMs = parseRetryAfterMs(response.headers.get('retry-after'));
-        console.warn(`[Rate Limited] Provider ${providerHost} waiting ${waitMs}ms before retry`);
-        await sleep(waitMs);
-
-        const retryResponse = await fetch(`${this.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!retryResponse.ok) {
-          if (retryResponse.status === 429) {
-            throw new RateLimitError();
-          }
-          if (retryResponse.status === 401 || retryResponse.status === 403) {
-            throw new InvalidKeyError();
-          }
-          const retryErrorText = await retryResponse.text();
-          throw new Error(`${providerHost} API error (after retry): ${retryResponse.status} ${retryErrorText}`);
+      if (response.status === 429 && attempt < RATE_LIMIT_HTTP_ATTEMPTS - 1) {
+        const remaining = RATE_LIMIT_TOTAL_WAIT_CAP_MS - waitedMs;
+        if (remaining <= 0) {
+          throw new RateLimitError();
         }
-
-        return (await retryResponse.json()) as OpenAIChatCompletionResponse;
+        const waitMs = backoffWaitMs(attempt, response.headers.get('retry-after'), remaining);
+        didBackoff = true;
+        console.warn(`[Rate Limited] Provider ${providerHost} waiting ${waitMs}ms before retry ${attempt + 2}/${RATE_LIMIT_HTTP_ATTEMPTS}`);
+        await sleep(waitMs);
+        waitedMs += waitMs;
+        continue;
       }
 
-      throw new Error(`${providerHost} API error: ${response.status} ${errorText}`);
+      if (response.status === 429) {
+        throw new RateLimitError();
+      }
+
+      throw new Error(`${providerHost} API error: ${response.status} ${lastErrorText}`);
     }
 
-    return (await response.json()) as OpenAIChatCompletionResponse;
+    throw new RateLimitError();
   }
 
   async validateConnection(): Promise<void> {
@@ -511,11 +513,14 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
     input: RiskInput
   ): boolean {
     const factorText = item.text;
-    const numbersInFactor = collectTextNumbers(factorText);
+    const identifiers = [input.pool_name, input.protocol, input.chain];
+    const numbersInFactor = collectExtractedNumbers(factorText, identifiers);
 
-    for (const num of numbersInFactor) {
+    for (const extracted of numbersInFactor) {
+      const num = extracted.value;
       if (isNaN(num)) continue;
       const numStr = String(num);
+      const matchOpts = { fromPercent: extracted.fromPercent };
 
       // Find context around this number in original text
       const numIndex = factorText.indexOf(numStr);
@@ -546,9 +551,9 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
       let found = false;
       for (const allowedNum of allowedNumbers) {
         const signMatches = (allowedNum < 0) === (num < 0);
-        const matchesValue = numbersMatch(num, allowedNum);
+        const matchesValue = numbersMatch(num, allowedNum, matchOpts);
         const matchesAbs =
-          allowedNum < 0 && num > 0 && numbersMatch(num, Math.abs(allowedNum));
+          allowedNum < 0 && num > 0 && numbersMatch(num, Math.abs(allowedNum), matchOpts);
 
         if (matchesValue && signMatches) {
           if (allowedNum < 0 && hasIncreaseWording) {
@@ -573,7 +578,7 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
 
       if (!found && num > 0 && hasDecreaseWording) {
         for (const allowedNum of allowedNumbers) {
-          if (allowedNum < 0 && numbersMatch(num, Math.abs(allowedNum))) {
+          if (allowedNum < 0 && numbersMatch(num, Math.abs(allowedNum), matchOpts)) {
             found = true;
             break;
           }
@@ -654,7 +659,10 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
 
     return {
       output: {
-        summary: `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. Due to data processing limitations, detailed analysis is temporarily unavailable.`,
+        summary:
+          reason === 'rate_limited'
+            ? `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. ${describeFallbackReason('rate_limited')}`
+            : `This pool has a ${categoryLabel.toLowerCase()} risk rating with a score of ${input.total_risk_score.toFixed(1)}/100. Due to data processing limitations, detailed analysis is temporarily unavailable.`,
         key_factors: factors,
         disclaimer:
           'This risk assessment is for educational purposes only and does not constitute financial advice. DeFi protocols carry inherent risks. Always conduct your own research.',

@@ -210,7 +210,9 @@ export async function explainPoolRiskTool(
   const explanation = await apiClient.explainPoolRisk(validated.pool_id, llmApiKey);
 
   const fallbackNote = explanation.metadata.fallback
-    ? `\n\n⚠️  Note: Using fallback explanation (${explanation.metadata.fallback_reason})`
+    ? explanation.metadata.fallback_reason === 'rate_limited'
+      ? '\n\nRate limited by the provider. Wait a moment and try again.'
+      : `\n\n⚠️  Note: Using fallback explanation (${explanation.metadata.fallback_reason})`
     : '';
 
   const summary =

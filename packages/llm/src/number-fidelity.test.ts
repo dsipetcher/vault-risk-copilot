@@ -3,6 +3,7 @@ import {
   collectTextNumbers,
   expandScaledNumbers,
   numbersMatch,
+  stripVersionTokens,
 } from './number-fidelity.js';
 
 describe('expandScaledNumbers / collectTextNumbers', () => {
@@ -28,6 +29,26 @@ describe('expandScaledNumbers / collectTextNumbers', () => {
     expect(collectTextNumbers('2.68 million')).toEqual([2_680_000]);
     expect(collectTextNumbers('$5 thousand')).toEqual([5_000]);
   });
+
+  it('parses $22.5bn / $5mn compact suffixes', () => {
+    expect(collectTextNumbers('$22.5bn')).toEqual([22_500_000_000]);
+    expect(collectTextNumbers('$5mn')).toEqual([5_000_000]);
+    expect(collectTextNumbers('$520k')).toEqual([520_000]);
+  });
+
+  it('does not treat Aave v3 / Uniswap-v4 / Aave‑v3 as the number 3 or 4', () => {
+    expect(stripVersionTokens('Aave v3')).not.toMatch(/\d/);
+    expect(collectTextNumbers('Aave v3')).toEqual([]);
+    expect(collectTextNumbers('Uniswap-v4')).toEqual([]);
+    expect(collectTextNumbers('Aave‑v3')).toEqual([]);
+    expect(collectTextNumbers('Aave v3 has TVL of $22.5bn')).toEqual([22_500_000_000]);
+  });
+
+  it('strips known identifiers so pool/protocol digits are ignored', () => {
+    expect(
+      collectTextNumbers('Aave v3 USDC on Ethereum has APY 2.8%.', ['Aave v3 USDC', 'Aave', 'Ethereum'])
+    ).toEqual([2.8]);
+  });
 });
 
 describe('numbersMatch rounding', () => {
@@ -47,5 +68,11 @@ describe('numbersMatch rounding', () => {
   it('still requires exact-ish match for scores under 1000', () => {
     expect(numbersMatch(93.2, 95)).toBe(false);
     expect(numbersMatch(95.0, 95)).toBe(true);
+  });
+
+  it('accepts APY 2.8% for 2.78 and rejects 3.5% / 27.8%', () => {
+    expect(numbersMatch(2.8, 2.78, { fromPercent: true })).toBe(true);
+    expect(numbersMatch(3.5, 2.78, { fromPercent: true })).toBe(false);
+    expect(numbersMatch(27.8, 2.78, { fromPercent: true })).toBe(false);
   });
 });

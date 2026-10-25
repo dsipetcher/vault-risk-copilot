@@ -7,10 +7,19 @@ export type { RiskInput, ExplanationOutput, RiskFactor } from './schemas.js';
 export { riskInputSchema, explanationOutputSchema, riskFactorSchema } from './schemas.js';
 export { ALLOWED_BASE_URLS, LOCALHOST_PATTERN } from './types.js';
 export { InvalidKeyError, isInvalidKeyError } from './errors.js';
-export { RateLimitError, isRateLimitError, parseRetryAfterMs } from './rate-limit.js';
+export {
+  RateLimitError,
+  isRateLimitError,
+  parseRetryAfterMs,
+  backoffWaitMs,
+  describeFallbackReason,
+} from './rate-limit.js';
 export {
   expandScaledNumbers,
   collectTextNumbers,
+  collectExtractedNumbers,
   numbersMatch,
   numberInAllowedSet,
+  stripVersionTokens,
+  stripIdentifiers,
 } from './number-fidelity.js';

@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 export const riskFactorSchema = z.object({
   signal: z.string().min(1).max(100),
-  value: z.string().min(1).max(200),
+  value: z
+    .union([z.string(), z.number()])
+    .transform((value) => String(value))
+    .pipe(z.string().min(1).max(200)),
   explanation: z.string().min(10).max(500),
 });
 

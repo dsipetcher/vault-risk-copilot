@@ -233,6 +233,32 @@ describe('Tools', () => {
       expect(result.content[0].text).toContain('fallback');
       expect(result.content[0].text).toContain('No LLM key provided');
     });
+
+    it('surfaces rate_limited as a clear provider message', async () => {
+      vi.mocked(mockApiClient.explainPoolRisk).mockResolvedValue({
+        explanation: {
+          summary: 'Fallback explanation',
+          key_factors: [],
+          disclaimer: 'Not financial advice',
+        },
+        metadata: {
+          provider: 'groq',
+          model: 'openai/gpt-oss-120b',
+          timestamp: '2026-10-25T00:00:00Z',
+          latency_ms: 0,
+          fallback: true,
+          fallback_reason: 'rate_limited',
+        },
+        cached: false,
+      });
+
+      const result = await explainPoolRiskTool(mockApiClient, {
+        pool_id: '550e8400-e29b-41d4-a716-446655440000',
+      });
+
+      expect(result.content[0].text).toMatch(/Rate limited by the provider/i);
+      expect(result.content[0].text).not.toMatch(/Using fallback explanation \(rate_limited\)/);
+    });
   });
 
   describe('getVaultInfoTool', () => {

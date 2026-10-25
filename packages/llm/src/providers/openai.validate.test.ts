@@ -123,11 +123,8 @@ describe('OpenAIProvider rate limit handling', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('does not burn a validation retry when the bounded 429 retry still fails', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('rate limited', { status: 429, headers: { 'Retry-After': '0' } }))
-      .mockResolvedValueOnce(new Response('still limited', { status: 429, headers: { 'Retry-After': '0' } }));
+  it('retries 429 up to 3 HTTP attempts and does not add a validation retry', async () => {
+    const fetchMock = vi.fn(async () => new Response('still limited', { status: 429, headers: { 'Retry-After': '0' } }));
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = new OpenAIProvider({ apiKey: 'gsk_ok' });
@@ -135,14 +132,77 @@ describe('OpenAIProvider rate limit handling', () => {
 
     expect(result.metadata.fallback).toBe(true);
     expect(result.metadata.fallback_reason).toBe('rate_limited');
+    expect(result.output.summary).toMatch(/Rate limited by the provider/i);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not issue a validation retry after a 429 backoff that then returns an unfixable body', async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response('rate limited', { status: 429, headers: { 'Retry-After': '0' } });
+      }
+      return jsonResponse({
+        id: '1',
+        object: 'chat.completion',
+        created: 1,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant', content: '{"not":"valid"}' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new OpenAIProvider({ apiKey: 'gsk_ok' });
+    const result = await provider.generate(input);
+    expect(result.metadata.fallback).toBe(true);
+    expect(result.metadata.fallback_reason).toBe('validation_failed');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('accepts a numeric key_factors value without a second HTTP call', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        id: '1',
+        object: 'chat.completion',
+        created: 1,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                summary: 'Score 10.0 with TVL 1000000 and APY notes.',
+                key_factors: [
+                  { signal: 'TVL Score', value: 5, explanation: 'TVL score 5.0 with TVL 1000000.' },
+                ],
+                disclaimer: 'This is educational only and not financial advice.',
+              }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider({ apiKey: 'gsk_ok' });
+    const result = await provider.generate(input);
+    expect(result.metadata.fallback).toBeUndefined();
+    expect(result.output.key_factors[0].value).toBe('5');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('parse path: RateLimitError is the typed failure after retry', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('rate limited', { status: 429, headers: { 'Retry-After': '0' } }))
-      .mockResolvedValueOnce(new Response('still limited', { status: 429, headers: { 'Retry-After': '0' } }));
+    const fetchMock = vi.fn(async () => new Response('still limited', { status: 429, headers: { 'Retry-After': '0' } }));
     vi.stubGlobal('fetch', fetchMock);
     const provider = new OpenAIProvider({ apiKey: 'gsk_ok' });
     const call = Reflect.get(provider, 'callOpenAI') as (
@@ -150,5 +210,6 @@ describe('OpenAIProvider rate limit handling', () => {
       user: string
     ) => Promise<unknown>;
     await expect(call.call(provider, 's', 'u')).rejects.toBeInstanceOf(RateLimitError);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
