@@ -13,7 +13,7 @@ test.describe('Mobile viewport 390px', () => {
     expect(headerBox!.width).toBeLessThanOrEqual(390);
 
     await expect(page.getByTestId('llm-settings-button')).toBeVisible();
-    await expect(page.getByText('Testnet')).toBeVisible();
+    await expect(page.getByTestId('testnet-badge')).toBeVisible();
 
     const table = page.locator('table').first();
     if (await table.count()) {

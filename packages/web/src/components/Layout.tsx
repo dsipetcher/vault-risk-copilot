@@ -64,7 +64,10 @@ export function Layout() {
                 </svg>
                 <span className="hidden sm:inline">LLM Settings</span>
               </button>
-              <span className="px-2 sm:px-3 py-1 text-xs font-medium text-yellow-800 bg-yellow-100 rounded-full whitespace-nowrap">
+              <span
+                data-testid="testnet-badge"
+                className="px-2 sm:px-3 py-1 text-xs font-medium text-yellow-800 bg-yellow-100 rounded-full whitespace-nowrap"
+              >
                 Testnet
               </span>
               <button

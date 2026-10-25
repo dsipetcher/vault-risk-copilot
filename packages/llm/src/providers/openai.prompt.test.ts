@@ -45,5 +45,9 @@ describe('OpenAI prompt semantics', () => {
     expect(user).toContain('22490000000');
     expect(user).toContain('higher = more risk');
     expect(user).toMatch(/APY: 3\.40%/);
+    // E2E stub parses factors between `=== RISK BREAKDOWN ===` and the next `===`.
+    const breakdown = user.split('=== RISK BREAKDOWN ===')[1]?.split('===')[0] ?? '';
+    expect(breakdown).toMatch(/TVL Score: 5\.0/);
+    expect(breakdown).toMatch(/APY Volatility: 8\.0/);
   });
 });

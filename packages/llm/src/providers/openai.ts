@@ -247,7 +247,8 @@ Chain: ${chainSafe}
 Risk Score: ${input.total_risk_score.toFixed(1)}/100
 Category: ${input.risk_category}
 
-=== RISK BREAKDOWN (0-100; higher = more risk) ===
+=== RISK BREAKDOWN ===
+Scores are 0-100; higher = more risk.
 TVL Score: ${input.breakdown.tvl_score !== null ? input.breakdown.tvl_score.toFixed(1) : 'N/A'}
 TVL Volatility: ${input.breakdown.tvl_volatility_score !== null ? input.breakdown.tvl_volatility_score.toFixed(1) : 'N/A'}
 APY Volatility: ${input.breakdown.apy_volatility_score !== null ? input.breakdown.apy_volatility_score.toFixed(1) : 'N/A'}

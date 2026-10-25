@@ -141,7 +141,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 // ---- Tests ------------------------------------------------------------------
-test('SIWE: sign in → address → reload persists → save key → masked hint → explain uses stored key → sign out → 401', async ({
+test('SIWE: sign in → address → reload persists → save key → masked hint → explain uses stored key → sign out', async ({
   page,
   context,
 }) => {
@@ -207,9 +207,12 @@ test('SIWE: sign in → address → reload persists → save key → masked hint
   await page.getByTestId('auth-sign-out-button').click();
   await expect(page.getByTestId('auth-connect-button')).toBeVisible({ timeout: 10000 });
 
-  expect((await page.request.get(`${API_URL}/api/auth/me`)).status()).toBe(401);
+  const loggedOut = await page.request.get(`${API_URL}/api/auth/me`);
+  expect(loggedOut.status()).toBe(200);
+  expect((await loggedOut.json()).authenticated).toBe(false);
   const replay = await fetch(`${API_URL}/api/auth/me`, { headers: { cookie: `vault_session=${session!.value}` } });
-  expect(replay.status).toBe(401);
+  expect(replay.status).toBe(200);
+  expect((await replay.json()).authenticated).toBe(false);
 
   await page.reload();
   await expect(page.getByTestId('auth-connect-button')).toBeVisible({ timeout: 10000 });
