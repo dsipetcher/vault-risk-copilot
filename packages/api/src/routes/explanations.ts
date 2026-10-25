@@ -120,10 +120,16 @@ export async function explanationsRoutes(app: FastifyInstance) {
             );
           }
         } catch (error) {
+          if ((error as Error).message === 'baseurl_mismatch') {
+            return reply.code(400).send({
+              error: 'baseurl_mismatch',
+              message: 'Stored credential cannot be used with the requested baseUrl',
+            });
+          }
           if ((error as Error).message === 'credential_unavailable') {
-            return reply.code(500).send({
+            return reply.code(422).send({
               error: 'credential_unavailable',
-              message: 'Stored credential could not be decrypted',
+              message: 'Stored credential could not be decrypted. Please re-save your API key.',
             });
           }
           throw error;

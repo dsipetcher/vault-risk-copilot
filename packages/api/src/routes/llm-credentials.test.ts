@@ -454,30 +454,34 @@ describe('LLM Credentials Tests', () => {
       `);
       const poolId = poolResult.rows[0].pool_id;
 
-      await pool.query(`
-        INSERT INTO risk_scores (
-          pool_id, calculated_at, total_risk_score, risk_category,
-          tvl_score, tvl_volatility_score, apy_volatility_score
-        ) VALUES (
-          $1, NOW(), 50, 'medium', 75, 60, 55
-        )
-      `, [poolId]);
+      try {
+        await pool.query(`
+          INSERT INTO risk_scores (
+            pool_id, calculated_at, total_risk_score, risk_category,
+            tvl_score, tvl_volatility_score, apy_volatility_score
+          ) VALUES (
+            $1, NOW(), 50, 'medium', 75, 60, 55
+          )
+        `, [poolId]);
 
-      const explainResponse = await app.inject({
-        method: 'POST',
-        url: `/api/pools/${poolId}/explain`,
-        cookies: { vault_session: sessionCookie1 },
-        payload: {
-          provider: 'groq',
-          baseUrl: 'https://api.openai.com/v1',
-        },
-      });
+        const explainResponse = await app.inject({
+          method: 'POST',
+          url: `/api/pools/${poolId}/explain`,
+          cookies: { vault_session: sessionCookie1 },
+          payload: {
+            provider: 'groq',
+            baseUrl: 'https://api.openai.com/v1',
+          },
+        });
 
-      expect(explainResponse.statusCode).toBe(400);
-
-      await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
-      await pool.query('DELETE FROM risk_scores WHERE pool_id = $1', [poolId]);
-      await pool.query('DELETE FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+        expect(explainResponse.statusCode).toBe(400);
+        const body = JSON.parse(explainResponse.body);
+        expect(body.error).toBe('baseurl_mismatch');
+      } finally {
+        await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
+        await pool.query('DELETE FROM risk_scores WHERE pool_id = $1', [poolId]);
+        await pool.query('DELETE FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+      }
     });
   });
 });

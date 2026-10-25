@@ -25,6 +25,12 @@ export async function build() {
     }
     console.warn('⚠️  LLM_KEY_ENCRYPTION_KEY not set - server-side key storage disabled');
   }
+  
+  if (env.NODE_ENV === 'production') {
+    if (!env.SIWE_DOMAIN || !env.SIWE_URI || !env.SIWE_CHAIN_ID) {
+      throw new Error('SIWE_DOMAIN, SIWE_URI, and SIWE_CHAIN_ID are required in production');
+    }
+  }
 
   const app = Fastify({
     logger: {

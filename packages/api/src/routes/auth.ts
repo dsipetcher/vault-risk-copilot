@@ -9,9 +9,12 @@ import {
 } from '../lib/siwe.js';
 import { z } from 'zod';
 import { env } from '../config.js';
+import { SiweMessage } from 'siwe';
 
 const SESSION_COOKIE_NAME = 'vault_session';
+const NONCE_COOKIE_NAME = 'siwe_nonce';
 const SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+const NONCE_COOKIE_MAX_AGE = 5 * 60;
 
 const siweMessageSchema = z.object({
   message: z.string(),
@@ -32,6 +35,14 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/auth/nonce', async (request, reply) => {
     const nonce = await generateNonce(pool, request.ip);
+    
+    reply.setCookie(NONCE_COOKIE_NAME, nonce, {
+      httpOnly: true,
+      secure: env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: NONCE_COOKIE_MAX_AGE,
+      path: '/',
+    });
     
     return reply.send({ nonce });
   });
@@ -72,14 +83,30 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         const { message, signature } = siweMessageSchema.parse(request.body);
         
-        const domain = env.SIWE_DOMAIN || request.hostname;
+        const cookieNonce = request.cookies[NONCE_COOKIE_NAME];
+        const siweMessage = new SiweMessage(message);
+        
+        if (!cookieNonce || cookieNonce !== siweMessage.nonce) {
+          return reply.code(401).send({
+            error: 'Authentication failed',
+          });
+        }
+        
+        const domain = env.SIWE_DOMAIN;
         const expectedUri = env.SIWE_URI;
         const expectedChainId = env.SIWE_CHAIN_ID;
         
         if (env.NODE_ENV === 'production') {
-          if (!env.SIWE_DOMAIN || !env.SIWE_URI || !env.SIWE_CHAIN_ID) {
+          if (!domain || !expectedUri || !expectedChainId) {
             throw new Error('SIWE configuration incomplete in production');
           }
+        }
+        
+        if (!domain) {
+          return reply.code(500).send({
+            error: 'SIWE configuration missing',
+            message: 'Server is not configured for authentication',
+          });
         }
         
         const { address, chainId } = await verifyAndConsumeSiweMessage(
@@ -95,6 +122,8 @@ export async function authRoutes(app: FastifyInstance) {
           chainId,
           new Date()
         );
+        
+        reply.clearCookie(NONCE_COOKIE_NAME, { path: '/' });
         
         reply.setCookie(SESSION_COOKIE_NAME, sessionToken, {
           httpOnly: true,

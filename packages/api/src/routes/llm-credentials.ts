@@ -226,7 +226,7 @@ export async function getStoredCredential(
   
   const defaultBaseUrl = PROVIDER_BASE_URLS[provider];
   if (requestedBaseUrl && defaultBaseUrl && requestedBaseUrl !== defaultBaseUrl) {
-    return null;
+    throw new Error('baseurl_mismatch');
   }
 
   const result = await pool.query(

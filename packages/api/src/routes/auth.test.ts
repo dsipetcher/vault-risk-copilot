@@ -22,6 +22,9 @@ describe('SIWE Authentication Tests', () => {
       process.env.DATABASE_URL ||
       'postgresql://postgres:postgres@localhost:5432/vault_risk';
     process.env.LLM_KEY_ENCRYPTION_KEY = Buffer.from('a'.repeat(32)).toString('base64');
+    process.env.SIWE_DOMAIN = 'localhost';
+    process.env.SIWE_URI = 'http://localhost:3000';
+    process.env.SIWE_CHAIN_ID = '1';
 
     const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
     const migrationsDir = resolve(workspaceRoot, 'db/migrations');
@@ -76,6 +79,18 @@ describe('SIWE Authentication Tests', () => {
 
   describe('POST /auth/verify', () => {
     it('should verify valid SIWE message and create session', async () => {
+      const nonceResponse = await app.inject({
+        method: 'GET',
+        url: '/api/auth/nonce',
+      });
+      
+      const cookies = nonceResponse.cookies;
+      const nonceCookie = cookies.find((c) => c.name === 'siwe_nonce');
+      expect(nonceCookie).toBeDefined();
+      expect(nonceCookie?.httpOnly).toBe(true);
+      
+      const { nonce } = JSON.parse(nonceResponse.body);
+
       const siweMessage = new SiweMessage({
         domain: 'localhost',
         address: wallet.address,
@@ -83,7 +98,7 @@ describe('SIWE Authentication Tests', () => {
         uri: 'http://localhost:3000',
         version: '1',
         chainId: 1,
-        nonce: validNonce,
+        nonce,
         issuedAt: new Date().toISOString(),
       });
 
@@ -93,6 +108,9 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        cookies: {
+          siwe_nonce: nonceCookie!.value,
+        },
         payload: {
           message,
           signature,
@@ -104,15 +122,15 @@ describe('SIWE Authentication Tests', () => {
       expect(body.success).toBe(true);
       expect(body.address).toBe(wallet.address);
 
-      const cookies = response.cookies;
-      expect(cookies.length).toBeGreaterThan(0);
-      const sessionCookie = cookies.find((c) => c.name === 'vault_session');
+      const sessionCookies = response.cookies;
+      expect(sessionCookies.length).toBeGreaterThan(0);
+      const sessionCookie = sessionCookies.find((c) => c.name === 'vault_session');
       expect(sessionCookie).toBeDefined();
       expect(sessionCookie?.httpOnly).toBe(true);
 
       const nonceResult = await pool.query(
         'SELECT used FROM nonces WHERE nonce = $1',
-        [validNonce]
+        [nonce]
       );
       expect(nonceResult.rows[0].used).toBe(true);
     });
@@ -280,6 +298,8 @@ describe('SIWE Authentication Tests', () => {
     });
 
     it('should reject wrong URI', async () => {
+      const nonce = await (await app.inject({ method: 'GET', url: '/api/auth/nonce' })).json();
+      
       const siweMessage = new SiweMessage({
         domain: 'localhost',
         address: wallet.address,
@@ -287,14 +307,12 @@ describe('SIWE Authentication Tests', () => {
         uri: 'https://evil.example',
         version: '1',
         chainId: 1,
-        nonce: validNonce,
+        nonce: nonce.nonce,
         issuedAt: new Date().toISOString(),
       });
 
       const message = siweMessage.prepareMessage();
       const signature = await wallet.signMessage(message);
-
-      process.env.SIWE_URI = 'http://localhost:3000';
 
       const response = await app.inject({
         method: 'POST',
@@ -305,11 +323,11 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
-
-      delete process.env.SIWE_URI;
     });
 
     it('should reject wrong chainId', async () => {
+      const nonce = await (await app.inject({ method: 'GET', url: '/api/auth/nonce' })).json();
+      
       const siweMessage = new SiweMessage({
         domain: 'localhost',
         address: wallet.address,
@@ -317,14 +335,12 @@ describe('SIWE Authentication Tests', () => {
         uri: 'http://localhost:3000',
         version: '1',
         chainId: 999,
-        nonce: validNonce,
+        nonce: nonce.nonce,
         issuedAt: new Date().toISOString(),
       });
 
       const message = siweMessage.prepareMessage();
       const signature = await wallet.signMessage(message);
-
-      process.env.SIWE_CHAIN_ID = '1';
 
       const response = await app.inject({
         method: 'POST',
@@ -335,8 +351,6 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
-
-      delete process.env.SIWE_CHAIN_ID;
     });
 
     it('should reject invalid origin on verify', async () => {
@@ -366,6 +380,46 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(403);
       const body = JSON.parse(response.body);
       expect(body.error).toContain('Invalid origin');
+    });
+
+    it('should reject nonce cookie mismatch', async () => {
+      const nonceResponse = await app.inject({
+        method: 'GET',
+        url: '/api/auth/nonce',
+      });
+      
+      const cookies = nonceResponse.cookies;
+      const nonceCookie = cookies.find((c) => c.name === 'siwe_nonce');
+      expect(nonceCookie).toBeDefined();
+
+      const differentNonce = await (await app.inject({ method: 'GET', url: '/api/auth/nonce' })).json();
+
+      const siweMessage = new SiweMessage({
+        domain: 'localhost',
+        address: wallet.address,
+        statement: 'Sign in',
+        uri: 'http://localhost:3000',
+        version: '1',
+        chainId: 1,
+        nonce: differentNonce.nonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const message = siweMessage.prepareMessage();
+      const signature = await wallet.signMessage(message);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/verify',
+        cookies: {
+          siwe_nonce: nonceCookie!.value,
+        },
+        payload: { message, signature },
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Authentication failed');
     });
   });
 

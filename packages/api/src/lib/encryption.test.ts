@@ -28,12 +28,16 @@ describe('Encryption Library Tests', () => {
       expect(() => {
         initEncryption(Buffer.from('short').toString('base64'));
       }).toThrow('Master key must be exactly 32 bytes');
+      
+      initEncryption(testMasterKey);
     });
 
     it('should reject invalid base64', () => {
       expect(() => {
         initEncryption('not-valid-base64!!!');
       }).toThrow();
+      
+      initEncryption(testMasterKey);
     });
 
     it('should disable encryption when no key provided', () => {
@@ -190,7 +194,7 @@ describe('Encryption Library Tests', () => {
   describe('maskApiKey', () => {
     it('should mask API key showing last 4 chars', () => {
       expect(maskApiKey('sk-1234567890abcdef')).toBe('****cdef');
-      expect(maskApiKey('test123')).toBe('****123');
+      expect(maskApiKey('test1234')).toBe('****1234');
     });
 
     it('should mask short keys', () => {
