@@ -792,8 +792,8 @@ jobs:
           npm run build
           
           cd ../api
+          rm -rf node_modules dist .tsbuildinfo  # Force fresh install and build
           npm ci
-          rm -rf dist  # Ensure clean build
           echo "=== Checking source before build ==="
           grep "provider.*enum" src/routes/llm-credentials.ts || echo "Pattern not found!"
           npm run build
