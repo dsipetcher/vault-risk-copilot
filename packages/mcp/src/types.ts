@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const poolSnapshotSchema = z.object({
-  id: z.number(),
+  id: z.union([z.number(), z.string()]),
   pool_id: z.string().uuid(),
   protocol: z.string(),
   chain: z.string(),
