@@ -263,6 +263,14 @@ The risk scoring system evaluates pools based on:
 - Prompt injection defenses
 - No financial advice in output
 
+**Sign-In With Ethereum (SIWE) Authentication:**
+- Connect wallet and authenticate via EIP-4361 standard
+- Server-side encrypted LLM API key storage per wallet
+- AES-256-GCM encryption with master key rotation support
+- httpOnly session cookies with 7-day expiry
+- Replay protection and domain validation
+- **See [docs/SIWE_AUTH.md](./docs/SIWE_AUTH.md) for security model and threat analysis**
+
 **MCP Server (Read-Only):**
 - `list_pools` - Get available pools with basic info
 - `get_pool_risk` - Retrieve risk score and factors for a pool
