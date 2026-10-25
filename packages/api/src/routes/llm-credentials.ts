@@ -11,8 +11,12 @@ import {
 import { z } from 'zod';
 import { env } from '../config.js';
 
+// Single source of truth for both the zod check and the Fastify JSON schema
+// (Fastify validates schema.body first, so the two lists must never drift).
+const STORABLE_PROVIDERS = ['openai', 'openrouter', 'groq', 'ollama', 'anthropic'] as const;
+
 const putCredentialSchema = z.object({
-  provider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'anthropic', 'mock']),
+  provider: z.enum(STORABLE_PROVIDERS),
   apiKey: z.string().min(1),
 });
 
@@ -46,7 +50,7 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
           properties: {
             provider: {
               type: 'string',
-              enum: ['openai', 'openrouter', 'groq', 'ollama', 'anthropic'],
+              enum: [...STORABLE_PROVIDERS],
             },
             apiKey: { type: 'string', minLength: 1 },
           },

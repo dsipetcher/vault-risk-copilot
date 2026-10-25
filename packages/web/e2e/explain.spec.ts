@@ -33,8 +33,9 @@ test.describe('LLM Explain Feature', () => {
     await page.goto('/pools');
     await expect(page.getByTestId('pools-title')).toBeVisible({ timeout: 10000 });
 
-    // Find and click first pool link
+    // Wait for pool data to load (not just the title)
     const poolRows = page.getByTestId('pool-row');
+    await expect(poolRows.first()).toBeVisible({ timeout: 15000 });
     const poolCount = await poolRows.count();
     console.log(`Found ${poolCount} pool rows`);
 

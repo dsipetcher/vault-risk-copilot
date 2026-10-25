@@ -26,7 +26,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
 
   if (!isAuthenticated) {
     return (
-      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg" data-testid="server-key-settings">
         <p className="text-sm text-yellow-800">
           Please sign in with your wallet to save keys on the server.
         </p>
@@ -102,7 +102,6 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
           <option value="openrouter">OpenRouter</option>
           <option value="groq">Groq</option>
           <option value="ollama">Ollama</option>
-          <option value="mock">Mock (Testing)</option>
         </select>
       </div>
 
