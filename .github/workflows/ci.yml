@@ -282,6 +282,94 @@ jobs:
         working-directory: packages/api
         run: npm run build
 
+  mcp:
+    name: MCP Server
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            packages/llm/package-lock.json
+            packages/api/package-lock.json
+            packages/mcp/package-lock.json
+      
+      - name: Build llm package
+        working-directory: packages/llm
+        run: |
+          npm ci
+          npm run build
+      
+      - name: Set up database schema
+        run: |
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh
+      
+      - name: Seed test data
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/e2e-seed.sql
+      
+      - name: Build and start API service
+        run: |
+          cd packages/api
+          npm ci
+          npm run build
+          
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/vault_risk \
+          LLM_PROVIDER=mock \
+          NODE_ENV=test \
+          PORT=3000 \
+          nohup node dist/index.js > /tmp/api.log 2>&1 &
+          
+          timeout 30 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 1; done'
+          echo "✅ API is ready"
+      
+      - name: Install MCP dependencies
+        working-directory: packages/mcp
+        run: npm ci
+      
+      - name: Type check
+        working-directory: packages/mcp
+        run: npm run typecheck
+      
+      - name: Run unit tests
+        working-directory: packages/mcp
+        run: npm test
+      
+      - name: Build
+        working-directory: packages/mcp
+        run: npm run build
+      
+      - name: Run integration tests
+        working-directory: packages/mcp
+        env:
+          API_BASE_URL: http://localhost:3000
+        run: npm run test:integration
+      
+      - name: Show API logs on failure
+        if: failure()
+        run: |
+          echo "=== API Logs ==="
+          cat /tmp/api.log || echo "No API logs found"
+
   llm:
     name: LLM Package
     runs-on: ubuntu-latest
