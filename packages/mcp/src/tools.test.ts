@@ -289,15 +289,17 @@ describe('Tools', () => {
 
       const result = await getVaultInfoTool(mockApiClient);
 
-      expect(result.content[0].text).toBe('Vault is not deployed.');
+      expect(result.content[0].text).toMatch(/not deployed/i);
+      expect(result.content[0].text).toMatch(/MockUSDC|SimpleVault/);
     });
 
-    it('should say VAULT_ADDRESS/RPC must be set when the vault is not configured', async () => {
+    it('should explain the public demo has no live vault when unconfigured', async () => {
       vi.mocked(mockApiClient.getVaultInfo).mockRejectedValue(new VaultNotConfiguredError());
 
       const result = await getVaultInfoTool(mockApiClient);
 
-      expect(result.content[0].text).toBe('Vault not configured: set VAULT_ADDRESS/RPC');
+      expect(result.content[0].text).toMatch(/not deployed in this public demo/i);
+      expect(result.content[0].text).toMatch(/Anvil/);
     });
   });
 });
@@ -310,8 +312,8 @@ describe('safeErrorMessage / toolErrorResult', () => {
     expect(safeErrorMessage(new Error('MCP error -32602: MCP error -32602: bad input'))).toBe(
       'bad input'
     );
-    expect(safeErrorMessage(new VaultNotConfiguredError())).toBe(
-      'Vault not configured: set VAULT_ADDRESS/RPC'
+    expect(safeErrorMessage(new VaultNotConfiguredError())).toMatch(
+      /not deployed in this public demo/i
     );
     expect(
       safeErrorMessage(

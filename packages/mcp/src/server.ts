@@ -225,9 +225,9 @@ export function createServer(config: Config): Server {
         {
           name: 'get_vault_info',
           description:
-            'Get current state of the ERC-4626 vault deployed on Sepolia testnet. ' +
+            'Get current state of the ERC-4626 vault (MockUSDC + SimpleVault) when it is deployed locally. ' +
             'Returns vault address, total assets, total supply, share price, and block number. ' +
-            'Returns a precise error if the vault is not configured (VAULT_ADDRESS/RPC) or the read fails.',
+            'Explains that the vault is not deployed in the public demo if VAULT_ADDRESS/RPC are unset.',
           inputSchema: {
             type: 'object',
             properties: {},

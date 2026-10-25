@@ -39,7 +39,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: /auth-siwe\.spec\.ts/,
+      testIgnore: /auth-siwe\.spec\.ts|vault-unconfigured\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
@@ -49,6 +49,16 @@ export default defineConfig({
       name: 'auth',
       testMatch: /auth-siwe\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5174' },
+    },
+    {
+      name: 'unconfigured',
+      testMatch: /vault-unconfigured\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175' },
+    },
+    {
+      name: 'unconfigured-mobile',
+      testMatch: /vault-unconfigured\.spec\.ts/,
+      use: { ...devices['iPhone 12'], baseURL: 'http://localhost:5175' },
     },
   ],
   webServer: [
@@ -65,6 +75,18 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
       env: { ...envVars, VITE_ENABLE_MOCK_CONNECTOR: 'false' },
+    },
+    {
+      command: 'npm run dev -- --port 5175 --strictPort',
+      url: 'http://localhost:5175',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120000,
+      env: {
+        VITE_API_URL: process.env.VITE_API_URL || envVars.VITE_API_URL || 'http://localhost:3000',
+        VITE_VAULT_ADDRESS: '',
+        VITE_USDC_ADDRESS: '',
+        VITE_ENABLE_MOCK_CONNECTOR: 'false',
+      },
     },
   ],
 });

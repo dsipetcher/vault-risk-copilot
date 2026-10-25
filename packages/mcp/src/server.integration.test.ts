@@ -159,7 +159,7 @@ describe('MCP Server Integration Tests', () => {
     const result = await client.callTool({ name: 'get_vault_info', arguments: {} });
     expect(result.isError).toBeFalsy();
     expect(textBlocks(result)[0].text).toMatch(
-      /Vault not configured: set VAULT_ADDRESS\/RPC|Vault State \(ERC-4626\)|Vault is not deployed/
+      /not deployed|MockUSDC|Anvil|Vault State \(ERC-4626\)/i
     );
     expect(textBlocks(result)[0].text).not.toMatch(/may not be deployed or API does not support/);
   });
