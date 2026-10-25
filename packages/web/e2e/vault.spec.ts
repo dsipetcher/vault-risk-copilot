@@ -40,15 +40,11 @@ const VAULT_ABI = [
 ] as const;
 
 async function takeScreenshot(page: Page, name: string) {
-  try {
-    await page.screenshot({
-      path: join(__dirname, '../../../docs/screenshots', `${name}.png`),
-      fullPage: true,
-    });
-    console.log(`✅ Screenshot saved: ${name}.png`);
-  } catch (error) {
-    console.error(`❌ Failed to save screenshot ${name}:`, error);
-  }
+  await page.screenshot({
+    path: join(__dirname, '../../../docs/screenshots', `${name}.png`),
+    fullPage: true,
+  });
+  console.log(`✅ Screenshot saved: ${name}.png`);
 }
 
 test.describe('Vault E2E Flow', () => {

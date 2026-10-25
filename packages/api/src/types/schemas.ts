@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-// Pool snapshot from database
 export const poolSnapshotSchema = z.object({
   id: z.number(),
   pool_id: z.string().uuid(),
@@ -24,11 +23,10 @@ export const poolSnapshotSchema = z.object({
 
 export type PoolSnapshot = z.infer<typeof poolSnapshotSchema>;
 
-// Risk score with breakdown
 export const riskScoreSchema = z.object({
-  id: z.number(),
+  id: z.string().uuid(),
   pool_id: z.string().uuid(),
-  snapshot_id: z.number(),
+  snapshot_id: z.string().uuid().nullable(),
   total_risk_score: z.number(),
   risk_category: z.enum(['low', 'medium', 'high', 'critical']),
   tvl_score: z.number(),
@@ -48,12 +46,11 @@ export const riskScoreSchema = z.object({
 
 export type RiskScore = z.infer<typeof riskScoreSchema>;
 
-// Vault state from on-chain
 export const vaultStateSchema = z.object({
   vault_address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   chain_id: z.number(),
-  total_assets: z.string(), // BigInt as string
-  total_supply: z.string(), // BigInt as string
+  total_assets: z.string(),
+  total_supply: z.string(),
   share_price: z.number(),
   block_number: z.number(),
   snapshot_at: z.string().datetime(),
@@ -61,7 +58,6 @@ export const vaultStateSchema = z.object({
 
 export type VaultState = z.infer<typeof vaultStateSchema>;
 
-// API response types
 export const poolWithRiskSchema = poolSnapshotSchema.merge(
   riskScoreSchema.pick({
     total_risk_score: true,
@@ -71,7 +67,6 @@ export const poolWithRiskSchema = poolSnapshotSchema.merge(
 
 export type PoolWithRisk = z.infer<typeof poolWithRiskSchema>;
 
-// Pagination
 export const paginationQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   offset: z.coerce.number().min(0).default(0),
@@ -79,7 +74,6 @@ export const paginationQuerySchema = z.object({
 
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
-// Filters
 export const poolFiltersSchema = z.object({
   protocol: z.string().optional(),
   chain: z.string().optional(),
@@ -90,3 +84,11 @@ export const poolFiltersSchema = z.object({
 });
 
 export type PoolFilters = z.infer<typeof poolFiltersSchema>;
+
+export const llmProviderConfigSchema = z.object({
+  provider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'mock']),
+  model: z.string().optional(),
+  baseUrl: z.string().url().optional(),
+});
+
+export type LLMProviderConfig = z.infer<typeof llmProviderConfigSchema>;

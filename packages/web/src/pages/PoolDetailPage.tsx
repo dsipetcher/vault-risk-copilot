@@ -3,7 +3,9 @@ import { usePoolDetail, usePoolHistory } from '@/hooks/usePools';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { RiskBadge } from '@/components/RiskBadge';
+import { ExplainPanel } from '@/components/ExplainPanel';
 import { formatNumber, formatPercentage, formatDate } from '@/lib/utils';
+import { prepareChartData } from '@/utils/chartData';
 import type { Pool, PoolRiskScore } from '@/types/api';
 import {
   LineChart,
@@ -68,25 +70,18 @@ export function PoolDetailPage() {
         />
       </div>
 
+      {riskScore && <ExplainPanel poolId={pool.pool_id} />}
+
       {riskScore && (
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Risk Factor Breakdown
           </h2>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={[
-                { name: 'TVL Score', value: riskScore.tvl_score },
-                { name: 'TVL Volatility', value: riskScore.tvl_volatility_score },
-                { name: 'APY Volatility', value: riskScore.apy_volatility_score },
-                { name: 'Reward Ratio', value: riskScore.reward_ratio_score },
-                { name: 'IL Risk', value: riskScore.il_score },
-                { name: 'Data Age', value: riskScore.data_age_score },
-              ]}
-            >
+            <BarChart data={prepareChartData(riskScore)}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-              <YAxis />
+              <YAxis domain={[0, 100]} />
               <Tooltip />
               <Bar dataKey="value" fill="#0ea5e9" />
             </BarChart>
@@ -94,27 +89,27 @@ export function PoolDetailPage() {
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-600">TVL Score:</span>{' '}
-              <span className="font-medium">{riskScore.tvl_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.tvl_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">TVL Volatility:</span>{' '}
-              <span className="font-medium">{riskScore.tvl_volatility_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.tvl_volatility_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">APY Volatility:</span>{' '}
-              <span className="font-medium">{riskScore.apy_volatility_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.apy_volatility_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">Reward Ratio:</span>{' '}
-              <span className="font-medium">{riskScore.reward_ratio_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.reward_ratio_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">IL Score:</span>{' '}
-              <span className="font-medium">{riskScore.il_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.il_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div>
               <span className="text-gray-600">Data Age:</span>{' '}
-              <span className="font-medium">{riskScore.data_age_score.toFixed(2)}</span>
+              <span className="font-medium">{riskScore.data_age_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
           </div>
         </div>
@@ -129,11 +124,18 @@ export function PoolDetailPage() {
             <LineChart data={history}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
-                dataKey="timestamp"
+                dataKey="snapshot_at"
                 tickFormatter={(value) => formatDate(value)}
               />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
+              <YAxis 
+                yAxisId="left" 
+                tickFormatter={(value) => `$${(value / 1e6).toFixed(0)}M`}
+              />
+              <YAxis 
+                yAxisId="right" 
+                orientation="right"
+                tickFormatter={(value) => `${value.toFixed(1)}%`}
+              />
               <Tooltip
                 labelFormatter={(value) => formatDate(value)}
                 formatter={(value: number, name: string) => {

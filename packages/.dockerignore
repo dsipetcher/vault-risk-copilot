@@ -1,0 +1,14 @@
+# Ignore node_modules except what we explicitly copy
+*/node_modules
+*/dist
+*/.next
+*/coverage
+*/.turbo
+*/.env
+*/.env.local
+*/tsconfig.tsbuildinfo
+
+# Ignore everything except api and llm
+collector
+risk-service
+web

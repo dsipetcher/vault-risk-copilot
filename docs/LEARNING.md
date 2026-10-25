@@ -1152,6 +1152,97 @@ pytest -m "unit and slow"   # Both markers
 - FastAPI lifecycle management (startup/shutdown with `lifespan`)
 - Explainable ML (deterministic formulas > black-box models)
 - PostgreSQL connection pooling and prepared statements
+<<<<<<< HEAD
+
+---
+
+## Phase 6: LLM Risk Explanations - Q&A
+
+### Q1: Why bring-your-own-key (BYOK) instead of server-side API keys?
+
+**Answer:**
+**Security reasons:**
+1. **Liability:** Server storing user API keys = responsible for breaches and security incidents
+2. **Trust:** Users don't have to trust us with $$$-worth API keys
+3. **Cost control:** User controls their own LLM spend, no surprise bills
+4. **Privacy:** User's prompts/responses never touch our logs (only metadata)
+
+**Why NOT store keys server-side:**
+- **Attack surface:** Encrypted keys at rest still require decryption keys somewhere
+- **Insider risk:** Admins with DB access could extract keys
+- **Regulatory complexity:** Additional security requirements and audit obligations
+- **Vendor lock-in:** Users can switch providers without migrating data
+
+**Trade-off:**
+- ❌ **UX friction:** Users must enter key each time (unless they opt into localStorage)
+- ✅ **Zero trust:** We never see the key, can't be stolen from us
+
+**In production:** Session-based storage (memory) by default, opt-in localStorage with clear warning.
+
+---
+
+### Q2: What is SSRF and how does baseUrl validation prevent it?
+
+**Answer:**
+**SSRF (Server-Side Request Forgery):** Attacker tricks server into making HTTP requests to internal services.
+
+**Attack scenario:**
+```
+User sends: POST /api/pools/123/explain
+Body: { "provider": "ollama", "baseUrl": "http://169.254.169.254/metadata" }
+
+Server makes request to AWS metadata service (intended for EC2 instances only)
+→ Leaks IAM credentials, instance role tokens, etc.
+```
+
+**Our defense (validateBaseUrl):**
+1. **Allowlist:** Only https://api.openai.com, https://openrouter.ai, https://api.groq.com
+2. **Localhost exception:** http://localhost allowed ONLY in NODE_ENV=development (for Ollama)
+3. **Block:**
+   - Private IP ranges (10.x, 192.168.x, 172.16-31.x)
+   - Cloud metadata endpoints (169.254.169.254, fd00:ec2::254)
+   - Internal .local domains
+
+**Why this works:**
+- Attacker can't target our internal services (Redis, Postgres, Admin APIs)
+- Attacker can't scan internal network from our server
+- Legitimate Ollama users (localhost) only work in dev mode
+
+---
+
+### Q3: Why pass API key in header (X-LLM-Api-Key) instead of body?
+
+**Answer:**
+**HTTP best practice:** Credentials in headers, data in body.
+
+**Benefits:**
+1. **Separation of concerns:** Authentication (header) vs parameters (body)
+2. **Logging safety:** Most logging libraries auto-redact `Authorization`-like headers
+3. **Caching:** HTTP caches ignore headers, include body in cache key
+4. **OpenAPI clarity:** `security: [{ ApiKeyAuth: [] }]` vs custom body field
+
+**Body would be dangerous:**
+```json
+// BAD: Key in body
+{ "provider": "openai", "apiKey": "sk-secret" }
+
+// Logged by default in many frameworks
+// Sent to analytics (Sentry, Datadog)
+// Cached in Redis with full body as key
+```
+
+**Header is safer:**
+```
+X-LLM-Api-Key: sk-secret
+
+// Most loggers redact headers with "key", "token", "auth" in name
+// Not included in cache keys
+// Clear separation from business logic
+```
+
+---
+
+=======
 # React 19 & wagmi Integration: Q&A
 
 ## 1. What is React 19 and what are its main improvements?
@@ -1403,3 +1494,4 @@ We use Approach 1 for simplicity. The `setTimeout` is a workaround because block
 - [viem docs](https://viem.sh/)
 - [TanStack Query docs](https://tanstack.com/query/latest)
 - [ERC-4626 standard](https://eips.ethereum.org/EIPS/eip-4626)
+>>>>>>> origin/main

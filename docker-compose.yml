@@ -13,7 +13,6 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vault_user} -d ${POSTGRES_DB:-vault_risk_copilot}"]
       interval: 10s
@@ -22,6 +21,29 @@ services:
     restart: unless-stopped
     networks:
       - vault-network
+
+  # Database migration runner (runs once on startup)
+  migrate:
+    image: postgres:16-alpine
+    container_name: vault-risk-migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
+    volumes:
+      - ./db/migrations:/migrations:ro
+      - ./db/run-migrations.sh:/tmp/run-migrations.sh:ro
+    command: >
+      sh -c "
+        apk add --no-cache bash &&
+        cp /tmp/run-migrations.sh /run-migrations.sh &&
+        chmod +x /run-migrations.sh &&
+        MIGRATIONS_DIR=/migrations /run-migrations.sh
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vault-network
+    restart: "no"
 
   # Collector service (TypeScript)
   collector:
@@ -42,6 +64,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - vault-network
@@ -77,8 +101,8 @@ services:
   # Node.js API - Phase 4
   api:
     build:
-      context: ./packages/api
-      dockerfile: Dockerfile
+      context: ./packages
+      dockerfile: api/Dockerfile
     container_name: vault-risk-api
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
@@ -87,11 +111,17 @@ services:
       PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       risk-service:
         condition: service_healthy
     networks:

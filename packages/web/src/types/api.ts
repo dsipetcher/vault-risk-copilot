@@ -67,3 +67,40 @@ export interface ApiError {
   error: string;
   message?: string;
 }
+
+export interface RiskFactor {
+  signal: string;
+  value: string;
+  explanation: string;
+}
+
+export interface ExplanationOutput {
+  summary: string;
+  key_factors: RiskFactor[];
+  disclaimer: string;
+}
+
+export interface ExplanationMetadata {
+  provider: string;
+  model: string;
+  timestamp: string;
+  latency_ms: number | null;
+  fallback?: boolean;
+  fallback_reason?: string;
+}
+
+export interface ExplanationResponse {
+  explanation: ExplanationOutput;
+  metadata: ExplanationMetadata;
+  cached: boolean;
+}
+
+export type LLMProvider = 'mock' | 'openai' | 'openrouter' | 'groq' | 'ollama';
+
+export interface LLMSettings {
+  provider: LLMProvider;
+  model?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  rememberKey: boolean;
+}

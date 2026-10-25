@@ -180,8 +180,16 @@ export function PoolsPage() {
 }
 
 function PoolRow({ pool }: { pool: Pool }) {
+  const handleRowClick = () => {
+    window.location.href = `/pools/${pool.pool_id}`;
+  };
+
   return (
-    <tr data-testid="pool-row" className="hover:bg-gray-50">
+    <tr 
+      data-testid="pool-row" 
+      className="hover:bg-gray-50 cursor-pointer"
+      onClick={handleRowClick}
+    >
       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm">
         <div className="font-medium text-gray-900">{pool.asset_symbol}</div>
         <div className="text-gray-500">{pool.protocol}</div>

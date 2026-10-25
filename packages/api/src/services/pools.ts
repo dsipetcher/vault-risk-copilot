@@ -77,16 +77,43 @@ export async function getLatestPools(
     pool.query(dataQuery, [...params, limit, offset]),
   ]);
 
+  const pools = dataResult.rows.map((row: any) => ({
+    ...row,
+    tvl_usd: row.tvl_usd != null ? parseFloat(row.tvl_usd) : null,
+    tvl_change_7d_pct: row.tvl_change_7d_pct != null ? parseFloat(row.tvl_change_7d_pct) : null,
+    apy: row.apy != null ? parseFloat(row.apy) : null,
+    apy_base: row.apy_base != null ? parseFloat(row.apy_base) : null,
+    apy_reward: row.apy_reward != null ? parseFloat(row.apy_reward) : null,
+    apy_sigma: row.apy_sigma != null ? parseFloat(row.apy_sigma) : null,
+    apy_pct_7d: row.apy_pct_7d != null ? parseFloat(row.apy_pct_7d) : null,
+    il_risk: row.il_risk != null ? parseFloat(row.il_risk) : null,
+    total_risk_score: row.total_risk_score != null ? parseFloat(row.total_risk_score) : null,
+  })) as PoolWithRisk[];
+
   return {
-    pools: dataResult.rows as PoolWithRisk[],
+    pools,
     total: parseInt(countResult.rows[0].total, 10),
   };
 }
 
 export async function getPoolById(poolId: string): Promise<(PoolSnapshot & { risk_score: RiskScore | null }) | null> {
   const query = `
+    WITH latest_snapshot AS (
+      SELECT *
+      FROM pool_snapshots
+      WHERE pool_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+    ),
+    latest_risk_score AS (
+      SELECT *
+      FROM risk_scores
+      WHERE pool_id = $1
+      ORDER BY calculated_at DESC
+      LIMIT 1
+    )
     SELECT 
-      ps.*,
+      ls.*,
       jsonb_build_object(
         'id', rs.id,
         'pool_id', rs.pool_id,
@@ -106,15 +133,41 @@ export async function getPoolById(poolId: string): Promise<(PoolSnapshot & { ris
         'model_version', rs.model_version,
         'calculated_at', rs.calculated_at
       ) as risk_score
-    FROM pool_snapshots ps
-    LEFT JOIN risk_scores rs ON rs.snapshot_id = ps.id
-    WHERE ps.pool_id = $1
-    ORDER BY ps.created_at DESC
-    LIMIT 1
+    FROM latest_snapshot ls
+    LEFT JOIN latest_risk_score rs ON TRUE
   `;
 
   const result = await pool.query(query, [poolId]);
-  return result.rows[0] || null;
+  
+  if (!result.rows[0]) {
+    return null;
+  }
+
+  const row = result.rows[0];
+  
+  return {
+    ...row,
+    tvl_usd: row.tvl_usd != null ? parseFloat(row.tvl_usd) : null,
+    tvl_change_7d_pct: row.tvl_change_7d_pct != null ? parseFloat(row.tvl_change_7d_pct) : null,
+    apy: row.apy != null ? parseFloat(row.apy) : null,
+    apy_base: row.apy_base != null ? parseFloat(row.apy_base) : null,
+    apy_reward: row.apy_reward != null ? parseFloat(row.apy_reward) : null,
+    apy_sigma: row.apy_sigma != null ? parseFloat(row.apy_sigma) : null,
+    apy_pct_7d: row.apy_pct_7d != null ? parseFloat(row.apy_pct_7d) : null,
+    il_risk: row.il_risk != null ? parseFloat(row.il_risk) : null,
+    risk_score: row.risk_score ? {
+      ...row.risk_score,
+      total_risk_score: row.risk_score.total_risk_score != null ? parseFloat(row.risk_score.total_risk_score) : null,
+      tvl_score: row.risk_score.tvl_score != null ? parseFloat(row.risk_score.tvl_score) : null,
+      tvl_volatility_score: row.risk_score.tvl_volatility_score != null ? parseFloat(row.risk_score.tvl_volatility_score) : null,
+      apy_volatility_score: row.risk_score.apy_volatility_score != null ? parseFloat(row.risk_score.apy_volatility_score) : null,
+      reward_ratio_score: row.risk_score.reward_ratio_score != null ? parseFloat(row.risk_score.reward_ratio_score) : null,
+      stablecoin_score: row.risk_score.stablecoin_score != null ? parseFloat(row.risk_score.stablecoin_score) : null,
+      il_score: row.risk_score.il_score != null ? parseFloat(row.risk_score.il_score) : null,
+      data_age_score: row.risk_score.data_age_score != null ? parseFloat(row.risk_score.data_age_score) : null,
+      vault_score: row.risk_score.vault_score != null ? parseFloat(row.risk_score.vault_score) : null,
+    } : null,
+  };
 }
 
 export async function getPoolHistory(poolId: string, limit: number = 30): Promise<PoolSnapshot[]> {
@@ -127,5 +180,16 @@ export async function getPoolHistory(poolId: string, limit: number = 30): Promis
   `;
 
   const result = await pool.query(query, [poolId, limit]);
-  return result.rows as PoolSnapshot[];
+  
+  return result.rows.map((row: any) => ({
+    ...row,
+    tvl_usd: row.tvl_usd != null ? parseFloat(row.tvl_usd) : null,
+    tvl_change_7d_pct: row.tvl_change_7d_pct != null ? parseFloat(row.tvl_change_7d_pct) : null,
+    apy: row.apy != null ? parseFloat(row.apy) : null,
+    apy_base: row.apy_base != null ? parseFloat(row.apy_base) : null,
+    apy_reward: row.apy_reward != null ? parseFloat(row.apy_reward) : null,
+    apy_sigma: row.apy_sigma != null ? parseFloat(row.apy_sigma) : null,
+    apy_pct_7d: row.apy_pct_7d != null ? parseFloat(row.apy_pct_7d) : null,
+    il_risk: row.il_risk != null ? parseFloat(row.il_risk) : null,
+  })) as PoolSnapshot[];
 }

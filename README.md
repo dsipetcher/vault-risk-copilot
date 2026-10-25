@@ -90,6 +90,9 @@ Vault Risk Copilot is a full-stack DeFi application that:
 ### Final Vault State
 ![Final State](docs/screenshots/08-final-state.png)
 
+### AI Risk Explanation (Phase 6)
+![Explain Panel](docs/screenshots/09-explain-panel.png)
+
 ### Backend
 - **Node.js 22** + **TypeScript 5.9**
 - **Fastify 5** API with zod validation

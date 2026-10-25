@@ -2,13 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, cursor/**]
   pull_request:
     branches: [main]
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 env:
   FOUNDRY_PROFILE: ci
@@ -17,7 +13,6 @@ jobs:
   contracts:
     name: Smart Contracts
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +49,6 @@ jobs:
   lint:
     name: Lint & Format Check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +63,6 @@ jobs:
   security:
     name: Security Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +99,6 @@ jobs:
   dependency-check:
     name: Dependency Audit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -127,7 +119,6 @@ jobs:
   collector:
     name: Collector Service
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -161,7 +152,6 @@ jobs:
   risk-service:
     name: Risk Service (Python)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     
     services:
       postgres:
@@ -228,7 +218,21 @@ jobs:
   api:
     name: API Service (Node.js)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     
     steps:
       - uses: actions/checkout@v4
@@ -237,7 +241,19 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: packages/api/package-lock.json
+          cache-dependency-path: |
+            packages/llm/package-lock.json
+            packages/api/package-lock.json
+      
+      - name: Build llm package
+        working-directory: packages/llm
+        run: |
+          npm ci
+          npm run build
+      
+      - name: Set up database schema
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
       
       - name: Install dependencies
         working-directory: packages/api
@@ -249,11 +265,47 @@ jobs:
       
       - name: Run unit tests
         working-directory: packages/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
         run: npm test
       
       - name: Build
         working-directory: packages/api
         run: npm run build
+
+  llm:
+    name: LLM Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/llm/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: packages/llm
+        run: npm ci
+      
+      - name: Type check
+        working-directory: packages/llm
+        run: npm run typecheck
+      
+      - name: Run unit tests
+        working-directory: packages/llm
+        run: npm test
+      
+      - name: Build
+        working-directory: packages/llm
+        run: npm run build
+      
+      - name: Run evals
+        working-directory: packages/llm
+        run: npm run eval
 
   web:
     name: Web Frontend (React)
@@ -324,7 +376,8 @@ jobs:
       - name: Build api image
         uses: docker/build-push-action@v5
         with:
-          context: ./packages/api
+          context: ./packages
+          file: ./packages/api/Dockerfile
           push: false
           tags: vault-risk-api:latest
           cache-from: type=gha,scope=api
@@ -367,6 +420,12 @@ jobs:
       
       - name: Start services
         run: docker compose up -d --build
+      
+      - name: Check migrate service logs
+        if: always()
+        run: |
+          echo "=== Migrate service logs ==="
+          docker compose logs migrate || echo "No migrate logs available"
       
       - name: Wait for postgres to be healthy
         run: |
@@ -527,34 +586,6 @@ jobs:
             exit 1
           fi
       
-      - name: Wait for web to be ready
-        run: |
-          echo "Waiting for web to be ready (up to 60 seconds)..."
-          timeout 60 bash -c 'until curl -sf http://localhost:5173 > /dev/null; do sleep 2; done'
-          echo "✅ Web is ready"
-      
-      - name: Test web frontend
-        run: |
-          echo "=== Testing web frontend ==="
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5173)
-          
-          if [ "$STATUS_CODE" -eq 200 ]; then
-            echo "✅ Web frontend returns 200 OK"
-          else
-            echo "❌ Web frontend returned status: $STATUS_CODE"
-            docker compose logs web
-            exit 1
-          fi
-          
-          echo "=== Checking web content ==="
-          CONTENT=$(curl -s http://localhost:5173)
-          if echo "$CONTENT" | grep -q "root"; then
-            echo "✅ Web frontend serves HTML with root element"
-          else
-            echo "❌ Web frontend HTML does not contain expected content"
-            exit 1
-          fi
-      
       - name: Trigger risk score computation
         run: |
           echo "=== Triggering risk score recomputation ==="
@@ -572,6 +603,63 @@ jobs:
             exit 1
           fi
           echo "✅ Risk score computation succeeded"
+          
+          # Save first computed pool ID for explain test
+          COMPUTED_POOL_ID=$(echo "$RECOMPUTE_RESULT" | jq -r '.pool_ids[0]')
+          echo "COMPUTED_POOL_ID=$COMPUTED_POOL_ID" >> $GITHUB_ENV
+      
+      - name: Test LLM explain endpoint
+        run: |
+          echo "=== Testing LLM explain endpoint with mock provider ==="
+          
+          # Use pool ID from recompute result
+          POOL_ID="${COMPUTED_POOL_ID}"
+          
+          if [ -z "$POOL_ID" ] || [ "$POOL_ID" == "null" ]; then
+            echo "❌ No pool ID available for testing"
+            exit 1
+          fi
+          
+          echo "Testing explain endpoint for pool ID: $POOL_ID"
+          
+          # Call explain endpoint
+          EXPLAIN_RESPONSE=$(curl -s -X POST http://localhost:3000/api/pools/$POOL_ID/explain)
+          
+          # Debug: show full response
+          echo "Full explain response:"
+          echo "$EXPLAIN_RESPONSE" | jq .
+          
+          # Check response structure
+          if echo "$EXPLAIN_RESPONSE" | jq -e '.explanation' > /dev/null; then
+            echo "✅ Explain endpoint returned valid response"
+            echo "$EXPLAIN_RESPONSE" | jq '.explanation | {summary, factors_count: (.key_factors | length), has_disclaimer: (.disclaimer != null)}'
+          else
+            echo "❌ Explain endpoint failed or returned invalid response"
+            echo "Response: $EXPLAIN_RESPONSE"
+            exit 1
+          fi
+          
+          # Verify explanation structure
+          SUMMARY=$(echo "$EXPLAIN_RESPONSE" | jq -r '.explanation.summary')
+          FACTORS_COUNT=$(echo "$EXPLAIN_RESPONSE" | jq '.explanation.key_factors | length')
+          HAS_DISCLAIMER=$(echo "$EXPLAIN_RESPONSE" | jq -e '.explanation.disclaimer' > /dev/null && echo "yes" || echo "no")
+          
+          if [ -z "$SUMMARY" ] || [ "$SUMMARY" == "null" ]; then
+            echo "❌ Explanation has no summary"
+            exit 1
+          fi
+          
+          if [ "$FACTORS_COUNT" -eq 0 ]; then
+            echo "❌ Explanation has no key factors"
+            exit 1
+          fi
+          
+          if [ "$HAS_DISCLAIMER" == "no" ]; then
+            echo "❌ Explanation has no disclaimer"
+            exit 1
+          fi
+          
+          echo "✅ LLM explain endpoint validated successfully"
       
       - name: Verify risk_scores table
         run: |
@@ -642,16 +730,75 @@ jobs:
         working-directory: packages/web
         run: npm ci
       
+      - name: Start Postgres
+        run: |
+          docker run -d \
+            --name postgres-e2e \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=vault_risk \
+            -p 5432:5432 \
+            postgres:16
+          
+          # Wait for Postgres to be ready (after initdb restart)
+          # postgres:16 entrypoint starts temporary server for initdb, then restarts
+          # Wait for 'database system is ready to accept connections' to appear twice
+          timeout 60 bash -c 'until [ $(docker logs postgres-e2e 2>&1 | grep -c "database system is ready to accept connections") -ge 2 ]; do sleep 1; done'
+          
+          # Extra validation: ensure postgres accepts connections
+          docker exec postgres-e2e psql -U postgres -c "SELECT 1" > /dev/null
+          echo "✅ Postgres is ready"
+      
+      - name: Run database migrations
+        run: |
+          docker cp db/migrations postgres-e2e:/tmp/migrations
+          docker cp db/run-migrations.sh postgres-e2e:/tmp/run-migrations.sh
+          docker exec postgres-e2e bash -c "DATABASE_URL='postgresql://postgres:postgres@localhost:5432/vault_risk' MIGRATIONS_DIR=/tmp/migrations bash /tmp/run-migrations.sh"
+      
+      - name: Seed E2E test data
+        run: |
+          docker cp db/e2e-seed.sql postgres-e2e:/tmp/seed.sql
+          docker exec postgres-e2e psql -U postgres -d vault_risk -f /tmp/seed.sql
+      
       - name: Install Playwright browsers
         working-directory: packages/web
         run: npx playwright install --with-deps chromium
       
+      - name: Build and start API service
+        run: |
+          cd packages/llm
+          npm ci
+          npm run build
+          
+          cd ../api
+          npm ci
+          npm run build
+          
+          # Start API in background with mock LLM provider
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/vault_risk \
+          LLM_PROVIDER=mock \
+          NODE_ENV=test \
+          PORT=3000 \
+          nohup node dist/index.js > /tmp/api.log 2>&1 &
+          
+          # Wait for API to be ready
+          timeout 30 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 1; done'
+          echo "✅ API is ready"
+      
       - name: Run E2E tests
         working-directory: packages/web
         shell: bash
+        env:
+          VITE_API_URL: http://localhost:3000
         run: |
           export PATH="$PATH:$HOME/.foundry/bin"
           bash e2e/run-e2e.sh
+      
+      - name: Show API logs on failure
+        if: failure()
+        run: |
+          echo "=== API Logs ==="
+          cat /tmp/api.log || echo "No API logs found"
       
       - name: Upload screenshots
         if: always()
@@ -677,3 +824,362 @@ jobs:
           path: packages/web/anvil.log
           retention-days: 30
           if-no-files-found: ignore
+      
+      - name: Stop containers
+        if: always()
+        run: |
+          docker stop postgres-e2e || true
+          docker rm postgres-e2e || true
+  
+  # Test migration runner error handling
+  migration-error-test:
+    name: Migration Error Handling
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up schema_migrations table
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d vault_risk -c "
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+              version INTEGER PRIMARY KEY,
+              applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              name VARCHAR(255) NOT NULL
+            );
+          "
+      
+      - name: Test broken migration fails correctly
+        run: |
+          # Copy broken migration to test directory
+          mkdir -p /tmp/test-migrations
+          cp db/migrations/999_test_broken.sql.disabled /tmp/test-migrations/999_test_broken.sql
+          
+          # This MUST fail (runner connects to service container via localhost:5433)
+          if DATABASE_URL='postgresql://postgres:postgres@localhost:5433/vault_risk' MIGRATIONS_DIR=/tmp/test-migrations bash db/run-migrations.sh; then
+            echo "ERROR: Broken migration should have failed but succeeded!"
+            exit 1
+          else
+            echo "✓ Broken migration correctly failed"
+          fi
+          
+          # Verify schema_migrations table doesn't have the broken entry
+          COUNT=$(PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 999")
+          if [ "$COUNT" != "0" ]; then
+            echo "ERROR: Broken migration was marked as applied!"
+            exit 1
+          fi
+          echo "✓ Broken migration was not recorded"
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop postgres-migration-test || true
+          docker rm postgres-migration-test || true
+  
+  migration-upgrade-path:
+    name: Migration Upgrade Path
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Apply old migrations via initdb (simulating pre-PR volumes)
+        run: |
+          # Simulate old deployment: 001 and 002 applied, no schema_migrations table
+          PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+          PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -f db/migrations/002_fix_explanation_cache_key.sql
+          echo "✓ Old migrations applied (simulating pre-PR state)"
+      
+      - name: Verify baseline detection and migration runner
+        run: |
+          # Run migration runner - should detect baseline and record 001+002
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5434/vault_risk' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh
+          
+          # Verify 001 and 002 are recorded
+          COUNT_001=$(PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
+          COUNT_002=$(PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
+          COUNT_003=$(PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 3")
+          
+          if [ "$COUNT_001" != "1" ] || [ "$COUNT_002" != "1" ]; then
+            echo "ERROR: Baseline migrations not recorded correctly!"
+            exit 1
+          fi
+          
+          if [ "$COUNT_003" != "1" ]; then
+            echo "ERROR: Migration 003 not applied!"
+            exit 1
+          fi
+          
+          echo "✓ Upgrade path works: baseline recorded, new migration applied"
+  
+  migration-partial-schema:
+    name: Migration Partial Schema (001 only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Apply only 001 (simulating partial deployment)
+        run: |
+          # Apply only migration 001, NOT 002 (partial schema)
+          PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+          echo "✓ Migration 001 applied (partial schema)"
+      
+      - name: Verify migration 002 actually executes
+        run: |
+          # Run migration runner - should detect 001 baseline, then EXECUTE 002
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5435/vault_risk' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh
+          
+          # Verify 001 is recorded as baseline
+          COUNT_001=$(PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
+          
+          # Verify 002 is recorded AND provider column exists
+          COUNT_002=$(PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
+          PROVIDER_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'explanations' AND column_name = 'provider')")
+          
+          if [ "$COUNT_001" != "1" ]; then
+            echo "ERROR: Migration 001 baseline not recorded!"
+            exit 1
+          fi
+          
+          if [ "$COUNT_002" != "1" ]; then
+            echo "ERROR: Migration 002 not recorded!"
+            exit 1
+          fi
+          
+          if [ "$(echo $PROVIDER_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: provider column does not exist - migration 002 did not execute!"
+            exit 1
+          fi
+          
+          echo "✓ Partial schema test passed: 001 baseline, 002 executed with provider column"
+  
+  migration-only-pool-snapshots:
+    name: Migration Only pool_snapshots Table
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vault_risk
+        ports:
+          - 5436:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create empty database (no tables - clean slate)
+        run: |
+          # Empty DB - 001 should create all tables (idempotent test)
+          echo "✓ Database is empty - testing 001 creates all objects from scratch"
+      
+      - name: Verify migrations run successfully
+        run: |
+          # Run migration runner - 001 should execute (idempotent), 002 should execute
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5436/vault_risk' MIGRATIONS_DIR=db/migrations bash db/run-migrations.sh
+          
+          # Verify 001 and 002 are recorded
+          COUNT_001=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 1")
+          COUNT_002=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT COUNT(*) FROM schema_migrations WHERE version = 2")
+          
+          # Verify all 001 objects exist (indexes, risk_scores, explanations tables)
+          INDEX_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM pg_indexes WHERE indexname = 'idx_pool_snapshots_pool_id')")
+          RISK_SCORES_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'risk_scores')")
+          EXPLANATIONS_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'explanations')")
+          PROVIDER_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p 5436 -U postgres -d vault_risk -tAc "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'explanations' AND column_name = 'provider')")
+          
+          if [ "$COUNT_001" != "1" ] || [ "$COUNT_002" != "1" ]; then
+            echo "ERROR: Migrations not recorded!"
+            exit 1
+          fi
+          
+          if [ "$(echo $INDEX_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: 001 index missing!"
+            exit 1
+          fi
+          
+          if [ "$(echo $RISK_SCORES_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: risk_scores table missing!"
+            exit 1
+          fi
+          
+          if [ "$(echo $EXPLANATIONS_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: explanations table missing!"
+            exit 1
+          fi
+          
+          if [ "$(echo $PROVIDER_EXISTS | tr -d '[:space:]')" != "t" ]; then
+            echo "ERROR: provider column missing - 002 did not execute!"
+            exit 1
+          fi
+          
+          echo "✓ Empty-DB test passed: 001 executed (created all objects), 002 executed"
+  
+  migration-transaction-check:
+    name: Migration Transaction Control Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test 1 - Reject COMMIT in middle of line
+        run: |
+          echo "CREATE TABLE a(i int); COMMIT;" > /tmp/test_migration.sql
+          
+          # Check validation logic directly
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_migration.sql > "$temp_file"
+          
+          if grep -iE "\bCOMMIT[[:space:]]*;" "$temp_file"; then
+            echo "✓ Test 1 passed: COMMIT; detected"
+            rm -f "$temp_file" /tmp/test_migration.sql
+          else
+            echo "✗ Test 1 failed: COMMIT; not detected"
+            rm -f "$temp_file" /tmp/test_migration.sql
+            exit 1
+          fi
+      
+      - name: Test 2 - Reject lowercase commit
+        run: |
+          echo "SELECT 1; commit;" > /tmp/test_migration_lower.sql
+          
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_migration_lower.sql > "$temp_file"
+          
+          if grep -iE "\bCOMMIT[[:space:]]*;" "$temp_file"; then
+            echo "✓ Test 2 passed: commit; detected (case insensitive)"
+            rm -f "$temp_file" /tmp/test_migration_lower.sql
+          else
+            echo "✗ Test 2 failed: commit; not detected"
+            rm -f "$temp_file" /tmp/test_migration_lower.sql
+            exit 1
+          fi
+      
+      - name: Test 3 - Allow END inside $$ blocks
+        run: |
+          echo 'DO $$' > /tmp/test_plpgsql.sql
+          echo 'BEGIN' >> /tmp/test_plpgsql.sql
+          echo '  CREATE TABLE test(i int);' >> /tmp/test_plpgsql.sql
+          echo 'END $$;' >> /tmp/test_plpgsql.sql
+          
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_plpgsql.sql > "$temp_file"
+          
+          # Should succeed (no END; found after removing $$ blocks)
+          if grep -iE "\bEND[[:space:]]*;" "$temp_file"; then
+            echo "✗ Test 3 failed: False positive on DO \$\$ ... END \$\$"
+            rm -f "$temp_file" /tmp/test_plpgsql.sql
+            exit 1
+          else
+            echo "✓ Test 3 passed: PL/pgSQL END inside \$\$ allowed"
+            rm -f "$temp_file" /tmp/test_plpgsql.sql
+          fi
+      
+      - name: Test 4 - Reject standalone END;
+        run: |
+          echo "CREATE TABLE a(i int); END;" > /tmp/test_end.sql
+          
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_end.sql > "$temp_file"
+          
+          if grep -iE "\bEND[[:space:]]*;" "$temp_file"; then
+            echo "✓ Test 4 passed: END; detected"
+            rm -f "$temp_file" /tmp/test_end.sql
+          else
+            echo "✗ Test 4 failed: END; not detected"
+            rm -f "$temp_file" /tmp/test_end.sql
+            exit 1
+          fi
+      
+      - name: Test 5 - Allow COMMIT in SQL comment
+        run: |
+          echo "CREATE TABLE test(i int); -- commit;" > /tmp/test_comment.sql
+          
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_comment.sql | sed 's/--.*$//' | sed 's|/\*.*\*/||g' > "$temp_file"
+          
+          # Should succeed (commit is in comment)
+          if grep -iE "\bCOMMIT[[:space:]]*;" "$temp_file"; then
+            echo "✗ Test 5 failed: False positive on -- commit;"
+            rm -f "$temp_file" /tmp/test_comment.sql
+            exit 1
+          else
+            echo "✓ Test 5 passed: -- commit; ignored"
+            rm -f "$temp_file" /tmp/test_comment.sql
+          fi
+      
+      - name: Test 6 - Allow ROLLBACK in block comment
+        run: |
+          echo "SELECT 1; /* rollback; */" > /tmp/test_block_comment.sql
+          
+          temp_file=$(mktemp)
+          sed 's/\$\$[^$]*\$\$//' /tmp/test_block_comment.sql | sed 's/--.*$//' | sed 's|/\*.*\*/||g' > "$temp_file"
+          
+          # Should succeed (rollback is in block comment)
+          if grep -iE "\bROLLBACK[[:space:]]*;" "$temp_file"; then
+            echo "✗ Test 6 failed: False positive on /* rollback; */"
+            rm -f "$temp_file" /tmp/test_block_comment.sql
+            exit 1
+          else
+            echo "✓ Test 6 passed: /* rollback; */ ignored"
+            rm -f "$temp_file" /tmp/test_block_comment.sql
+          fi

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatNumber, formatPercentage, shortenAddress, getRiskColor } from '@/lib/utils';
+import { formatNumber, formatPercentage, formatDate, shortenAddress, getRiskColor } from '@/lib/utils';
 
 describe('formatNumber', () => {
   it('formats large numbers with B suffix', () => {
@@ -32,6 +32,32 @@ describe('formatPercentage', () => {
   it('formats percentages with custom decimals', () => {
     expect(formatPercentage(5.5, 0)).toBe('6%');
     expect(formatPercentage(12.345, 3)).toBe('12.345%');
+  });
+});
+
+describe('formatDate', () => {
+  it('formats Date objects', () => {
+    const date = new Date('2024-03-15T10:30:00Z');
+    const formatted = formatDate(date);
+    expect(formatted).toMatch(/Mar 1[45], 2024/); // Time zone dependent
+  });
+
+  it('formats ISO date strings from PostgreSQL', () => {
+    const isoString = '2024-03-15T10:30:00.000Z';
+    const formatted = formatDate(isoString);
+    expect(formatted).toMatch(/Mar 1[45], 2024/);
+  });
+
+  it('formats timestamp strings', () => {
+    const timestamp = '2024-10-24T18:20:00Z';
+    const formatted = formatDate(timestamp);
+    expect(formatted).toMatch(/Oct 2[45], 2024/);
+  });
+
+  it('does not return Invalid Date for valid dates', () => {
+    const date = new Date('2024-03-15T10:30:00Z');
+    const formatted = formatDate(date);
+    expect(formatted).not.toContain('Invalid');
   });
 });
 

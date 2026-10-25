@@ -1,0 +1,12 @@
+-- This migration is intentionally broken for testing purposes
+-- Rename to .sql (remove .disabled) to test migration runner error handling
+
+CREATE TABLE nonexistent_parent (
+  id UUID PRIMARY KEY
+);
+
+-- This will fail: references nonexistent table
+ALTER TABLE explanations 
+ADD CONSTRAINT fk_broken 
+FOREIGN KEY (nonexistent_column) 
+REFERENCES nonexistent_table(id);
