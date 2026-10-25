@@ -184,8 +184,10 @@ jobs:
           pip install -r requirements-dev.txt
       
       - name: Set up database schema
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+        working-directory: .
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
+        run: bash db/run-migrations.sh
       
       - name: Lint with ruff
         working-directory: packages/risk-service
@@ -252,8 +254,10 @@ jobs:
           npm run build
       
       - name: Set up database schema
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+        working-directory: .
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
+        run: bash db/run-migrations.sh
       
       - name: Install dependencies
         working-directory: packages/api
