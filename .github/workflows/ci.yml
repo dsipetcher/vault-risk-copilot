@@ -421,12 +421,16 @@ jobs:
           EOF
       
       - name: Start services
+        env:
+          LLM_KEY_ENCRYPTION_KEY: ${{ secrets.LLM_KEY_ENCRYPTION_KEY || '' }}
         run: |
-          export LLM_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)
+          if [ -z "$LLM_KEY_ENCRYPTION_KEY" ]; then
+            export LLM_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)
+          fi
           export SIWE_DOMAIN=localhost
           export SIWE_URI=http://localhost:3000
           export SIWE_CHAIN_ID=1
-          docker compose up -d --build
+          docker compose up -d --build --build
       
       - name: Check migrate service logs
         if: always()
