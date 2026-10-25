@@ -1,17 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits, formatUnits, type Address } from 'viem';
-import { ErrorMessage } from '@/components/ErrorMessage';
+import { VaultUnavailable } from '@/components/VaultUnavailable';
+import { isVaultConfigured, ZERO_ADDRESS } from '@/lib/vault-config';
 import { shortenAddress, formatNumber } from '@/lib/utils';
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || ZERO_ADDRESS) as `0x${string}`;
 const USDC_ADDRESS = (import.meta.env.VITE_USDC_ADDRESS || ZERO_ADDRESS) as `0x${string}`;
-const VAULT_CONFIGURED =
-  Boolean(import.meta.env.VITE_VAULT_ADDRESS) &&
-  Boolean(import.meta.env.VITE_USDC_ADDRESS) &&
-  VAULT_ADDRESS !== ZERO_ADDRESS &&
-  USDC_ADDRESS !== ZERO_ADDRESS;
 
 const VAULT_ABI = [
   {
@@ -113,6 +108,13 @@ const ERC20_ABI = [
 ] as const;
 
 export function VaultPage() {
+  if (!isVaultConfigured()) {
+    return <VaultUnavailable />;
+  }
+  return <ConfiguredVaultPage />;
+}
+
+function ConfiguredVaultPage() {
   const { address, isConnected, chain } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
@@ -126,7 +128,7 @@ export function VaultPage() {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    query: { enabled: VAULT_CONFIGURED && isConnected && !!address },
+    query: { enabled: isConnected && !!address },
   });
 
   const { data: sharesBalance, refetch: refetchSharesBalance } = useReadContract({
@@ -134,7 +136,7 @@ export function VaultPage() {
     abi: VAULT_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    query: { enabled: VAULT_CONFIGURED && isConnected && !!address },
+    query: { enabled: isConnected && !!address },
   });
 
   const { data: sharesInAssets } = useReadContract({
@@ -142,36 +144,33 @@ export function VaultPage() {
     abi: VAULT_ABI,
     functionName: 'convertToAssets',
     args: sharesBalance ? [sharesBalance] : undefined,
-    query: { enabled: VAULT_CONFIGURED && isConnected && !!address && !!sharesBalance },
+    query: { enabled: isConnected && !!address && !!sharesBalance },
   });
 
   const { data: totalAssets } = useReadContract({
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: 'totalAssets',
-    query: { enabled: VAULT_CONFIGURED },
   });
 
   const { data: totalSupply } = useReadContract({
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: 'totalSupply',
-    query: { enabled: VAULT_CONFIGURED },
   });
 
   const { data: vaultDecimals } = useReadContract({
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: 'decimals',
-    query: { enabled: VAULT_CONFIGURED },
   });
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: address && VAULT_ADDRESS ? [address, VAULT_ADDRESS] : undefined,
-    query: { enabled: VAULT_CONFIGURED && isConnected && !!address },
+    args: address ? [address, VAULT_ADDRESS] : undefined,
+    query: { enabled: isConnected && !!address },
   });
 
   const { writeContract: approve, data: approveHash, isPending: isApproving } = useWriteContract();
@@ -279,12 +278,6 @@ export function VaultPage() {
   const needsApproval = depositAmount && allowance !== undefined
     ? parseUnits(depositAmount, 6) > allowance
     : false;
-
-  if (!VAULT_CONFIGURED) {
-    return (
-      <ErrorMessage message="Vault or USDC address not configured. Please set VITE_VAULT_ADDRESS and VITE_USDC_ADDRESS." />
-    );
-  }
 
   return (
     <div className="space-y-6">

@@ -11,7 +11,7 @@
 
 **THIS IS A LEARNING PROJECT - NOT FINANCIAL ADVICE**
 
-- 🧪 **Testnet only** - Deployed on Sepolia, no mainnet usage
+- 🧪 **Testnet / local Anvil only** - Not deployed to a public Sepolia instance; no mainnet usage
 - 📚 **Educational purpose** - Built to demonstrate technical skills
 - 🚫 **No financial advice** - Risk signals are for learning, not investment decisions
 - 💸 **No real funds** - Never use with production wallets or mainnet
@@ -23,7 +23,7 @@
 Vault Risk Copilot is a full-stack DeFi application that:
 
 1. **📊 Analyzes Real DeFi Pools** - Fetches data from live protocols (read-only) and calculates explainable risk signals
-2. **🏦 Custom ERC-4626 Vault** - Implements a simple yield vault on Sepolia testnet with security best practices
+2. **🏦 Custom ERC-4626 Vault** - `MockUSDC` + `SimpleVault` for local Anvil (not deployed publicly)
 3. **🤖 AI-Powered Explanations** - Uses LLMs to explain risk factors in plain language (structured, validated output)
 4. **🔌 MCP Integration** - Exposes read-only tools for AI agents to query pool risk and vault state
 
@@ -35,7 +35,7 @@ Vault Risk Copilot is a full-stack DeFi application that:
 │ (Vite,      │               │ (TypeScript, │         │ Service        │
 │ wagmi/viem) │               │ zod, OpenAPI)│         │ (FastAPI)      │
 └──────┬──────┘               └──┬────┬──────┘         └───────┬────────┘
-       │ wallet (Sepolia)        │    │ SQL                    │ SQL
+       │ wallet (Anvil/Sepolia)  │    │ SQL                    │ SQL
        ▼                         │    ▼                        ▼
 ┌─────────────┐   viem read     │ ┌──────────────────────────────┐
 │ ERC-4626    │ ◄───────────────┘ │ PostgreSQL                   │
@@ -169,6 +169,32 @@ docker compose exec postgres psql -U vault_user -d vault_risk_copilot \
 
 **SIWE defaults** match the web app (`localhost:5173`, Anvil `31337` and Sepolia `11155111`). Connect a wallet on the UI and sign in — no extra env is required for local login.
 
+### Local ERC-4626 vault (Anvil)
+
+The public GitHub Pages demo does **not** include a live vault. `MockUSDC` and `SimpleVault` are not deployed to Sepolia.
+
+To deposit and redeem locally:
+
+1. Start the stack with `docker compose up --build` (API + web).
+2. In another terminal, run Anvil: `anvil --port 8545`.
+3. Deploy from [`contracts/`](./contracts):
+
+```bash
+cd contracts
+export DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+forge script script/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast
+```
+
+4. Set `VITE_VAULT_ADDRESS` and `VITE_USDC_ADDRESS` (or `VAULT_ADDRESS` / `MOCK_USDC_ADDRESS` for compose) to the printed addresses and reload the web app.
+
+Or run the Playwright helper, which starts Anvil, deploys, and writes `.env.e2e.local`:
+
+```bash
+cd packages/web/e2e && ./run-e2e.sh
+```
+
+Contract source: [`contracts/src/SimpleVault.sol`](./contracts/src/SimpleVault.sol) and [`contracts/src/MockUSDC.sol`](./contracts/src/MockUSDC.sol).
+
 **Groq:** set `LLM_PROVIDER=groq` and `LLM_API_KEY=...` (or paste the key in LLM Settings). You do not need to set a model; the default is `openai/gpt-oss-120b`.
 
 **MCP Server** (run separately after the API is up):
@@ -244,14 +270,11 @@ The stack through MCP is implemented and covered by GitHub Actions (unit, integr
 
 **See:** [docs/phases/](./docs/phases/) for historical phase notes.
 
-## Smart Contracts on Sepolia
+## Smart Contracts
 
-Deployed contracts (Sepolia testnet):
+`MockUSDC` and `SimpleVault` are **not deployed publicly** (no Sepolia addresses). They exist for local Anvil and CI.
 
-| Contract | Address | Etherscan |
-|----------|---------|-----------|
-| MockUSDC | `TBD` | [View](https://sepolia.etherscan.io/address/TBD) |
-| SimpleVault | `TBD` | [View](https://sepolia.etherscan.io/address/TBD) |
+To run them locally, follow [Local ERC-4626 vault (Anvil)](#local-erc-4626-vault-anvil). Source lives in [`contracts/`](./contracts).
 
 ## Features
 
@@ -310,7 +333,7 @@ The risk scoring system evaluates pools based on:
 - `get_pool_risk` - Retrieve risk score breakdown and 7-day history
 - `compare_pools` - Compare 2-5 pools side-by-side
 - `explain_pool_risk` - Get AI explanation of pool risk (LLM-powered or fallback)
-- `get_vault_info` - Query Sepolia vault state (TVL, share price)
+- `get_vault_info` - Query local vault state when deployed (TVL, share price); explains the public-demo gap otherwise
 
 **Resources:**
 - `methodology://risk-signals` - Risk model documentation

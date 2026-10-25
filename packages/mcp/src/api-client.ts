@@ -23,8 +23,11 @@ export class ApiError extends Error {
   }
 }
 
+export const VAULT_NOT_CONFIGURED_MESSAGE =
+  'The ERC-4626 vault (MockUSDC + SimpleVault) is not deployed in this public demo. Run it locally with docker compose and Anvil; see the README.';
+
 export class VaultNotConfiguredError extends Error {
-  constructor(message = 'Vault not configured: set VAULT_ADDRESS/RPC') {
+  constructor(message = VAULT_NOT_CONFIGURED_MESSAGE) {
     super(message);
     this.name = 'VaultNotConfiguredError';
   }

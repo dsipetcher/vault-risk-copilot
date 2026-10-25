@@ -175,7 +175,7 @@ Get ERC-4626 vault state (if available).
 
 **Output:**
 - Vault address, chain ID, total assets, total supply, share price, block number
-- Returns "Vault not configured: set VAULT_ADDRESS/RPC" when the API is missing vault env, or a real error if the read fails
+- Explains that the vault is not deployed in the public demo (run locally with docker compose + Anvil) when the API is missing vault env, or a real error if the read fails
 
 ---
 

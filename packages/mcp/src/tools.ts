@@ -288,7 +288,7 @@ export async function getVaultInfoTool(apiClient: ApiClient) {
       content: [
         {
           type: 'text' as const,
-          text: 'Vault is not deployed.',
+          text: 'The ERC-4626 vault (MockUSDC + SimpleVault) is not deployed in this environment.',
         },
       ],
     };

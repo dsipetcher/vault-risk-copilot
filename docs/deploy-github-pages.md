@@ -10,6 +10,7 @@ The web app is a static SPA, so it can live on GitHub Pages while the API runs e
 - `VITE_BASE=/<repo>/` sets the Vite base path; the router uses it as `basename`.
 - `404.html` is a copy of `index.html` so deep links work.
 - Every API request carries `ngrok-skip-browser-warning: 1` to bypass ngrok's interstitial.
+- The Vault page is a placeholder: contracts are not deployed to Sepolia. Deposit/redeem work locally (see the README Anvil section).
 
 ## Backend (.env for the API host)
 ```

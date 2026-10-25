@@ -299,7 +299,7 @@ describe('ApiClient', () => {
       );
 
       const client = new ApiClient(mockConfig);
-      await expect(client.getVaultInfo()).rejects.toThrow('Vault not configured: set VAULT_ADDRESS/RPC');
+      await expect(client.getVaultInfo()).rejects.toThrow(/not deployed in this public demo/i);
     });
   });
 

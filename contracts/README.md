@@ -119,14 +119,9 @@ pip install slither-analyzer
 slither .
 ```
 
-## Deployment Addresses (Sepolia)
+## Deployment Addresses
 
-Will be updated after deployment.
-
-| Contract | Address | Etherscan |
-|----------|---------|-----------|
-| MockUSDC | TBD | TBD |
-| SimpleVault | TBD | TBD |
+These contracts are **not deployed publicly**. Use local Anvil (see the root README [Local ERC-4626 vault](../README.md#local-erc-4626-vault-anvil) section) or `packages/web/e2e/run-e2e.sh`.
 
 ## Interacting with Contracts
 
