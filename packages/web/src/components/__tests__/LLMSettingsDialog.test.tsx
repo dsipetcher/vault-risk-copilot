@@ -210,7 +210,7 @@ describe('LLMSettingsDialog', () => {
     vi.mocked(llmStorage.providerRequiresApiKey).mockReturnValue(false);
     
       const mockApi = await import('@/lib/api');
-      vi.mocked(mockApi.apiClient.explainRisk).mockRejectedValue(
+      vi.mocked(mockApi.apiClient.validateLlm).mockRejectedValue(
         new Error('Invalid API key')
       );
 
@@ -221,6 +221,21 @@ describe('LLMSettingsDialog', () => {
     await waitFor(() => {
       expect(screen.getByText('✗ Connection failed')).toBeInTheDocument();
       expect(screen.getByTestId('test-error')).toHaveTextContent('Invalid API key');
+    });
+  });
+
+  it('shows a fallback error when the provider returns no message', async () => {
+    vi.mocked(llmStorage.providerRequiresApiKey).mockReturnValue(false);
+
+    const mockApi = await import('@/lib/api');
+    vi.mocked(mockApi.apiClient.validateLlm).mockRejectedValue(new Error(''));
+
+    render(<LLMSettingsDialog isOpen={true} onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByTestId('test-connection-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('test-error')).toHaveTextContent('Connection test failed');
     });
   });
 });

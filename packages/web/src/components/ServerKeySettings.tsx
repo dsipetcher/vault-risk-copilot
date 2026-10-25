@@ -14,6 +14,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [stored, setStored] = useState<{ provider: string; maskedKey: string }[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   async function loadStored() {
     const res = await fetch(`${API_BASE_URL}/api/llm-credentials`, { credentials: 'include' });
@@ -98,7 +99,6 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
           <option value="openrouter">OpenRouter</option>
           <option value="groq">Groq</option>
           <option value="ollama">Ollama</option>
@@ -123,8 +123,57 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
       {stored.length > 0 && (
         <ul className="text-xs text-gray-700" data-testid="stored-keys-list">
           {stored.map((c) => (
-            <li key={c.provider} data-testid={`stored-key-${c.provider}`}>
-              {c.provider}: {c.maskedKey}
+            <li key={c.provider} className="flex items-center justify-between gap-2 py-1" data-testid={`stored-key-${c.provider}`}>
+              <span>
+                {c.provider}: {c.maskedKey}
+              </span>
+              {confirmDelete === c.provider ? (
+                <span className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid={`confirm-delete-${c.provider}`}
+                    onClick={async () => {
+                      setIsLoading(true);
+                      setError(null);
+                      try {
+                        const response = await fetch(
+                          `${API_BASE_URL}/api/llm-credentials?provider=${encodeURIComponent(c.provider)}`,
+                          { method: 'DELETE', credentials: 'include' }
+                        );
+                        if (!response.ok) {
+                          const data = await response.json();
+                          throw new Error(data.message || data.error || 'Failed to delete credential');
+                        }
+                        setConfirmDelete(null);
+                        await loadStored();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Failed to delete credential');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    className="text-red-600 hover:underline"
+                  >
+                    Confirm delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(null)}
+                    className="text-gray-500 hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  data-testid={`delete-key-${c.provider}`}
+                  onClick={() => setConfirmDelete(c.provider)}
+                  className="text-red-600 hover:underline"
+                >
+                  Delete
+                </button>
+              )}
             </li>
           ))}
         </ul>

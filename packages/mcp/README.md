@@ -36,7 +36,7 @@ X_LLM_MODEL=openai/gpt-oss-120b  # optional
 # HTTP transport (only with --transport http). Token is REQUIRED,
 # host must be loopback (localhost / 127.0.0.1 / ::1).
 HTTP_PORT=3001
-HTTP_HOST=localhost
+HTTP_HOST=127.0.0.1
 HTTP_AUTH_TOKEN=your-secret-token
 ```
 
@@ -175,7 +175,7 @@ Get ERC-4626 vault state (if available).
 
 **Output:**
 - Vault address, chain ID, total assets, total supply, share price, block number
-- Returns "not available" message if vault is not deployed or API endpoint is not implemented
+- Returns "Vault not configured: set VAULT_ADDRESS/RPC" when the API is missing vault env, or a real error if the read fails
 
 ---
 

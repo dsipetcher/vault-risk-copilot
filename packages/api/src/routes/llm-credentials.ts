@@ -13,7 +13,7 @@ import { env } from '../config.js';
 
 // Single source of truth for both the zod check and the Fastify JSON schema
 // (Fastify validates schema.body first, so the two lists must never drift).
-const STORABLE_PROVIDERS = ['openai', 'openrouter', 'groq', 'ollama', 'anthropic'] as const;
+const STORABLE_PROVIDERS = ['openai', 'openrouter', 'groq', 'ollama'] as const;
 
 const putCredentialSchema = z.object({
   provider: z.enum(STORABLE_PROVIDERS),
@@ -22,7 +22,6 @@ const putCredentialSchema = z.object({
 
 const PROVIDER_BASE_URLS: Record<string, string> = {
   openai: 'https://api.openai.com/v1',
-  anthropic: 'https://api.anthropic.com/v1',
   groq: 'https://api.groq.com/openai/v1',
   openrouter: 'https://openrouter.ai/api/v1',
 };

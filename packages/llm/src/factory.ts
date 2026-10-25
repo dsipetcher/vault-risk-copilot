@@ -2,6 +2,9 @@ import type { LLMProvider, LLMConfig } from './types.js';
 import { ALLOWED_BASE_URLS, LOCALHOST_PATTERN } from './types.js';
 import { MockProvider } from './providers/mock.js';
 import { OpenAIProvider } from './providers/openai.js';
+import { getDefaultModel } from './defaults.js';
+
+export { getDefaultModel, DEFAULT_MODELS, MODEL_MAX_LENGTH } from './defaults.js';
 
 export function createProvider(config: LLMConfig): LLMProvider {
   if (config.provider === 'mock') {
@@ -17,10 +20,11 @@ export function createProvider(config: LLMConfig): LLMProvider {
   }
 
   const providerBaseUrl = config.baseUrl ?? getDefaultBaseUrl(config.provider);
+  const model = config.model?.trim() || getDefaultModel(config.provider);
 
   return new OpenAIProvider({
     apiKey: config.apiKey,
-    model: config.model,
+    model,
     baseUrl: providerBaseUrl,
   });
 }

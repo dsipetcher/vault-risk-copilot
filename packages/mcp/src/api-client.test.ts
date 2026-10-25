@@ -7,6 +7,7 @@ import type { Config } from './config.js';
 const mockConfig: Config = {
   apiBaseUrl: 'http://localhost:3000',
   requestTimeoutMs: 5000,
+  explainTimeoutMs: 45000,
   logLevel: 'error',
   httpPort: 3001,
   httpHost: 'localhost',
@@ -290,7 +291,7 @@ describe('ApiClient', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null for 503 (vault not configured)', async () => {
+    it('should throw VaultNotConfiguredError for 503', async () => {
       server.use(
         http.get('http://localhost:3000/api/vault/state', () => {
           return HttpResponse.json({ error: 'Vault monitoring not configured' }, { status: 503 });
@@ -298,9 +299,7 @@ describe('ApiClient', () => {
       );
 
       const client = new ApiClient(mockConfig);
-      const result = await client.getVaultInfo();
-
-      expect(result).toBeNull();
+      await expect(client.getVaultInfo()).rejects.toThrow('Vault not configured: set VAULT_ADDRESS/RPC');
     });
   });
 
@@ -328,6 +327,40 @@ describe('ApiClient', () => {
       const client = new ApiClient(shortTimeoutConfig);
 
       await expect(client.listPools({})).rejects.toThrow('Request timeout');
+    });
+
+    it('uses explainTimeoutMs so explain can outlast the default request timeout', async () => {
+      server.use(
+        http.post('http://localhost:3000/api/pools/:id/explain', async () => {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          return HttpResponse.json({
+            explanation: {
+              summary: 'Rate limited by the provider; retry in ~11 min.',
+              key_factors: [],
+              disclaimer: 'Not financial advice',
+            },
+            metadata: {
+              provider: 'groq',
+              model: 'openai/gpt-oss-120b',
+              timestamp: '2026-10-25T00:00:00Z',
+              latency_ms: 250,
+              fallback: true,
+              fallback_reason: 'rate_limited',
+            },
+            cached: false,
+          });
+        })
+      );
+
+      const client = new ApiClient({
+        ...mockConfig,
+        requestTimeoutMs: 50,
+        explainTimeoutMs: 2_000,
+      });
+
+      const result = await client.explainPoolRisk('550e8400-e29b-41d4-a716-446655440000');
+      expect(result.metadata.fallback_reason).toBe('rate_limited');
+      expect(result.explanation.summary).toMatch(/retry in ~11 min/i);
     });
 
     it('should handle 500 errors', async () => {

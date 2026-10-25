@@ -44,7 +44,10 @@ describe('usePools', () => {
   });
 
   it('fetches pools successfully', async () => {
-    vi.spyOn(apiModule.apiClient, 'getPools').mockResolvedValueOnce(mockPools);
+    vi.spyOn(apiModule.apiClient, 'getPools').mockResolvedValueOnce({
+      data: mockPools,
+      pagination: { total: 1, limit: 50, offset: 0 },
+    });
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -56,7 +59,7 @@ describe('usePools', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(result.current.data).toEqual(mockPools);
+    expect(result.current.data?.data).toEqual(mockPools);
     expect(apiModule.apiClient.getPools).toHaveBeenCalledTimes(1);
   });
 

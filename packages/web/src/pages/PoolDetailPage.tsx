@@ -1,10 +1,10 @@
 import { useParams } from 'react-router-dom';
-import { usePoolDetail, usePoolHistory } from '@/hooks/usePools';
+import { isPoolIdUuid, usePoolDetail, usePoolHistory } from '@/hooks/usePools';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { RiskBadge } from '@/components/RiskBadge';
 import { ExplainPanel } from '@/components/ExplainPanel';
-import { formatNumber, formatPercentage, formatDate } from '@/lib/utils';
+import { formatCompactUsd, formatNumber, formatPercentage, formatDate } from '@/lib/utils';
 import { prepareChartData } from '@/utils/chartData';
 import type { Pool, PoolRiskScore } from '@/types/api';
 import {
@@ -22,15 +22,22 @@ import {
 
 export function PoolDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: pool, isLoading, error } = usePoolDetail(id!);
+  const validId = isPoolIdUuid(id);
+  const { data: pool, isLoading, error, refetch } = usePoolDetail(id!);
   const { data: history, isLoading: historyLoading } = usePoolHistory(id!);
+
+  if (!validId) {
+    return (
+      <ErrorMessage message="This pool id is not a valid UUID. Open a pool from the list instead of editing the URL." />
+    );
+  }
 
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
   if (error) {
-    return <ErrorMessage message={error.message} />;
+    return <ErrorMessage message={error.message} onRetry={() => refetch()} />;
   }
 
   if (!pool) {
@@ -40,7 +47,7 @@ export function PoolDetailPage() {
   const riskScore = (pool as Pool & { risk_score?: PoolRiskScore }).risk_score;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       <div>
         <a href="/pools" className="text-primary-600 hover:text-primary-900 text-sm">
           ← Back to pools
@@ -111,6 +118,14 @@ export function PoolDetailPage() {
               <span className="text-gray-600">Data Age:</span>{' '}
               <span className="font-medium">{riskScore.data_age_score?.toFixed(2) ?? 'N/A'}</span>
             </div>
+            <div>
+              <span className="text-gray-600">Stablecoin:</span>{' '}
+              <span className="font-medium">{riskScore.stablecoin_score?.toFixed(2) ?? 'N/A'}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Vault Score:</span>{' '}
+              <span className="font-medium">{riskScore.vault_score?.toFixed(2) ?? 'N/A'}</span>
+            </div>
           </div>
         </div>
       )}
@@ -129,7 +144,7 @@ export function PoolDetailPage() {
               />
               <YAxis 
                 yAxisId="left" 
-                tickFormatter={(value) => `$${(value / 1e6).toFixed(0)}M`}
+                tickFormatter={(value) => formatCompactUsd(Number(value))}
               />
               <YAxis 
                 yAxisId="right" 

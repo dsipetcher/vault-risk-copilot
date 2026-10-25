@@ -7,7 +7,7 @@ Node.js + TypeScript API service that aggregates pool data, risk scores, and vau
 - **Pools API**: List and filter DeFi pools with risk scores
 - **Risk API**: Trigger risk score recomputation via risk-service
 - **Vault API**: Read on-chain vault state (total assets, share price)
-- **OpenAPI Documentation**: Auto-generated at `/docs`
+- **OpenAPI Documentation**: Served at `/docs` and `/docs/openapi.json`
 - **Security**: Helmet, CORS, rate limiting
 - **Validation**: Zod schemas for all inputs
 - **Structured Logging**: Pino logger with pretty output in dev

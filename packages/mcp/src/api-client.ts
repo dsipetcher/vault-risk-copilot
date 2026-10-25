@@ -23,6 +23,13 @@ export class ApiError extends Error {
   }
 }
 
+export class VaultNotConfiguredError extends Error {
+  constructor(message = 'Vault not configured: set VAULT_ADDRESS/RPC') {
+    super(message);
+    this.name = 'VaultNotConfiguredError';
+  }
+}
+
 export class ApiClient {
   private config: Config;
 
@@ -32,13 +39,14 @@ export class ApiClient {
 
   private async fetch<T>(
     path: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    timeoutMs = this.config.requestTimeoutMs
   ): Promise<T> {
     const url = `${this.config.apiBaseUrl}${path}`;
     const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort(),
-      this.config.requestTimeoutMs
+      timeoutMs
     );
 
     try {
@@ -129,16 +137,35 @@ export class ApiClient {
       headers['X-LLM-Api-Key'] = llmApiKey;
     }
 
-    const result = await this.fetch<unknown>(`/api/pools/${poolId}/explain`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        ...(this.config.llmProvider ? { provider: this.config.llmProvider } : {}),
-        ...(this.config.llmModel ? { model: this.config.llmModel } : {}),
-      }),
-    });
+    const result = await this.fetch<unknown>(
+      `/api/pools/${poolId}/explain`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(this.buildExplainBody()),
+      },
+      this.config.explainTimeoutMs
+    );
 
     return explanationSchema.parse(result);
+  }
+
+  private buildExplainBody(): Record<string, string> {
+    const body: Record<string, string> = {};
+    if (this.config.llmProvider) body.provider = this.config.llmProvider;
+    const model =
+      this.config.llmModel ||
+      (this.config.llmProvider === 'groq'
+        ? 'openai/gpt-oss-120b'
+        : this.config.llmProvider === 'ollama'
+          ? 'llama3.2'
+          : this.config.llmProvider === 'openrouter'
+            ? 'openai/gpt-4o-mini'
+            : this.config.llmProvider === 'openai'
+              ? 'gpt-4o-mini'
+              : undefined);
+    if (model) body.model = model;
+    return body;
   }
 
   async getVaultInfo(): Promise<VaultState | null> {
@@ -146,7 +173,10 @@ export class ApiClient {
       const result = await this.fetch<{ data: unknown }>('/api/vault/state');
       return vaultStateSchema.parse(result.data);
     } catch (error) {
-      if (error instanceof ApiError && (error.statusCode === 404 || error.statusCode === 503)) {
+      if (error instanceof ApiError && error.statusCode === 503) {
+        throw new VaultNotConfiguredError();
+      }
+      if (error instanceof ApiError && error.statusCode === 404) {
         return null;
       }
       throw error;

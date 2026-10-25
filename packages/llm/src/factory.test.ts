@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateBaseUrl, redactApiKey, getDefaultBaseUrl } from '../src/factory.js';
+import { validateBaseUrl, redactApiKey, getDefaultBaseUrl, createProvider, getDefaultModel } from '../src/factory.js';
 
 describe('validateBaseUrl', () => {
   const originalEnv = process.env.NODE_ENV;
@@ -75,5 +75,40 @@ describe('getDefaultBaseUrl', () => {
 
   it('should throw for mock provider', () => {
     expect(getDefaultBaseUrl('mock')).toBe('');
+  });
+});
+
+describe('getDefaultModel', () => {
+  it('returns a per-provider default so Groq never falls back to an OpenAI model id', () => {
+    expect(getDefaultModel('groq')).toBe('openai/gpt-oss-120b');
+    expect(getDefaultModel('openai')).toBe('gpt-4o-mini');
+    expect(getDefaultModel('openrouter')).toBe('openai/gpt-4o-mini');
+    expect(getDefaultModel('ollama')).toBe('llama3.2');
+    expect(getDefaultModel('mock')).toBe('mock-v1');
+  });
+});
+
+describe('createProvider default models', () => {
+  it('uses the Groq default model when none is provided', () => {
+    const provider = createProvider({ provider: 'groq', apiKey: 'gsk-test' });
+    expect((provider as { model?: string }).model ?? (provider as unknown as { model: string }).model).toBeDefined();
+    // OpenAIProvider stores model privately; generate fallback metadata uses it.
+    // Inspect via a type-narrowed read of the constructed instance.
+    expect(Reflect.get(provider, 'model')).toBe('openai/gpt-oss-120b');
+  });
+
+  it('uses the OpenAI default model when none is provided', () => {
+    const provider = createProvider({ provider: 'openai', apiKey: 'sk-test' });
+    expect(Reflect.get(provider, 'model')).toBe('gpt-4o-mini');
+  });
+
+  it('uses the Ollama default model when none is provided', () => {
+    const provider = createProvider({ provider: 'ollama', apiKey: 'local' });
+    expect(Reflect.get(provider, 'model')).toBe('llama3.2');
+  });
+
+  it('keeps an explicit model', () => {
+    const provider = createProvider({ provider: 'groq', apiKey: 'gsk-test', model: 'llama-3.3-70b-versatile' });
+    expect(Reflect.get(provider, 'model')).toBe('llama-3.3-70b-versatile');
   });
 });

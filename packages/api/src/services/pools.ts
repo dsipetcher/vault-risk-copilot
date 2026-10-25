@@ -42,14 +42,23 @@ export async function getLatestPools(
     params.push(filters.max_tvl);
   }
 
+  if (filters.search) {
+    const term = `%${filters.search.replace(/[%_]/g, '\\$&')}%`;
+    conditions.push(
+      `(ps.protocol ILIKE $${paramIndex} OR ps.asset_symbol ILIKE $${paramIndex} OR COALESCE(ps.pool_name, '') ILIKE $${paramIndex} OR ps.chain ILIKE $${paramIndex})`
+    );
+    params.push(term);
+    paramIndex++;
+  }
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  // Determine ORDER BY clause based on sort parameter
-  let orderByClause = 'ORDER BY ps.tvl_usd DESC NULLS LAST';
+  const direction = filters.order === 'asc' ? 'ASC' : 'DESC';
+  let orderByClause = `ORDER BY ps.tvl_usd ${direction} NULLS LAST`;
   if (filters.sort === 'risk') {
-    orderByClause = 'ORDER BY rs.total_risk_score DESC NULLS LAST';
+    orderByClause = `ORDER BY rs.total_risk_score ${direction} NULLS LAST`;
   } else if (filters.sort === 'apy') {
-    orderByClause = 'ORDER BY ps.apy DESC NULLS LAST';
+    orderByClause = `ORDER BY ps.apy ${direction} NULLS LAST`;
   }
 
   // Subquery to get latest snapshots per pool_id

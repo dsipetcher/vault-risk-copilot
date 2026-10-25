@@ -9,6 +9,11 @@ interface ExplainPanelProps {
   poolId: string;
 }
 
+function rateLimitedWarningText(summary: string): string {
+  const match = summary.match(/Rate limited by the provider[^.]*(?:\.|$)/i);
+  return match?.[0]?.trim() || 'Rate limited by the provider. Wait a moment and try again.';
+}
+
 export function ExplainPanel({ poolId }: ExplainPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +76,23 @@ export function ExplainPanel({ poolId }: ExplainPanelProps) {
 
           {/* Fallback warning */}
           {explanation.metadata.fallback && (
-            <div className="bg-orange-50 border border-orange-200 rounded-md p-3" data-testid="fallback-warning">
+            <div
+              className="bg-orange-50 border border-orange-200 rounded-md p-3"
+              data-testid={
+                explanation.metadata.fallback_reason === 'rate_limited'
+                  ? 'rate-limited-warning'
+                  : 'fallback-warning'
+              }
+            >
               <p className="text-sm text-orange-800">
-                <strong>⚠️ Limited Analysis:</strong> {explanation.metadata.fallback_reason}
+                <strong>
+                  {explanation.metadata.fallback_reason === 'rate_limited'
+                    ? 'Rate limited:'
+                    : '⚠️ Limited Analysis:'}
+                </strong>{' '}
+                {explanation.metadata.fallback_reason === 'rate_limited'
+                  ? rateLimitedWarningText(explanation.explanation.summary)
+                  : explanation.metadata.fallback_reason}
               </p>
             </div>
           )}

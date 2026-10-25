@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ApiClient } from './api-client.js';
-import { ApiError } from './api-client.js';
+import { ApiError, VaultNotConfiguredError } from './api-client.js';
 import {
   listPoolsTool,
   getPoolRiskTool,
@@ -233,6 +233,35 @@ describe('Tools', () => {
       expect(result.content[0].text).toContain('fallback');
       expect(result.content[0].text).toContain('No LLM key provided');
     });
+
+    it('surfaces rate_limited as a clear provider message', async () => {
+      vi.mocked(mockApiClient.explainPoolRisk).mockResolvedValue({
+        explanation: {
+          summary:
+            'This pool has a low risk rating with a score of 10.0/100. Rate limited by the provider; retry in ~11 min.',
+          key_factors: [],
+          disclaimer: 'Not financial advice',
+        },
+        metadata: {
+          provider: 'groq',
+          model: 'openai/gpt-oss-120b',
+          timestamp: '2026-10-25T00:00:00Z',
+          latency_ms: 0,
+          fallback: true,
+          fallback_reason: 'rate_limited',
+        },
+        cached: false,
+      });
+
+      const result = await explainPoolRiskTool(mockApiClient, {
+        pool_id: '550e8400-e29b-41d4-a716-446655440000',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Rate limited by the provider/i);
+      expect(result.content[0].text).toMatch(/retry in ~11 min/i);
+      expect(result.content[0].text).not.toMatch(/Using fallback explanation \(rate_limited\)/);
+    });
   });
 
   describe('getVaultInfoTool', () => {
@@ -255,12 +284,20 @@ describe('Tools', () => {
       expect(result.content[0].text).toContain('1.111111');
     });
 
-    it('should handle unavailable vault', async () => {
+    it('should say the vault is not deployed when the API returns 404/null', async () => {
       vi.mocked(mockApiClient.getVaultInfo).mockResolvedValue(null);
 
       const result = await getVaultInfoTool(mockApiClient);
 
-      expect(result.content[0].text).toContain('not available');
+      expect(result.content[0].text).toBe('Vault is not deployed.');
+    });
+
+    it('should say VAULT_ADDRESS/RPC must be set when the vault is not configured', async () => {
+      vi.mocked(mockApiClient.getVaultInfo).mockRejectedValue(new VaultNotConfiguredError());
+
+      const result = await getVaultInfoTool(mockApiClient);
+
+      expect(result.content[0].text).toBe('Vault not configured: set VAULT_ADDRESS/RPC');
     });
   });
 });
@@ -270,5 +307,18 @@ describe('safeErrorMessage / toolErrorResult', () => {
     expect(toolErrorResult(new ApiError('x', 404))).toEqual({ isError: true, content: [{ type: 'text', text: 'Not found: no pool with that id' }] });
     expect(safeErrorMessage(new ApiError('Network error', 0))).toBe('Risk API is unreachable');
     expect(safeErrorMessage(new Error('secret http://internal/x'))).toBe('Internal error');
+    expect(safeErrorMessage(new Error('MCP error -32602: MCP error -32602: bad input'))).toBe(
+      'bad input'
+    );
+    expect(safeErrorMessage(new VaultNotConfiguredError())).toBe(
+      'Vault not configured: set VAULT_ADDRESS/RPC'
+    );
+    expect(
+      safeErrorMessage(
+        new ApiError('rate limited', 429, {
+          message: 'Rate limited by the provider; retry in ~11 min.',
+        })
+      )
+    ).toMatch(/retry in ~11 min/i);
   });
 });

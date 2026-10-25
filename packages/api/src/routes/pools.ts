@@ -20,6 +20,8 @@ export async function poolsRoutes(app: FastifyInstance) {
             min_tvl: { type: 'number' },
             max_tvl: { type: 'number' },
             sort: { type: 'string', enum: ['tvl', 'risk', 'apy'] },
+            order: { type: 'string', enum: ['asc', 'desc'] },
+            search: { type: 'string', maxLength: 200 },
           },
         },
         response: {

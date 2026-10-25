@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # PostgreSQL database
   postgres:
@@ -53,7 +51,8 @@ services:
       target: production
     container_name: vault-risk-collector
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}}
+      # Always use the compose network hostname. Do not inherit a host-only DATABASE_URL from .env.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
       RPC_URL: ${RPC_URL:-}
       MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://eth.llamarpc.com}
       DEFILLAMA_API_URL: ${DEFILLAMA_API_URL:-https://yields.llama.fi}
@@ -61,20 +60,21 @@ services:
       COLLECTION_INTERVAL_MS: ${COLLECTION_INTERVAL_MS:-300000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: ${NODE_ENV:-production}
+      RISK_SERVICE_URL: http://risk-service:8000
+      RISK_INTERNAL_TOKEN: ${RISK_INTERNAL_TOKEN:-local-dev-risk-internal-token}
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      risk-service:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - vault-network
 
-  # ============================================================================
-  # FUTURE SERVICES (Phase 4-5) - Uncomment when implemented
-  # ============================================================================
-
-  # Risk service (Python FastAPI) - Phase 3 (ENABLED)
+  # Risk service (Python FastAPI) — internal only; no host port by default.
+  # Publish with: docker compose --profile debug up
   risk-service:
     build:
       context: ./packages/risk-service
@@ -83,8 +83,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-    ports:
-      - "${RISK_SERVICE_PORT:-8000}:8000"
+      RISK_INTERNAL_TOKEN: ${RISK_INTERNAL_TOKEN:-local-dev-risk-internal-token}
+      RECOMPUTE_INTERVAL_SECONDS: ${RECOMPUTE_INTERVAL_SECONDS:-300}
+      AUTO_RECOMPUTE_ON_STARTUP: ${AUTO_RECOMPUTE_ON_STARTUP:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,7 +99,7 @@ services:
       retries: 3
       start_period: 10s
 
-  # Node.js API - Phase 4
+  # Node.js API
   api:
     build:
       context: ./packages
@@ -107,6 +108,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
       RISK_SERVICE_URL: http://risk-service:8000
+      RISK_INTERNAL_TOKEN: ${RISK_INTERNAL_TOKEN:-local-dev-risk-internal-token}
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
@@ -115,10 +117,13 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
-      LLM_KEY_ENCRYPTION_KEY: ${LLM_KEY_ENCRYPTION_KEY:-}  # required in production; API refuses to start if empty
-      SIWE_DOMAIN: ${SIWE_DOMAIN:-localhost}
-      SIWE_URI: ${SIWE_URI:-http://localhost:3000}
-      SIWE_CHAIN_ID: ${SIWE_CHAIN_ID:-1}
+      # Local-only 32-byte key (base64 of 32 ASCII 'A's). Generate your own for anything shared:
+      #   openssl rand -base64 32
+      LLM_KEY_ENCRYPTION_KEY: ${LLM_KEY_ENCRYPTION_KEY:-QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=}
+      SIWE_DOMAIN: ${SIWE_DOMAIN:-localhost:5173}
+      SIWE_URI: ${SIWE_URI:-http://localhost:5173}
+      SIWE_CHAIN_ID: ${SIWE_CHAIN_ID:-31337}
+      SIWE_CHAIN_IDS: ${SIWE_CHAIN_IDS:-31337,11155111}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
@@ -138,7 +143,7 @@ services:
       retries: 3
       start_period: 10s
 
-  # Frontend (React + Vite) - Phase 4-5
+  # Frontend (React + Vite)
   web:
     build:
       context: ./packages/web
@@ -163,29 +168,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-
-  # # MCP server (TypeScript, read-only) - Phase 5
-  # mcp:
-  #   profiles: ["full"]
-  #   build:
-  #     context: ./packages/mcp
-  #     dockerfile: Dockerfile
-  #   container_name: vault-risk-mcp
-  #   environment:
-  #     DATABASE_URL: postgresql://${POSTGRES_USER:-vault_user}:${POSTGRES_PASSWORD:-vault_pass_local}@postgres:5432/${POSTGRES_DB:-vault_risk_copilot}
-  #     API_URL: http://api:3000
-  #     RPC_URL: ${RPC_URL}
-  #     VAULT_ADDRESS: ${VAULT_ADDRESS}
-  #     NODE_ENV: ${NODE_ENV:-development}
-  #   ports:
-  #     - "${MCP_PORT:-3001}:3001"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     api:
-  #       condition: service_started
-  #   networks:
-  #     - vault-network
 
 volumes:
   postgres_data:

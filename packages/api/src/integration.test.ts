@@ -98,6 +98,12 @@ describe('Pools Integration Tests', () => {
     expect(ours.map((p) => p.total_risk_score)).toEqual([90, 40, 10]);
   });
 
+  it('should search by protocol or asset symbol', async () => {
+    const result = await getLatestPools({ search: 'sort-b' }, { limit: 10, offset: 0 });
+    expect(result.pools.some((p) => p.pool_id === SORT_B)).toBe(true);
+    expect(result.pools.every((p) => p.protocol.includes('sort-b') || p.asset_symbol.includes('sort-b'))).toBe(true);
+  });
+
   it('should sort by APY descending on the server', async () => {
     const sorted = await getLatestPools({ sort: 'apy' }, { limit: 100, offset: 0 });
     const ours = sorted.pools.filter((p) => [SORT_A, SORT_B, SORT_C].includes(p.pool_id));

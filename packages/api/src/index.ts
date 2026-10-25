@@ -3,8 +3,8 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
-import apiReference from '@scalar/fastify-api-reference';
-import { env } from './config.js';
+import { env, getAllowedSiweChainIds } from './config.js';
+import { docsRoutes } from './docs.js';
 import { pool } from './database.js';
 import { healthRoutes } from './routes/health.js';
 import { poolsRoutes } from './routes/pools.js';
@@ -27,8 +27,8 @@ export async function build() {
   }
   
   if (env.NODE_ENV === 'production') {
-    if (!env.SIWE_DOMAIN || !env.SIWE_URI || !env.SIWE_CHAIN_ID) {
-      throw new Error('SIWE_DOMAIN, SIWE_URI, and SIWE_CHAIN_ID are required in production');
+    if (!env.SIWE_DOMAIN || !env.SIWE_URI || getAllowedSiweChainIds().length === 0) {
+      throw new Error('SIWE_DOMAIN, SIWE_URI, and SIWE_CHAIN_ID or SIWE_CHAIN_IDS are required in production');
     }
   }
 
@@ -68,9 +68,24 @@ export async function build() {
 
   app.setErrorHandler((error, request, reply) => {
     const errorMessage = error.message.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]');
-    request.log.error({ ...error, message: errorMessage }, 'Request error');
-    reply.status(error.statusCode || 500).send({
+    const isUuidParam =
+      /params\/id must match format "uuid"/i.test(errorMessage) ||
+      /must match format "uuid"/i.test(errorMessage);
+    if (isUuidParam) {
+      return reply.status(400).send({
+        error: 'Invalid pool id',
+        message: 'The pool id must be a valid UUID. Check the link or go back to the pools list.',
+      });
+    }
+    const statusCode = error.statusCode || 500;
+    if (statusCode >= 500) {
+      request.log.error({ ...error, message: errorMessage }, 'Request error');
+    } else {
+      request.log.warn({ message: errorMessage }, 'Request error');
+    }
+    return reply.status(statusCode).send({
       error: errorMessage,
+      message: errorMessage,
     });
   });
 
@@ -90,27 +105,7 @@ export async function build() {
     timeWindow: env.RATE_LIMIT_WINDOW,
   });
 
-  await app.register(apiReference, {
-    routePrefix: '/docs',
-    configuration: {
-      spec: {
-        content: {
-          openapi: '3.1.0',
-          info: {
-            title: 'Vault Risk Copilot API',
-            version: '1.0.0',
-            description: 'Node.js API for Vault Risk Copilot - aggregates pool data, risk scores, and vault state',
-          },
-          servers: [
-            {
-              url: `http://${env.HOST}:${env.PORT}`,
-              description: 'Development server',
-            },
-          ],
-        },
-      },
-    },
-  });
+  await docsRoutes(app);
 
   await app.register(healthRoutes, { prefix: '/api' });
   await app.register(poolsRoutes, { prefix: '/api' });

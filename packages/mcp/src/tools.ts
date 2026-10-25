@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ApiClient } from './api-client.js';
-import { ApiError } from './api-client.js';
+import { ApiError, VaultNotConfiguredError } from './api-client.js';
 
 const MAX_POOLS_LIMIT = 50;
 const MAX_COMPARE_POOLS = 5;
@@ -29,19 +29,46 @@ export const explainPoolRiskInputSchema = z.object({
 
 export const getVaultInfoInputSchema = z.object({});
 
+const MCP_ERROR_PREFIX = /^MCP error -?\d+:\s*/i;
+
+export function stripMcpErrorPrefix(message: string): string {
+  let current = message;
+  while (MCP_ERROR_PREFIX.test(current)) {
+    current = current.replace(MCP_ERROR_PREFIX, '');
+  }
+  return current;
+}
+
 /** Safe, client-facing message: no stack traces, URLs, upstream bodies or secrets. */
 export function safeErrorMessage(error: unknown): string {
   if (error instanceof z.ZodError) {
     return 'Invalid input: ' + error.issues.map((i) => `${i.path.join('.') || 'value'}: ${i.message}`).join('; ');
   }
+  if (error instanceof VaultNotConfiguredError) {
+    return error.message;
+  }
   if (error instanceof ApiError) {
     if (error.statusCode === 404) return 'Not found: no pool with that id';
     if (error.statusCode === 408) return 'Request to the risk API timed out';
+    if (error.statusCode === 429) {
+      const details = error.details;
+      if (details && typeof details === 'object') {
+        const record = details as { message?: unknown; error?: unknown; fallback_reason?: unknown };
+        for (const value of [record.message, record.error]) {
+          if (typeof value === 'string' && /rate limited/i.test(value)) return value;
+        }
+      }
+      return 'Rate limited by the provider. Wait a moment and try again.';
+    }
     if (error.statusCode === 0) return 'Risk API is unreachable';
     if (error.statusCode && error.statusCode >= 500) return 'Risk API server error';
     return `Risk API rejected the request (HTTP ${error.statusCode})`;
   }
   if (error instanceof Error && error.message.startsWith('Unknown tool:')) return error.message;
+  if (error instanceof Error) {
+    const stripped = stripMcpErrorPrefix(error.message);
+    if (stripped && stripped !== error.message) return stripped;
+  }
   return 'Internal error';
 }
 
@@ -184,6 +211,17 @@ export async function comparePoolsTool(
   };
 }
 
+export function rateLimitedErrorText(explanation: {
+  explanation: { summary: string };
+  metadata: { fallback_reason?: string };
+}): string {
+  const summary = explanation.explanation.summary.trim();
+  if (/rate limited/i.test(summary)) {
+    return summary;
+  }
+  return 'Rate limited by the provider. Wait a moment and try again.';
+}
+
 export async function explainPoolRiskTool(
   apiClient: ApiClient,
   args: Record<string, unknown>,
@@ -191,6 +229,13 @@ export async function explainPoolRiskTool(
 ) {
   const validated = explainPoolRiskInputSchema.parse(args);
   const explanation = await apiClient.explainPoolRisk(validated.pool_id, llmApiKey);
+
+  if (explanation.metadata.fallback && explanation.metadata.fallback_reason === 'rate_limited') {
+    return {
+      isError: true,
+      content: [{ type: 'text' as const, text: rateLimitedErrorText(explanation) }],
+    };
+  }
 
   const fallbackNote = explanation.metadata.fallback
     ? `\n\n⚠️  Note: Using fallback explanation (${explanation.metadata.fallback_reason})`
@@ -226,14 +271,24 @@ export async function explainPoolRiskTool(
 }
 
 export async function getVaultInfoTool(apiClient: ApiClient) {
-  const vaultState = await apiClient.getVaultInfo();
+  let vaultState;
+  try {
+    vaultState = await apiClient.getVaultInfo();
+  } catch (error) {
+    if (error instanceof VaultNotConfiguredError) {
+      return {
+        content: [{ type: 'text' as const, text: error.message }],
+      };
+    }
+    throw error;
+  }
 
   if (!vaultState) {
     return {
       content: [
         {
           type: 'text' as const,
-          text: 'Vault information is not available (vault may not be deployed or API does not support this endpoint).',
+          text: 'Vault is not deployed.',
         },
       ],
     };

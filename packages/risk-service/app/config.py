@@ -69,6 +69,22 @@ class Settings(BaseSettings):
     # Service
     log_level: str = Field(default="info", description="Logging level")
     model_version: str = Field(default="1.0", description="Risk model version")
+    risk_internal_token: str = Field(
+        default="",
+        description="Shared token required for /recompute (X-Internal-Token)",
+    )
+    cors_origins: str = Field(
+        default="",
+        description="Comma-separated CORS origins; empty = no browser CORS",
+    )
+    recompute_interval_seconds: int = Field(
+        default=300,
+        description="Background recompute interval; 0 disables the scheduler",
+    )
+    auto_recompute_on_startup: bool = Field(
+        default=True,
+        description="Recompute all scores shortly after startup",
+    )
 
     # Risk thresholds
     thresholds: RiskThresholds = Field(default_factory=RiskThresholds)

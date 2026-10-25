@@ -6,9 +6,11 @@ const configSchema = z.object({
   llmProvider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'mock']).optional(),
   llmModel: z.string().optional(),
   httpPort: z.coerce.number().int().min(1).max(65535).default(3001),
-  httpHost: z.string().default('localhost'),
+  httpHost: z.string().default('127.0.0.1'),
   httpAuthToken: z.string().optional(),
   requestTimeoutMs: z.coerce.number().int().min(1000).default(30000),
+  // Longer than the API's 30s rate-limit backoff so explain can return rate_limited.
+  explainTimeoutMs: z.coerce.number().int().min(1000).default(45000),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 }).refine((c) => !c.llmApiKey || c.llmProvider, {
   // Without a provider the API defaults to openai and would send the key to the wrong vendor.
@@ -28,6 +30,7 @@ export function loadConfig(): Config {
     httpHost: process.env.HTTP_HOST,
     httpAuthToken: process.env.HTTP_AUTH_TOKEN,
     requestTimeoutMs: process.env.REQUEST_TIMEOUT_MS,
+    explainTimeoutMs: process.env.EXPLAIN_TIMEOUT_MS,
     logLevel: process.env.LOG_LEVEL,
   });
 

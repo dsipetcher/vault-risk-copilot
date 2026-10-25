@@ -4,8 +4,14 @@ import { parseUnits, formatUnits, type Address } from 'viem';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { shortenAddress, formatNumber } from '@/lib/utils';
 
-const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-const USDC_ADDRESS = (import.meta.env.VITE_USDC_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS || ZERO_ADDRESS) as `0x${string}`;
+const USDC_ADDRESS = (import.meta.env.VITE_USDC_ADDRESS || ZERO_ADDRESS) as `0x${string}`;
+const VAULT_CONFIGURED =
+  Boolean(import.meta.env.VITE_VAULT_ADDRESS) &&
+  Boolean(import.meta.env.VITE_USDC_ADDRESS) &&
+  VAULT_ADDRESS !== ZERO_ADDRESS &&
+  USDC_ADDRESS !== ZERO_ADDRESS;
 
 const VAULT_ABI = [
   {
@@ -120,7 +126,7 @@ export function VaultPage() {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: VAULT_CONFIGURED && isConnected && !!address },
   });
 
   const { data: sharesBalance, refetch: refetchSharesBalance } = useReadContract({
@@ -128,7 +134,7 @@ export function VaultPage() {
     abi: VAULT_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: VAULT_CONFIGURED && isConnected && !!address },
   });
 
   const { data: sharesInAssets } = useReadContract({
@@ -136,25 +142,28 @@ export function VaultPage() {
     abi: VAULT_ABI,
     functionName: 'convertToAssets',
     args: sharesBalance ? [sharesBalance] : undefined,
-    query: { enabled: isConnected && !!address && !!sharesBalance },
+    query: { enabled: VAULT_CONFIGURED && isConnected && !!address && !!sharesBalance },
   });
 
   const { data: totalAssets } = useReadContract({
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: 'totalAssets',
+    query: { enabled: VAULT_CONFIGURED },
   });
 
   const { data: totalSupply } = useReadContract({
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: 'totalSupply',
+    query: { enabled: VAULT_CONFIGURED },
   });
 
   const { data: vaultDecimals } = useReadContract({
     address: VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: 'decimals',
+    query: { enabled: VAULT_CONFIGURED },
   });
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
@@ -162,7 +171,7 @@ export function VaultPage() {
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: address && VAULT_ADDRESS ? [address, VAULT_ADDRESS] : undefined,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: VAULT_CONFIGURED && isConnected && !!address },
   });
 
   const { writeContract: approve, data: approveHash, isPending: isApproving } = useWriteContract();
@@ -271,7 +280,7 @@ export function VaultPage() {
     ? parseUnits(depositAmount, 6) > allowance
     : false;
 
-  if (!VAULT_ADDRESS || !USDC_ADDRESS) {
+  if (!VAULT_CONFIGURED) {
     return (
       <ErrorMessage message="Vault or USDC address not configured. Please set VITE_VAULT_ADDRESS and VITE_USDC_ADDRESS." />
     );

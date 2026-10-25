@@ -299,7 +299,7 @@ describe('Number Fidelity Validation', () => {
     expect(result).toBe(false);
   });
 
-  it('REJECT: $510K vs input 500K (exact match required after unit normalization)', () => {
+  it('REJECT: $550K vs input 500K (10% is not reasonable rounding)', () => {
     const inputWith500K = {
       ...baseInput,
       pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 500000 },
@@ -309,8 +309,8 @@ describe('Number Fidelity Validation', () => {
       key_factors: [
         {
           signal: 'TVL Score',
-          value: '$510K',
-          explanation: 'TVL is $510K.',
+          value: '$550K',
+          explanation: 'TVL is $550K.',
         },
       ],
       disclaimer: 'Test',
@@ -597,6 +597,156 @@ describe('Number Fidelity Validation', () => {
 
   it('REJECT: "$5 marks" is not read as $5M', () => {
     expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5 marks'))).toBe(false);
+  });
+
+  it('ACCEPT: "$22.5 B" rounded from TVL 22532735702', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 22532735702 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$22.5 B'))).toBe(true);
+  });
+
+  it('ACCEPT: "$2.68 billion" rounded from TVL 2678123456', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 2_678_123_456 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$2.68 billion'))).toBe(true);
+  });
+
+  it('ACCEPT: "$3.5 billion" parses the decimal+word scale (not leftover 3)', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 3_500_000_000 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$3.5 billion'))).toBe(true);
+  });
+
+  it('ACCEPT: "$3.5billion" without a space', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 3_512_000_000 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$3.5billion'))).toBe(true);
+  });
+
+  it('ACCEPT: dotted aave v3.2 does not leave a stray 2', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_name: 'Aave v3.2 USDC',
+      protocol: 'Aave v3.2',
+      chain: 'Ethereum',
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 22_532_735_702 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'aave v3.2 quotes TVL of $22.5bn.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$22.5bn',
+          explanation: 'aave v3.2 TVL of $22.5bn is large.',
+        },
+      ],
+      disclaimer: 'Educational only.',
+    };
+    expect(validateNumberFidelity(provider, input, output)).toBe(true);
+  });
+
+  it('ACCEPT: Aave v3 / Uniswap-v4 / Aave‑v3 version tokens are not the number 3 or 4', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_name: 'Aave v3 USDC',
+      protocol: 'Aave-v3',
+      chain: 'Ethereum',
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 22_532_735_702, apy: 2.78 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Aave v3 and Uniswap-v4 and Aave‑v3 quotes TVL of $22.5bn with APY 2.8%.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$22.5bn',
+          explanation: 'Aave v3 TVL of $22.5bn is large; Uniswap-v4 is only a comparison.',
+        },
+      ],
+      disclaimer: 'Educational only.',
+    };
+    expect(validateNumberFidelity(provider, input, output)).toBe(true);
+  });
+
+  it('ACCEPT: APY 2.8% rounded from 2.78; REJECT 3.5% and 27.8%', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, apy: 2.78 },
+      breakdown: { ...baseInput.breakdown, apy_volatility_score: 60 },
+    };
+    const accept: ExplanationOutput = {
+      summary: 'APY is 2.8% on this pool.',
+      key_factors: [
+        {
+          signal: 'APY Volatility',
+          value: '2.8%',
+          explanation: 'APY of 2.8% matches the quoted yield.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    expect(validateNumberFidelity(provider, input, accept)).toBe(true);
+
+    const rejectHigh: ExplanationOutput = {
+      summary: 'APY is 3.5% on this pool.',
+      key_factors: [
+        {
+          signal: 'APY Volatility',
+          value: '3.5%',
+          explanation: 'APY of 3.5% is the wrong yield.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    expect(validateNumberFidelity(provider, input, rejectHigh)).toBe(false);
+
+    const rejectShift: ExplanationOutput = {
+      summary: 'APY is 27.8% on this pool.',
+      key_factors: [
+        {
+          signal: 'APY Volatility',
+          value: '27.8%',
+          explanation: 'APY of 27.8% is a decimal-place error.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    expect(validateNumberFidelity(provider, input, rejectShift)).toBe(false);
+  });
+
+  it('ACCEPT: Groq-style captured phrasing with version tokens, $22.5bn and 2.8%', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_name: 'Aave v3 USDC',
+      protocol: 'Aave‑v3',
+      chain: 'Ethereum',
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 22_532_735_702, apy: 2.78 },
+      breakdown: { ...baseInput.breakdown, apy_volatility_score: 60 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Aave v3 on Ethereum holds $22.5bn TVL. Uniswap-v4 is unrelated. APY is 2.8%.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '$22.5bn',
+          explanation: 'Aave‑v3 TVL of $22.5bn is a large pool, so size-risk is low.',
+        },
+        {
+          signal: 'APY Volatility',
+          value: 2.8 as unknown as string,
+          explanation: 'Quoted APY of 2.8% is the current yield.',
+        },
+      ],
+      disclaimer: 'Educational only.',
+    };
+    expect(validateNumberFidelity(provider, input, output)).toBe(true);
   });
 
   it('ACCEPT: grouped thousands without a $ prefix (520,000)', () => {

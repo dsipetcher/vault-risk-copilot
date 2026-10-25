@@ -55,4 +55,14 @@ describe('loadConfig', () => {
     expect(config.COLLECTION_INTERVAL_MS).toBe(60000);
     expect(typeof config.COLLECTION_INTERVAL_MS).toBe('number');
   });
+
+  it('allows optional risk-service URL for post-collection recompute', () => {
+    process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/test';
+    process.env.RISK_SERVICE_URL = 'http://risk-service:8000';
+    process.env.RISK_INTERNAL_TOKEN = 'secret';
+
+    const config = loadConfig();
+    expect(config.RISK_SERVICE_URL).toBe('http://risk-service:8000');
+    expect(config.RISK_INTERNAL_TOKEN).toBe('secret');
+  });
 });

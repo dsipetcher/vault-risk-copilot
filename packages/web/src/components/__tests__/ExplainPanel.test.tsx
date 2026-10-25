@@ -223,6 +223,32 @@ describe('ExplainPanel', () => {
     });
   });
 
+  it('shows a clear rate-limited status instead of a generic fallback', async () => {
+    vi.mocked(api.apiClient.explainRisk).mockResolvedValue({
+      ...mockExplanation,
+      explanation: {
+        ...mockExplanation.explanation,
+        summary:
+          'This pool has a low risk rating with a score of 10.0/100. Rate limited by the provider; retry in ~11 min.',
+      },
+      metadata: {
+        ...mockExplanation.metadata,
+        fallback: true,
+        fallback_reason: 'rate_limited',
+      },
+    });
+
+    render(<ExplainPanel poolId={mockPoolId} />);
+    await userEvent.click(screen.getByTestId('explain-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rate-limited-warning')).toHaveTextContent(
+        /Rate limited by the provider; retry in ~11 min/i
+      );
+    });
+    expect(screen.queryByTestId('fallback-warning')).not.toBeInTheDocument();
+  });
+
   it('should render multiple risk factors', async () => {
     vi.mocked(api.apiClient.explainRisk).mockResolvedValue(mockExplanation);
 

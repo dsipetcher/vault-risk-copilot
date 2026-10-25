@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { envSchema } from './config.js';
+import { envSchema, parseSiweChainIds } from './config.js';
 
 describe('Config', () => {
   it('should parse valid environment variables', () => {
@@ -35,5 +35,19 @@ describe('Config', () => {
     };
 
     expect(() => envSchema.parse(env)).toThrow();
+  });
+});
+
+describe('parseSiweChainIds', () => {
+  it('uses the comma-separated list when provided', () => {
+    expect(parseSiweChainIds('31337,11155111', 1)).toEqual([31337, 11155111]);
+  });
+
+  it('falls back to a single SIWE_CHAIN_ID', () => {
+    expect(parseSiweChainIds(undefined, 1)).toEqual([1]);
+  });
+
+  it('defaults to anvil and sepolia', () => {
+    expect(parseSiweChainIds()).toEqual([31337, 11155111]);
   });
 });

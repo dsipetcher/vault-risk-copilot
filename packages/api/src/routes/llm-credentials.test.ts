@@ -210,8 +210,20 @@ describe('LLM Credentials Tests', () => {
         headers: {
           'cookie': `vault_session=${sessionCookie1}`,
         },
+        payload: { provider: 'groq', apiKey: 'gsk-test-groq-key' },
+      });
+    });
+
+    it('rejects Anthropic because explain does not support that provider', async () => {
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/llm-credentials',
+        headers: {
+          'cookie': `vault_session=${sessionCookie1}`,
+        },
         payload: { provider: 'anthropic', apiKey: 'sk-test-anthropic-key' },
       });
+      expect(response.statusCode).toBe(400);
     });
 
     it('should return masked credentials for authenticated user', async () => {
@@ -247,6 +259,7 @@ describe('LLM Credentials Tests', () => {
       expect(response.statusCode).toBe(200);
       const responseText = response.body;
       expect(responseText).not.toContain('sk-test-openai-key');
+      expect(responseText).not.toContain('gsk-test-groq-key');
       expect(responseText).not.toContain('sk-test-anthropic-key');
     });
 

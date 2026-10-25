@@ -506,29 +506,29 @@ jobs:
       
       - name: Create .env file
         run: |
+          if [ -n "${{ secrets.LLM_KEY_ENCRYPTION_KEY }}" ]; then
+            ENC_KEY="${{ secrets.LLM_KEY_ENCRYPTION_KEY }}"
+          else
+            ENC_KEY="$(openssl rand -base64 32)"
+          fi
           cat > .env << EOF
           POSTGRES_USER=vault_user
           POSTGRES_PASSWORD=vault_pass_ci
           POSTGRES_DB=vault_risk_copilot
           POSTGRES_PORT=5432
-          DATABASE_URL=postgresql://vault_user:vault_pass_ci@postgres:5432/vault_risk_copilot
           RISK_SERVICE_URL=http://risk-service:8000
+          RISK_INTERNAL_TOKEN=local-dev-risk-internal-token
           DEFILLAMA_API_URL=https://yields.llama.fi
           COLLECTION_INTERVAL_MS=300000
           LOG_LEVEL=info
           NODE_ENV=production
+          LLM_PROVIDER=mock
+          LLM_KEY_ENCRYPTION_KEY=${ENC_KEY}
+          SIWE_DOMAIN=localhost:5173
+          SIWE_URI=http://localhost:5173
+          SIWE_CHAIN_ID=31337
+          SIWE_CHAIN_IDS=31337,11155111
           EOF
-      
-      - name: Start services
-        run: |
-          if [ -z "${{ secrets.LLM_KEY_ENCRYPTION_KEY }}" ]; then
-            echo "LLM_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> $GITHUB_ENV
-          else
-            echo "LLM_KEY_ENCRYPTION_KEY=${{ secrets.LLM_KEY_ENCRYPTION_KEY }}" >> $GITHUB_ENV
-          fi
-          echo "SIWE_DOMAIN=localhost" >> $GITHUB_ENV
-          echo "SIWE_URI=http://localhost:3000" >> $GITHUB_ENV
-          echo "SIWE_CHAIN_ID=1" >> $GITHUB_ENV
       
       - name: Docker compose up
         run: |
@@ -637,14 +637,14 @@ jobs:
       
       - name: Wait for risk-service to be healthy
         run: |
-          echo "Waiting for risk-service to be healthy (up to 60 seconds)..."
-          timeout 60 bash -c 'until curl -sf http://localhost:8000/health > /dev/null; do sleep 2; done'
+          echo "Waiting for risk-service to be healthy (internal network, up to 90 seconds)..."
+          timeout 90 bash -c 'until docker compose exec -T risk-service python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\")"; do sleep 2; done'
           echo "✅ Risk service is healthy"
       
       - name: Test risk-service API
         run: |
-          echo "=== Testing /health endpoint ==="
-          HEALTH=$(curl -s http://localhost:8000/health)
+          echo "=== Testing /health endpoint (via compose exec) ==="
+          HEALTH=$(docker compose exec -T risk-service python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())")
           echo "$HEALTH" | jq .
           
           STATUS=$(echo "$HEALTH" | jq -r '.status')
@@ -653,6 +653,29 @@ jobs:
             exit 1
           fi
           echo "✅ Risk service health check passed"
+
+      - name: Wait for automatic risk scores
+        run: |
+          echo "Waiting for collector/scheduler to write risk_scores (up to 3 minutes)..."
+          START_TIME=$(date +%s)
+          TIMEOUT=180
+          while true; do
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+            if [ $ELAPSED -gt $TIMEOUT ]; then
+              echo "❌ Timeout waiting for automatic risk scores"
+              docker compose logs risk-service --tail 50
+              docker compose logs collector --tail 50
+              exit 1
+            fi
+            COUNT=$(docker compose exec -T postgres psql -U vault_user -d vault_risk_copilot -t -c "SELECT COUNT(*) FROM risk_scores;" | tr -d ' ')
+            echo "risk_scores count: $COUNT (elapsed: ${ELAPSED}s)"
+            if [ "$COUNT" -gt 0 ] 2>/dev/null; then
+              echo "✅ Automatic risk scores present: $COUNT"
+              break
+            fi
+            sleep 5
+          done
       
       - name: Wait for API to be healthy
         run: |
@@ -698,13 +721,24 @@ jobs:
             echo "Response: $POOLS_RESPONSE"
             exit 1
           fi
+
+          echo "=== Testing /docs OpenAPI ==="
+          DOCS_STATUS=$(curl -s -o /tmp/docs.html -w '%{http_code}' http://localhost:3000/docs)
+          if [ "$DOCS_STATUS" != "200" ]; then
+            echo "❌ /docs returned HTTP $DOCS_STATUS"
+            exit 1
+          fi
+          if ! grep -qi 'openapi' /tmp/docs.html; then
+            echo "❌ /docs HTML is missing an OpenAPI link"
+            exit 1
+          fi
+          curl -sf http://localhost:3000/docs/openapi.json | jq -e '.openapi'
+          echo "✅ /docs and /docs/openapi.json are served"
       
       - name: Trigger risk score computation
         run: |
-          echo "=== Triggering risk score recomputation ==="
-          RECOMPUTE_RESULT=$(curl -s -X POST http://localhost:8000/recompute \
-            -H "Content-Type: application/json" \
-            -d '{"pool_ids": null, "force": true}')
+          echo "=== Triggering risk score recomputation (internal token) ==="
+          RECOMPUTE_RESULT=$(docker compose exec -T risk-service python -c 'import json,urllib.request; req=urllib.request.Request("http://127.0.0.1:8000/recompute",data=json.dumps({"pool_ids":None,"force":True}).encode(),headers={"Content-Type":"application/json","X-Internal-Token":"local-dev-risk-internal-token"},method="POST"); print(urllib.request.urlopen(req,timeout=120).read().decode())')
           
           echo "$RECOMPUTE_RESULT" | jq .
           
@@ -720,6 +754,18 @@ jobs:
           # Save first computed pool ID for explain test
           COMPUTED_POOL_ID=$(echo "$RECOMPUTE_RESULT" | jq -r '.pool_ids[0]')
           echo "COMPUTED_POOL_ID=$COMPUTED_POOL_ID" >> $GITHUB_ENV
+
+          echo "=== Testing API POST /api/risk/recompute/:id ==="
+          API_RECOMPUTE=$(curl -s -X POST "http://localhost:3000/api/risk/recompute/${COMPUTED_POOL_ID}" \
+            -H "Content-Type: application/json" \
+            -d '{"force": true}')
+          echo "$API_RECOMPUTE" | jq .
+          API_STATUS=$(echo "$API_RECOMPUTE" | jq -r '.status')
+          if [ "$API_STATUS" != "success" ]; then
+            echo "❌ API recompute proxy failed"
+            exit 1
+          fi
+          echo "✅ API recompute proxy succeeded"
       
       - name: Test LLM explain endpoint
         run: |
@@ -801,8 +847,8 @@ jobs:
       
       - name: Test GET /scores endpoint
         run: |
-          echo "=== Testing GET /scores endpoint ==="
-          SCORES=$(curl -s "http://localhost:8000/scores?limit=5")
+          echo "=== Testing GET /scores endpoint (via compose exec) ==="
+          SCORES=$(docker compose exec -T risk-service python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/scores?limit=5').read().decode())")
           echo "$SCORES" | jq .
           
           TOTAL=$(echo "$SCORES" | jq -r '.total')

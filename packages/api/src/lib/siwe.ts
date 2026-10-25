@@ -8,6 +8,7 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export interface SiweVerifyOptions {
   domain: string;
   expectedChainId?: number;
+  expectedChainIds?: number[];
   expectedUri?: string;
 }
 
@@ -36,8 +37,15 @@ export async function verifyAndConsumeSiweMessage(
     throw new Error(`Domain mismatch: expected ${options.domain}, got ${siweMessage.domain}`);
   }
   
-  if (options.expectedChainId && siweMessage.chainId !== options.expectedChainId) {
-    throw new Error(`Chain ID mismatch: expected ${options.expectedChainId}, got ${siweMessage.chainId}`);
+  const allowedChainIds = options.expectedChainIds?.length
+    ? options.expectedChainIds
+    : options.expectedChainId
+      ? [options.expectedChainId]
+      : [];
+  if (allowedChainIds.length > 0 && !allowedChainIds.includes(siweMessage.chainId)) {
+    throw new Error(
+      `Chain ID mismatch: expected one of [${allowedChainIds.join(', ')}], got ${siweMessage.chainId}`
+    );
   }
   
   if (options.expectedUri && siweMessage.uri !== options.expectedUri) {
