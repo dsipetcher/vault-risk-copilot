@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { createProvider, getDefaultModel } from '@vault-risk-copilot/llm';
+import { createProvider, getDefaultModel, isInvalidKeyError } from '@vault-risk-copilot/llm';
 import { llmProviderConfigSchema } from '../types/schemas.js';
 import {
   generateExplanation,
@@ -246,6 +246,17 @@ export async function explanationsRoutes(app: FastifyInstance) {
             },
             required: ['ok', 'provider', 'model'],
           },
+          401: {
+            type: 'object',
+            properties: {
+              ok: { type: 'boolean' },
+              error: { type: 'string' },
+              message: { type: 'string' },
+              provider: { type: 'string' },
+              model: { type: 'string' },
+            },
+            required: ['ok', 'error', 'message'],
+          },
         },
       },
     },
@@ -266,19 +277,32 @@ export async function explanationsRoutes(app: FastifyInstance) {
           model,
           baseUrl: body.baseUrl,
         });
-        createProvider({
+        const instance = createProvider({
           provider,
           apiKey,
           model,
           baseUrl: body.baseUrl,
         });
+        await instance.validateConnection();
         return reply.send({ ok: true, provider, model });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const configStatus = statusForLlmConfigError(error) ?? 400;
+        if (isInvalidKeyError(error) || statusForLlmConfigError(error) === 401) {
+          return reply.code(401).send({
+            ok: false,
+            error: 'invalid_key',
+            message: message || 'Invalid API key',
+            provider,
+            model,
+          });
+        }
+        const configStatus = statusForLlmConfigError(error) ?? 502;
         return reply.code(configStatus).send({
-          error: message,
+          ok: false,
+          error: configStatus === 400 ? 'invalid_config' : 'provider_error',
           message,
+          provider,
+          model,
         });
       }
     }

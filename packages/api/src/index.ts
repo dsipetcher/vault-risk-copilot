@@ -3,8 +3,8 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
-import apiReference from '@scalar/fastify-api-reference';
 import { env, getAllowedSiweChainIds } from './config.js';
+import { docsRoutes } from './docs.js';
 import { pool } from './database.js';
 import { healthRoutes } from './routes/health.js';
 import { poolsRoutes } from './routes/pools.js';
@@ -105,27 +105,7 @@ export async function build() {
     timeWindow: env.RATE_LIMIT_WINDOW,
   });
 
-  await app.register(apiReference, {
-    routePrefix: '/docs',
-    configuration: {
-      spec: {
-        content: {
-          openapi: '3.1.0',
-          info: {
-            title: 'Vault Risk Copilot API',
-            version: '1.0.0',
-            description: 'Node.js API for Vault Risk Copilot - aggregates pool data, risk scores, and vault state',
-          },
-          servers: [
-            {
-              url: `http://${env.HOST}:${env.PORT}`,
-              description: 'Development server',
-            },
-          ],
-        },
-      },
-    },
-  });
+  await docsRoutes(app);
 
   await app.register(healthRoutes, { prefix: '/api' });
   await app.register(poolsRoutes, { prefix: '/api' });

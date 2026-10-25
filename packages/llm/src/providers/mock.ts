@@ -58,6 +58,10 @@ export class MockProvider implements LLMProvider {
     };
   }
 
+  async validateConnection(): Promise<void> {
+    return;
+  }
+
   private sanitizeInput(text: string): string {
     const truncated = text.substring(0, 200);
     return truncated.replace(/[<>]/g, '');

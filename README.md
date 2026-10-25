@@ -163,7 +163,7 @@ docker compose exec postgres psql -U vault_user -d vault_risk_copilot \
 - **PostgreSQL:** localhost:5432 (auto-applies migrations on first start)
 - **Collector:** Runs immediately, then every 5 minutes; fetches DeFiLlama pools and triggers risk recompute
 - **API:** http://localhost:3000 (Node.js REST API)
-- **API docs:** http://localhost:3000/docs (Scalar / OpenAPI)
+- **API docs:** http://localhost:3000/docs (OpenAPI at `/docs/openapi.json`)
 - **Risk Service:** internal to the compose network only (no host port). Debug with `docker compose exec risk-service ...`
 - **Frontend:** http://localhost:5173 (React + Vite)
 

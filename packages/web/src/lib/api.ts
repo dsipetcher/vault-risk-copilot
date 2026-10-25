@@ -102,7 +102,7 @@ class ApiClient {
     model?: string;
     baseUrl?: string;
     apiKey?: string;
-  } = {}): Promise<{ ok: boolean; provider: string; model: string }> {
+  } = {}): Promise<{ ok: boolean; provider: string; model: string; error?: string; message?: string }> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

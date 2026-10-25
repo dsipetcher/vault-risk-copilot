@@ -8,11 +8,11 @@ import {
   ListResourceTemplatesRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
-  McpError,
   ErrorCode,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Config } from './config.js';
 import { ApiClient } from './api-client.js';
+import { protocolError } from './protocol-error.js';
 import {
   listPoolsTool,
   getPoolRiskTool,
@@ -227,7 +227,7 @@ export function createServer(config: Config): Server {
           description:
             'Get current state of the ERC-4626 vault deployed on Sepolia testnet. ' +
             'Returns vault address, total assets, total supply, share price, and block number. ' +
-            'Returns null if vault is not deployed or API does not support this endpoint.',
+            'Returns a precise error if the vault is not configured (VAULT_ADDRESS/RPC) or the read fails.',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -308,18 +308,18 @@ export function createServer(config: Config): Server {
     if (uri.startsWith('pool://')) {
       const id = uri.slice('pool://'.length);
       if (!UUID_RE.test(id)) {
-        throw new McpError(ErrorCode.InvalidParams, 'pool:// id must be a UUID');
+        throw protocolError(ErrorCode.InvalidParams, 'pool:// id must be a UUID');
       }
       try {
         const pool = await apiClient.getPoolRisk(id);
         return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(pool, null, 2) }] };
       } catch (error) {
         const text = toolErrorResult(error).content[0].text.replace(/^MCP error -?\d+:\s*/i, '');
-        throw new McpError(ErrorCode.InvalidParams, text);
+        throw protocolError(ErrorCode.InvalidParams, text);
       }
     }
 
-    throw new McpError(ErrorCode.InvalidParams, 'Unknown resource');
+    throw protocolError(ErrorCode.InvalidParams, 'Unknown resource');
   });
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => {

@@ -1,6 +1,9 @@
 import type { LLMProvider } from '../types.js';
 import type { RiskInput, ExplanationOutput } from '../schemas.js';
 import { explanationOutputSchema } from '../schemas.js';
+import { InvalidKeyError } from '../errors.js';
+import { collectTextNumbers, numbersMatch } from '../number-fidelity.js';
+import { RateLimitError, isRateLimitError, parseRetryAfterMs, sleep } from '../rate-limit.js';
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -143,12 +146,12 @@ export class OpenAIProvider implements LLMProvider {
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
-        // Fail fast on rate_limited errors (don't retry)
-        if (lastError.message.includes('Rate limit exceeded')) {
+
+        // Rate limits already did a bounded HTTP retry — do not burn a validation attempt.
+        if (isRateLimitError(lastError) || lastError instanceof InvalidKeyError) {
           break;
         }
-        
+
         if (attempts < 2) {
           continue;
         }
@@ -304,48 +307,88 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
     if (!response.ok) {
       const errorText = await response.text();
       const providerHost = new URL(this.baseUrl).hostname;
-      
-      // On 429, honor retry-after header
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        if (retryAfter) {
-          const waitSec = parseInt(retryAfter, 10);
-          const waitMs = waitSec * 1000;
-          
-          // Fail fast if retry-after > 3 seconds
-          if (!isNaN(waitSec) && waitSec > 3) {
-            console.warn(`[Rate Limited] Provider ${providerHost} requires ${waitSec}s wait, failing fast with rate_limited fallback`);
-            throw new Error('Rate limit exceeded (retry-after too long)');
-          }
-          
-          if (!isNaN(waitMs) && waitMs > 0 && waitMs < 60000) {
-            console.warn(`[Rate Limited] Provider ${providerHost} waiting ${waitMs}ms before retry`);
-            await new Promise(resolve => setTimeout(resolve, waitMs));
-            
-            // Retry once after waiting
-            const retryResponse = await fetch(`${this.baseUrl}/chat/completions`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${this.apiKey}`,
-              },
-              body: JSON.stringify(requestBody),
-            });
-            
-            if (!retryResponse.ok) {
-              const retryErrorText = await retryResponse.text();
-              throw new Error(`${providerHost} API error (after retry): ${retryResponse.status} ${retryErrorText}`);
-            }
-            
-            return (await retryResponse.json()) as OpenAIChatCompletionResponse;
-          }
-        }
+
+      if (response.status === 401 || response.status === 403) {
+        throw new InvalidKeyError();
       }
-      
+
+      if (response.status === 429) {
+        const waitMs = parseRetryAfterMs(response.headers.get('retry-after'));
+        console.warn(`[Rate Limited] Provider ${providerHost} waiting ${waitMs}ms before retry`);
+        await sleep(waitMs);
+
+        const retryResponse = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!retryResponse.ok) {
+          if (retryResponse.status === 429) {
+            throw new RateLimitError();
+          }
+          if (retryResponse.status === 401 || retryResponse.status === 403) {
+            throw new InvalidKeyError();
+          }
+          const retryErrorText = await retryResponse.text();
+          throw new Error(`${providerHost} API error (after retry): ${retryResponse.status} ${retryErrorText}`);
+        }
+
+        return (await retryResponse.json()) as OpenAIChatCompletionResponse;
+      }
+
       throw new Error(`${providerHost} API error: ${response.status} ${errorText}`);
     }
 
     return (await response.json()) as OpenAIChatCompletionResponse;
+  }
+
+  async validateConnection(): Promise<void> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4_000);
+    const headers = { Authorization: `Bearer ${this.apiKey}` };
+
+    try {
+      const modelsRes = await fetch(`${this.baseUrl}/models`, {
+        headers,
+        signal: controller.signal,
+      });
+      if (modelsRes.status === 401 || modelsRes.status === 403) {
+        throw new InvalidKeyError();
+      }
+      if (modelsRes.ok) return;
+
+      const ping = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+        }),
+        signal: controller.signal,
+      });
+      if (ping.status === 401 || ping.status === 403) {
+        throw new InvalidKeyError();
+      }
+      if (!ping.ok) {
+        throw new Error(`Provider rejected the key check (${ping.status})`);
+      }
+    } catch (error) {
+      if (error instanceof InvalidKeyError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Provider timed out during key check');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private validateNumberFidelity(input: RiskInput, output: ExplanationOutput): boolean {
@@ -468,39 +511,11 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
     input: RiskInput
   ): boolean {
     const factorText = item.text;
-    
-    // Normalize K/M/B units and word scales (Groq writes "$5 M" and "$5 million")
-    // Word scales first so "$5 million" is not consumed as "$5 m" + "illion".
-    let normalized = factorText
-      .replace(/\$?(\d+(?:\.\d+)?)\s*(million|billion)\b/gi, (_match, num, unit) => {
-        const multipliers: Record<string, number> = { million: 1_000_000, billion: 1_000_000_000 };
-        return `$${parseFloat(num) * multipliers[unit.toLowerCase()]}`;
-      })
-      .replace(/\$(\d+(?:\.\d+)?)\s*([KMB])\b/gi, (_match, num, unit) => {
-        const multipliers: Record<string, number> = { K: 1000, M: 1_000_000, B: 1_000_000_000 };
-        return `$${parseFloat(num) * multipliers[unit.toUpperCase()]}`;
-      })
-      .replace(/\$(\d+),(\d+)/g, '$1$2');
+    const numbersInFactor = collectTextNumbers(factorText);
 
-    // Remove duration labels and scale phrases
-    // Include hyphenated forms Groq/gpt-oss uses: "7-day", "30-day window", "24-hour"
-    normalized = normalized.replace(/\b\d+\s*d(?:ays?)?\b/gi, '');
-    normalized = normalized.replace(/\b\d+\s*-\s*d(?:ays?)?\b/gi, '');
-    normalized = normalized.replace(/\b\d+\s*-\s*hours?\b/gi, '');
-    // "520,000" / "$1,000,000" — strip grouping commas so we keep one number
-    normalized = normalized.replace(/\$?(\d{1,3}(?:,\d{3})+(?:\.\d+)?)/g, (_, n) => n.replace(/,/g, ''));
-    normalized = normalized.replace(/\/100\b/g, '');
-    // Strip 'out of 100' / 'of 100' ONLY after a number, keeping the number
-    normalized = normalized.replace(/(\d+(?:\.\d+)?)\s*(?:out of|of)\s*100\b/gi, '$1');
-    normalized = normalized.replace(/-?\d+(?:\.\d+)?%/g, (match) => ` ${match.slice(0, -1)} `);
-
-    // Extract numbers
-    const numberPattern = /-?\d+(?:\.\d+)?/g;
-    const numbersInFactor = normalized.match(numberPattern) || [];
-
-    for (const numStr of numbersInFactor) {
-      const num = parseFloat(numStr);
+    for (const num of numbersInFactor) {
       if (isNaN(num)) continue;
+      const numStr = String(num);
 
       // Find context around this number in original text
       const numIndex = factorText.indexOf(numStr);
@@ -530,54 +545,37 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
 
       let found = false;
       for (const allowedNum of allowedNumbers) {
-        // Exact match after unit normalization, with rounding tolerance to displayed precision
-        // Round both to 2 decimals (typical display precision)
-        const numRounded = Math.round(num * 100) / 100;
-        const allowedRounded = Math.round(allowedNum * 100) / 100;
-        
-        if (numRounded === allowedRounded) {
-          // Check sign consistency
-          const signMatches = (allowedNum < 0) === (num < 0);
-          
-          // If signs match exactly, allow it
-          if (signMatches) {
-            // But reject increase wording with negative numbers
-            if (allowedNum < 0 && hasIncreaseWording) {
-              console.warn(`[Number Fidelity] Item '${item.context}' uses increase wording with negative input ${allowedNum}`);
-              return false;
-            }
+        const signMatches = (allowedNum < 0) === (num < 0);
+        const matchesValue = numbersMatch(num, allowedNum);
+        const matchesAbs =
+          allowedNum < 0 && num > 0 && numbersMatch(num, Math.abs(allowedNum));
+
+        if (matchesValue && signMatches) {
+          if (allowedNum < 0 && hasIncreaseWording) {
+            console.warn(`[Number Fidelity] Item '${item.context}' uses increase wording with negative input ${allowedNum}`);
+            return false;
+          }
+          found = true;
+          break;
+        }
+
+        if (matchesAbs) {
+          if (hasDecreaseWording) {
             found = true;
             break;
           }
-          
-          // If allowedNum is negative but num is positive (abs value case)
-          if (allowedNum < 0 && num > 0) {
-            // Only allow if there's decrease wording
-            if (hasDecreaseWording) {
-              found = true;
-              break;
-            }
-            // Reject increase wording with positive abs value of negative input
-            if (hasIncreaseWording) {
-              console.warn(`[Number Fidelity] Item '${item.context}' uses increase wording (${num}) for negative input ${allowedNum}`);
-              return false;
-            }
+          if (hasIncreaseWording) {
+            console.warn(`[Number Fidelity] Item '${item.context}' uses increase wording (${num}) for negative input ${allowedNum}`);
+            return false;
           }
         }
       }
 
-      if (!found) {
-        // Last chance: check if num is abs value of any negative allowedNum with decrease wording
-        if (num > 0 && hasDecreaseWording) {
-          for (const allowedNum of allowedNumbers) {
-            if (allowedNum < 0) {
-              const numRounded = Math.round(num * 100) / 100;
-              const allowedAbsRounded = Math.round(Math.abs(allowedNum) * 100) / 100;
-              if (numRounded === allowedAbsRounded) {
-                found = true;
-                break;
-              }
-            }
+      if (!found && num > 0 && hasDecreaseWording) {
+        for (const allowedNum of allowedNumbers) {
+          if (allowedNum < 0 && numbersMatch(num, Math.abs(allowedNum))) {
+            found = true;
+            break;
           }
         }
       }

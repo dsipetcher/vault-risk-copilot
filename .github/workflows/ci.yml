@@ -721,6 +721,19 @@ jobs:
             echo "Response: $POOLS_RESPONSE"
             exit 1
           fi
+
+          echo "=== Testing /docs OpenAPI ==="
+          DOCS_STATUS=$(curl -s -o /tmp/docs.html -w '%{http_code}' http://localhost:3000/docs)
+          if [ "$DOCS_STATUS" != "200" ]; then
+            echo "❌ /docs returned HTTP $DOCS_STATUS"
+            exit 1
+          fi
+          if ! grep -qi 'openapi' /tmp/docs.html; then
+            echo "❌ /docs HTML is missing an OpenAPI link"
+            exit 1
+          fi
+          curl -sf http://localhost:3000/docs/openapi.json | jq -e '.openapi'
+          echo "✅ /docs and /docs/openapi.json are served"
       
       - name: Trigger risk score computation
         run: |

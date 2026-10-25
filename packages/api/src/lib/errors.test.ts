@@ -19,6 +19,13 @@ describe('LLM config error status mapping', () => {
     ).toBe(400);
   });
 
+  it('maps invalid API keys to 401', () => {
+    const invalid = new Error('Invalid API key');
+    invalid.name = 'InvalidKeyError';
+    expect(statusForLlmConfigError(invalid)).toBe(401);
+    expect(statusForLlmConfigError(new Error('invalid api key from provider'))).toBe(401);
+  });
+
   it('does not map unrelated errors', () => {
     expect(statusForLlmConfigError(new Error('boom'))).toBeNull();
   });

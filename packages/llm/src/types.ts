@@ -14,6 +14,8 @@ export interface LLMProvider {
       fallback_reason?: string;
     };
   }>;
+  /** Lightweight live ping so a bad key is rejected before explain. */
+  validateConnection(): Promise<void>;
 }
 
 export interface LLMConfig {

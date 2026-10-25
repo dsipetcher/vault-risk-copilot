@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ApiClient } from './api-client.js';
-import { ApiError } from './api-client.js';
+import { ApiError, VaultNotConfiguredError } from './api-client.js';
 
 const MAX_POOLS_LIMIT = 50;
 const MAX_COMPARE_POOLS = 5;
@@ -43,6 +43,9 @@ export function stripMcpErrorPrefix(message: string): string {
 export function safeErrorMessage(error: unknown): string {
   if (error instanceof z.ZodError) {
     return 'Invalid input: ' + error.issues.map((i) => `${i.path.join('.') || 'value'}: ${i.message}`).join('; ');
+  }
+  if (error instanceof VaultNotConfiguredError) {
+    return error.message;
   }
   if (error instanceof ApiError) {
     if (error.statusCode === 404) return 'Not found: no pool with that id';
@@ -240,14 +243,24 @@ export async function explainPoolRiskTool(
 }
 
 export async function getVaultInfoTool(apiClient: ApiClient) {
-  const vaultState = await apiClient.getVaultInfo();
+  let vaultState;
+  try {
+    vaultState = await apiClient.getVaultInfo();
+  } catch (error) {
+    if (error instanceof VaultNotConfiguredError) {
+      return {
+        content: [{ type: 'text' as const, text: error.message }],
+      };
+    }
+    throw error;
+  }
 
   if (!vaultState) {
     return {
       content: [
         {
           type: 'text' as const,
-          text: 'Vault information is not available (vault may not be deployed or API does not support this endpoint).',
+          text: 'Vault is not deployed.',
         },
       ],
     };

@@ -47,12 +47,18 @@ export function LLMSettingsDialog({ isOpen, onClose }: LLMSettingsDialogProps) {
     setTestError('');
 
     try {
-      await apiClient.validateLlm({
+      const result = await apiClient.validateLlm({
         provider: settings.provider,
         model: settings.model,
         baseUrl: settings.baseUrl,
         apiKey: settings.apiKey,
       });
+
+      if (result.ok === false) {
+        setTestStatus('error');
+        setTestError(result.message || result.error || 'Connection test failed');
+        return;
+      }
 
       setTestStatus('success');
       setTimeout(() => setTestStatus('idle'), 3000);
@@ -206,9 +212,9 @@ export function LLMSettingsDialog({ isOpen, onClose }: LLMSettingsDialogProps) {
             {testStatus === 'idle' && 'Test Connection'}
           </button>
 
-          {testStatus === 'error' && testError && (
+          {testStatus === 'error' && (
             <p className="text-sm text-red-600" data-testid="test-error">
-              {testError}
+              {testError || 'Connection test failed'}
             </p>
           )}
           <ServerKeySettings onClose={onClose} />

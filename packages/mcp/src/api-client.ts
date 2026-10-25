@@ -23,6 +23,13 @@ export class ApiError extends Error {
   }
 }
 
+export class VaultNotConfiguredError extends Error {
+  constructor(message = 'Vault not configured: set VAULT_ADDRESS/RPC') {
+    super(message);
+    this.name = 'VaultNotConfiguredError';
+  }
+}
+
 export class ApiClient {
   private config: Config;
 
@@ -161,7 +168,10 @@ export class ApiClient {
       const result = await this.fetch<{ data: unknown }>('/api/vault/state');
       return vaultStateSchema.parse(result.data);
     } catch (error) {
-      if (error instanceof ApiError && (error.statusCode === 404 || error.statusCode === 503)) {
+      if (error instanceof ApiError && error.statusCode === 503) {
+        throw new VaultNotConfiguredError();
+      }
+      if (error instanceof ApiError && error.statusCode === 404) {
         return null;
       }
       throw error;

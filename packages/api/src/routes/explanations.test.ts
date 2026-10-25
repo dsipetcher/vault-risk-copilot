@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { build } from '../index.js';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../database.js';
@@ -264,5 +264,34 @@ describe('Explanations API Tests', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(JSON.parse(response.body).message).toMatch(/API key is required/i);
+  });
+
+  describe('live provider ping', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    it('maps a mocked 401 for gsk_bad to invalid_key', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response('invalid api key', { status: 401 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/llm/validate',
+        headers: {
+          'content-type': 'application/json',
+          'x-llm-api-key': 'gsk_bad',
+        },
+        body: JSON.stringify({ provider: 'groq' }),
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body);
+      expect(body.ok).toBe(false);
+      expect(body.error).toBe('invalid_key');
+      expect(body.message).toMatch(/invalid api key/i);
+      expect(fetchMock).toHaveBeenCalled();
+    });
   });
 });

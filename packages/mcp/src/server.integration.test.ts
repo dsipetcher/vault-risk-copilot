@@ -137,6 +137,15 @@ describe('MCP Server Integration Tests', () => {
     expect(textBlocks(result)[0].text).toMatch(/disclaimer|educational|not financial/i);
   }, 30000);
 
+  it('does not double-prefix resource protocol errors', async () => {
+    await expect(client.readResource({ uri: 'pool://not-a-uuid' })).rejects.toMatchObject({
+      message: 'MCP error -32602: pool:// id must be a UUID',
+    });
+    await expect(client.readResource({ uri: 'unknown://x' })).rejects.toMatchObject({
+      message: 'MCP error -32602: Unknown resource',
+    });
+  });
+
   it('should expose and read the pool://{id} resource template', async () => {
     const t = await client.listResourceTemplates();
     expect(t.resourceTemplates.map((r) => r.uriTemplate)).toContain('pool://{id}');
@@ -144,6 +153,15 @@ describe('MCP Server Integration Tests', () => {
     const pool = JSON.parse((r.contents[0] as { text: string }).text);
     expect(pool.pool_id).toBe(SEEDED_HIGH);
     expect(pool.risk_score?.total_risk_score ?? pool.total_risk_score).toBe(72.5);
+  });
+
+  it('get_vault_info distinguishes an unconfigured vault from a generic failure', async () => {
+    const result = await client.callTool({ name: 'get_vault_info', arguments: {} });
+    expect(result.isError).toBeFalsy();
+    expect(textBlocks(result)[0].text).toMatch(
+      /Vault not configured: set VAULT_ADDRESS\/RPC|Vault State \(ERC-4626\)|Vault is not deployed/
+    );
+    expect(textBlocks(result)[0].text).not.toMatch(/may not be deployed or API does not support/);
   });
 
   it('should list and read the methodology resource', async () => {

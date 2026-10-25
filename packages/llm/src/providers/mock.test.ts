@@ -199,4 +199,8 @@ describe('MockProvider', () => {
     expect(factor?.explanation).not.toMatch(/Stable TVL/i);
     expect(factor?.explanation).toMatch(/Moderate TVL movement/i);
   });
+
+  it('validateConnection succeeds without a network call', async () => {
+    await expect(provider.validateConnection()).resolves.toBeUndefined();
+  });
 });

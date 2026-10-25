@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ApiClient } from './api-client.js';
-import { ApiError } from './api-client.js';
+import { ApiError, VaultNotConfiguredError } from './api-client.js';
 import {
   listPoolsTool,
   getPoolRiskTool,
@@ -255,12 +255,20 @@ describe('Tools', () => {
       expect(result.content[0].text).toContain('1.111111');
     });
 
-    it('should handle unavailable vault', async () => {
+    it('should say the vault is not deployed when the API returns 404/null', async () => {
       vi.mocked(mockApiClient.getVaultInfo).mockResolvedValue(null);
 
       const result = await getVaultInfoTool(mockApiClient);
 
-      expect(result.content[0].text).toContain('not available');
+      expect(result.content[0].text).toBe('Vault is not deployed.');
+    });
+
+    it('should say VAULT_ADDRESS/RPC must be set when the vault is not configured', async () => {
+      vi.mocked(mockApiClient.getVaultInfo).mockRejectedValue(new VaultNotConfiguredError());
+
+      const result = await getVaultInfoTool(mockApiClient);
+
+      expect(result.content[0].text).toBe('Vault not configured: set VAULT_ADDRESS/RPC');
     });
   });
 });
@@ -272,6 +280,9 @@ describe('safeErrorMessage / toolErrorResult', () => {
     expect(safeErrorMessage(new Error('secret http://internal/x'))).toBe('Internal error');
     expect(safeErrorMessage(new Error('MCP error -32602: MCP error -32602: bad input'))).toBe(
       'bad input'
+    );
+    expect(safeErrorMessage(new VaultNotConfiguredError())).toBe(
+      'Vault not configured: set VAULT_ADDRESS/RPC'
     );
   });
 });

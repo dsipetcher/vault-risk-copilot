@@ -290,7 +290,7 @@ describe('ApiClient', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null for 503 (vault not configured)', async () => {
+    it('should throw VaultNotConfiguredError for 503', async () => {
       server.use(
         http.get('http://localhost:3000/api/vault/state', () => {
           return HttpResponse.json({ error: 'Vault monitoring not configured' }, { status: 503 });
@@ -298,9 +298,7 @@ describe('ApiClient', () => {
       );
 
       const client = new ApiClient(mockConfig);
-      const result = await client.getVaultInfo();
-
-      expect(result).toBeNull();
+      await expect(client.getVaultInfo()).rejects.toThrow('Vault not configured: set VAULT_ADDRESS/RPC');
     });
   });
 

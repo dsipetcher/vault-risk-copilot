@@ -299,7 +299,7 @@ describe('Number Fidelity Validation', () => {
     expect(result).toBe(false);
   });
 
-  it('REJECT: $510K vs input 500K (exact match required after unit normalization)', () => {
+  it('REJECT: $550K vs input 500K (10% is not reasonable rounding)', () => {
     const inputWith500K = {
       ...baseInput,
       pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 500000 },
@@ -309,8 +309,8 @@ describe('Number Fidelity Validation', () => {
       key_factors: [
         {
           signal: 'TVL Score',
-          value: '$510K',
-          explanation: 'TVL is $510K.',
+          value: '$550K',
+          explanation: 'TVL is $550K.',
         },
       ],
       disclaimer: 'Test',
@@ -597,6 +597,38 @@ describe('Number Fidelity Validation', () => {
 
   it('REJECT: "$5 marks" is not read as $5M', () => {
     expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5 marks'))).toBe(false);
+  });
+
+  it('ACCEPT: "$22.5 B" rounded from TVL 22532735702', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 22532735702 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$22.5 B'))).toBe(true);
+  });
+
+  it('ACCEPT: "$2.68 billion" rounded from TVL 2678123456', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 2_678_123_456 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$2.68 billion'))).toBe(true);
+  });
+
+  it('ACCEPT: "$3.5 billion" parses the decimal+word scale (not leftover 3)', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 3_500_000_000 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$3.5 billion'))).toBe(true);
+  });
+
+  it('ACCEPT: "$3.5billion" without a space', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 3_512_000_000 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$3.5billion'))).toBe(true);
   });
 
   it('ACCEPT: grouped thousands without a $ prefix (520,000)', () => {
