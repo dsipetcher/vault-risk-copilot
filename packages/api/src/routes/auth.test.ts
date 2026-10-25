@@ -1,16 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { build } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { execSync } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
 import { SiweMessage } from 'siwe';
 import { Wallet } from 'ethers';
 import { pool } from '../database.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const workspaceRoot = resolve(__dirname, '../../../..');
 
 describe('SIWE Authentication Tests', () => {
   let app: FastifyInstance;
@@ -25,13 +18,6 @@ describe('SIWE Authentication Tests', () => {
     process.env.SIWE_DOMAIN = 'localhost';
     process.env.SIWE_URI = 'http://localhost:3000';
     process.env.SIWE_CHAIN_ID = '1';
-
-    const migrationsScript = resolve(workspaceRoot, 'db/run-migrations.sh');
-    const migrationsDir = resolve(workspaceRoot, 'db/migrations');
-    execSync(`bash ${migrationsScript}`, {
-      env: { ...process.env, MIGRATIONS_DIR: migrationsDir },
-      stdio: 'inherit',
-    });
 
     app = await build();
     wallet = Wallet.createRandom();
