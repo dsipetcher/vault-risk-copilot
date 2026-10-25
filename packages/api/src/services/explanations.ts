@@ -1,8 +1,9 @@
 import { pool } from '../database.js';
-import { createProvider, validateBaseUrl } from '@vault-risk-copilot/llm';
+import { createProvider, validateBaseUrl, getDefaultModel } from '@vault-risk-copilot/llm';
 import type { LLMConfig, ExplanationOutput, RiskInput } from '@vault-risk-copilot/llm';
 import type { LLMProviderConfig } from '../types/schemas.js';
 import { getPoolById } from './pools.js';
+import { HttpError } from '../lib/errors.js';
 
 export interface ExplanationResult {
   explanation: ExplanationOutput;
@@ -78,18 +79,22 @@ export async function generateExplanation(
 ): Promise<ExplanationResult> {
   const poolData = await getPoolById(poolId);
 
-  if (!poolData || !poolData.risk_score) {
-    throw new Error(`Pool ${poolId} not found or has no risk score`);
+  if (!poolData) {
+    throw new HttpError(404, 'Pool not found');
+  }
+  if (!poolData.risk_score) {
+    throw new HttpError(404, 'Pool not found or has no risk score');
   }
 
   if (providerConfig?.baseUrl) {
     validateBaseUrl(providerConfig.baseUrl);
   }
 
+  const providerName = providerConfig?.provider || (apiKey ? 'openai' : 'mock');
   const llmConfig: LLMConfig = {
-    provider: providerConfig?.provider || (apiKey ? 'openai' : 'mock'),
+    provider: providerName,
     apiKey,
-    model: providerConfig?.model,
+    model: providerConfig?.model?.trim() || getDefaultModel(providerName),
     baseUrl: providerConfig?.baseUrl,
   };
 

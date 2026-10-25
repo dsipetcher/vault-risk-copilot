@@ -7,6 +7,7 @@ import { Layout } from './components/Layout';
 import { PoolsPage } from './pages/PoolsPage';
 import { PoolDetailPage } from './pages/PoolDetailPage';
 import { VaultPage } from './pages/VaultPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ function App() {
               <Route path="pools" element={<PoolsPage />} />
               <Route path="pools/:id" element={<PoolDetailPage />} />
               <Route path="vault" element={<VaultPage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

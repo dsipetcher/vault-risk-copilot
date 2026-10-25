@@ -2,7 +2,7 @@
 
 **A testnet-only learning project demonstrating DeFi concepts, ERC-4626 vaults, risk analytics, and AI integration.**
 
-[![CI](https://github.com/username/vault-risk-copilot/workflows/CI/badge.svg)](https://github.com/username/vault-risk-copilot/actions)
+[![CI](https://github.com/dsipetcher/vault-risk-copilot/workflows/CI/badge.svg)](https://github.com/dsipetcher/vault-risk-copilot/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -110,7 +110,8 @@ Vault Risk Copilot is a full-stack DeFi application that:
 - **GitHub Actions** for CI/CD
 
 ### AI & MCP
-- Provider-agnostic LLM integration (OpenAI, Anthropic, etc.)
+- Provider-agnostic LLM integration (Groq, OpenAI, OpenRouter, Ollama, mock)
+- Per-provider default models (Groq uses `openai/gpt-oss-120b` unless you set `LLM_MODEL`)
 - **MCP** (Model Context Protocol) server with read-only tools
 - Structured output validation with zod
 - Prompt injection defenses
@@ -126,37 +127,58 @@ Vault Risk Copilot is a full-stack DeFi application that:
 
 ### Docker Compose (Recommended)
 
-**Current Phase 2 includes:** PostgreSQL + Collector service
+A fresh clone following these steps brings up Postgres, the collector, the risk service, the API, and the web UI. Risk scores are computed automatically after the first collection (and every 5 minutes after that).
 
 ```bash
 # Clone the repository
-git clone https://github.com/username/vault-risk-copilot.git
+git clone https://github.com/dsipetcher/vault-risk-copilot.git
 cd vault-risk-copilot
 
-# Start services (postgres + collector)
-docker compose up
+# Create a local env file (do not commit it)
+cp .env.example .env
+
+# Generate a 32-byte AES key for SIWE-encrypted LLM key storage
+# Compose also has a local-only fallback if this is left empty.
+# Do NOT set DATABASE_URL in .env when using compose (see comments in .env.example).
+printf '\nLLM_KEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env
+
+# Start the full stack
+docker compose up --build
 
 # Or run in background
-docker compose up -d
+docker compose up --build -d
 
 # View logs
 docker compose logs -f collector
+docker compose logs -f risk-service
 
-# Verify data collection
+# Verify snapshots + auto-computed risk scores (usually within a few minutes)
 docker compose exec postgres psql -U vault_user -d vault_risk_copilot \
-  -c "SELECT COUNT(*) FROM pool_snapshots;"
+  -c "SELECT COUNT(*) AS snapshots FROM pool_snapshots;"
+docker compose exec postgres psql -U vault_user -d vault_risk_copilot \
+  -c "SELECT COUNT(*) AS scores FROM risk_scores;"
 ```
 
 **Services running:**
 - **PostgreSQL:** localhost:5432 (auto-applies migrations on first start)
-- **Collector:** Runs every 5 minutes, fetches DeFiLlama pools + on-chain vault state
+- **Collector:** Runs immediately, then every 5 minutes; fetches DeFiLlama pools and triggers risk recompute
 - **API:** http://localhost:3000 (Node.js REST API)
-- **Risk Service:** http://localhost:8000 (Python FastAPI)
+- **API docs:** http://localhost:3000/docs (Scalar / OpenAPI)
+- **Risk Service:** internal to the compose network only (no host port). Debug with `docker compose exec risk-service ...`
 - **Frontend:** http://localhost:5173 (React + Vite)
 
-**MCP Server** (Phase 7, run separately):
-- **Command:** `npx @vault-risk-copilot/mcp` or `node packages/mcp/dist/index.js`
-- **Configuration:** See [packages/mcp/README.md](./packages/mcp/README.md) for Claude Desktop/Cursor setup
+**SIWE defaults** match the web app (`localhost:5173`, Anvil `31337` and Sepolia `11155111`). Connect a wallet on the UI and sign in — no extra env is required for local login.
+
+**Groq:** set `LLM_PROVIDER=groq` and `LLM_API_KEY=...` (or paste the key in LLM Settings). You do not need to set a model; the default is `openai/gpt-oss-120b`.
+
+**MCP Server** (run separately after the API is up):
+```bash
+cd packages/mcp
+npm ci
+npm run build
+API_BASE_URL=http://localhost:3000 npm start
+```
+HTTP transport binds `127.0.0.1` by default (`npm run start:http`). See [packages/mcp/README.md](./packages/mcp/README.md) for Claude Desktop / Cursor setup.
 
 ### Running Tests
 
@@ -165,16 +187,26 @@ docker compose exec postgres psql -U vault_user -d vault_risk_copilot \
 cd contracts
 forge test
 
-# Collector tests
-cd packages/collector
-npm install
-npm test
+# Collector
+cd packages/collector && npm ci && npm test
 
-# Future services (not yet implemented)
-# npm run test:api
-# npm run test:web
-# pytest (in packages/risk-service)
+# API (needs Postgres + DATABASE_URL; CI uses the mock LLM provider)
+cd packages/api && npm ci && npm test
+
+# Web
+cd packages/web && npm ci && npm test
+
+# LLM package
+cd packages/llm && npm ci && npm test
+
+# Risk service
+cd packages/risk-service && pip install -r requirements-dev.txt && pytest -m unit
+
+# MCP
+cd packages/mcp && npm ci && npm test
 ```
+
+CI runs the same suites plus a compose smoke test (mock LLM, no real API keys).
 
 ### Manual Development (without Docker)
 
@@ -200,16 +232,17 @@ npm run dev
 
 ## Project Status
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 0-1 | ✅ Complete | Smart contracts (ERC-4626 vault), tests, CI/CD |
-| Phase 2 | ✅ Complete | PostgreSQL schema, Docker Compose, TypeScript collector |
-| Phase 3 | ✅ Complete | Python Risk Service (FastAPI, scikit-learn) |
-| Phase 4-5 | ✅ Complete | Node.js API + React frontend |
-| Phase 6 | ✅ Complete | LLM integration (BYOK, Groq/OpenAI-compatible) |
-| Phase 7 | ✅ Complete | MCP server (Model Context Protocol for AI assistants) |
+The stack through MCP is implemented and covered by GitHub Actions (unit, integration, compose smoke, Playwright).
 
-**See:** [docs/phases/](./docs/phases/) for detailed phase status and history
+| Area | Status | Description |
+|------|--------|-------------|
+| Smart contracts | ✅ | ERC-4626 vault, Foundry unit/fuzz/invariant tests, CI |
+| Data + risk | ✅ | Postgres, collector, FastAPI risk service, auto-recompute |
+| API + web | ✅ | Fastify API, React UI, SIWE, BYOK LLM, pagination |
+| LLM | ✅ | Groq / OpenAI / OpenRouter / Ollama / mock with per-provider defaults |
+| MCP | ✅ | Local stdio/HTTP server (not published to npm) |
+
+**See:** [docs/phases/](./docs/phases/) for historical phase notes.
 
 ## Smart Contracts on Sepolia
 

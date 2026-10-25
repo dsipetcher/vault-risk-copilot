@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { createProvider, getDefaultModel } from '@vault-risk-copilot/llm';
 import { llmProviderConfigSchema } from '../types/schemas.js';
 import {
   generateExplanation,
@@ -6,6 +7,7 @@ import {
 } from '../services/explanations.js';
 import { getAuthenticatedUser } from './auth.js';
 import { getStoredCredential } from './llm-credentials.js';
+import { isHttpError, statusForLlmConfigError } from '../lib/errors.js';
 
 export async function explanationsRoutes(app: FastifyInstance) {
   app.post<{
@@ -31,7 +33,7 @@ export async function explanationsRoutes(app: FastifyInstance) {
                   type: 'string',
                   enum: ['openai', 'openrouter', 'groq', 'ollama', 'mock'],
                 },
-                model: { type: 'string' },
+                model: { type: 'string', maxLength: 100 },
                 baseUrl: { type: 'string', format: 'uri' },
               },
               additionalProperties: false,
@@ -182,17 +184,101 @@ export async function explanationsRoutes(app: FastifyInstance) {
           cached: false,
         });
       } catch (error) {
-        app.log.error(
-          {
-            error: error instanceof Error ? error.message : String(error),
-            poolId: id,
-          },
-          'Failed to generate explanation'
-        );
-
+        const message = error instanceof Error ? error.message : String(error);
+        if (isHttpError(error)) {
+          return reply.code(error.statusCode).send({
+            error: message,
+            message,
+          });
+        }
+        const configStatus = statusForLlmConfigError(error);
+        if (configStatus) {
+          return reply.code(configStatus).send({
+            error: message,
+            message,
+          });
+        }
+        app.log.error({ error: message, poolId: id }, 'Failed to generate explanation');
         return reply.code(500).send({
           error: 'Failed to generate explanation',
-          message: error instanceof Error ? error.message : String(error),
+          message,
+        });
+      }
+    }
+  );
+
+  app.post<{
+    Body?: { provider?: string; model?: string; baseUrl?: string };
+  }>(
+    '/llm/validate',
+    {
+      schema: {
+        body: {
+          anyOf: [
+            {
+              type: 'object',
+              properties: {
+                provider: {
+                  type: 'string',
+                  enum: ['openai', 'openrouter', 'groq', 'ollama', 'mock'],
+                },
+                model: { type: 'string', maxLength: 100 },
+                baseUrl: { type: 'string', format: 'uri' },
+              },
+              additionalProperties: false,
+            },
+            { type: 'null' },
+          ],
+        },
+        headers: {
+          type: 'object',
+          properties: {
+            'x-llm-api-key': { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              ok: { type: 'boolean' },
+              provider: { type: 'string' },
+              model: { type: 'string' },
+            },
+            required: ['ok', 'provider', 'model'],
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const body = request.body || {};
+      const provider = (body.provider || 'mock') as
+        | 'openai'
+        | 'openrouter'
+        | 'groq'
+        | 'ollama'
+        | 'mock';
+      const model = body.model?.trim() || getDefaultModel(provider);
+      const apiKey = (request.headers['x-llm-api-key'] as string) || undefined;
+
+      try {
+        llmProviderConfigSchema.parse({
+          provider,
+          model,
+          baseUrl: body.baseUrl,
+        });
+        createProvider({
+          provider,
+          apiKey,
+          model,
+          baseUrl: body.baseUrl,
+        });
+        return reply.send({ ok: true, provider, model });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const configStatus = statusForLlmConfigError(error) ?? 400;
+        return reply.code(configStatus).send({
+          error: message,
+          message,
         });
       }
     }

@@ -132,13 +132,28 @@ export class ApiClient {
     const result = await this.fetch<unknown>(`/api/pools/${poolId}/explain`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        ...(this.config.llmProvider ? { provider: this.config.llmProvider } : {}),
-        ...(this.config.llmModel ? { model: this.config.llmModel } : {}),
-      }),
+      body: JSON.stringify(this.buildExplainBody()),
     });
 
     return explanationSchema.parse(result);
+  }
+
+  private buildExplainBody(): Record<string, string> {
+    const body: Record<string, string> = {};
+    if (this.config.llmProvider) body.provider = this.config.llmProvider;
+    const model =
+      this.config.llmModel ||
+      (this.config.llmProvider === 'groq'
+        ? 'openai/gpt-oss-120b'
+        : this.config.llmProvider === 'ollama'
+          ? 'llama3.2'
+          : this.config.llmProvider === 'openrouter'
+            ? 'openai/gpt-4o-mini'
+            : this.config.llmProvider === 'openai'
+              ? 'gpt-4o-mini'
+              : undefined);
+    if (model) body.model = model;
+    return body;
   }
 
   async getVaultInfo(): Promise<VaultState | null> {

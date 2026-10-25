@@ -36,7 +36,7 @@ X_LLM_MODEL=openai/gpt-oss-120b  # optional
 # HTTP transport (only with --transport http). Token is REQUIRED,
 # host must be loopback (localhost / 127.0.0.1 / ::1).
 HTTP_PORT=3001
-HTTP_HOST=localhost
+HTTP_HOST=127.0.0.1
 HTTP_AUTH_TOKEN=your-secret-token
 ```
 

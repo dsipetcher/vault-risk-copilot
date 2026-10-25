@@ -9,6 +9,8 @@ const envSchema = z.object({
   COLLECTION_INTERVAL_MS: z.coerce.number().default(300000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+  RISK_SERVICE_URL: z.string().url().optional().or(z.literal('')).optional(),
+  RISK_INTERNAL_TOKEN: z.string().optional().or(z.literal('')).optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;

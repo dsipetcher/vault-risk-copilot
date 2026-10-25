@@ -1,10 +1,13 @@
 interface ErrorMessageProps {
   message: string;
+  onRetry?: () => void;
 }
 
-export function ErrorMessage({ message }: ErrorMessageProps) {
+export function ErrorMessage({ message, onRetry }: ErrorMessageProps) {
+  const isUnreachable = /unreachable|Failed to fetch/i.test(message);
+
   return (
-    <div className="rounded-md bg-red-50 p-4 my-4">
+    <div className="rounded-md bg-red-50 p-4 my-4" data-testid="error-message">
       <div className="flex">
         <div className="flex-shrink-0">
           <svg
@@ -19,9 +22,21 @@ export function ErrorMessage({ message }: ErrorMessageProps) {
             />
           </svg>
         </div>
-        <div className="ml-3">
-          <h3 className="text-sm font-medium text-red-800">Error</h3>
+        <div className="ml-3 flex-1">
+          <h3 className="text-sm font-medium text-red-800">
+            {isUnreachable ? 'Cannot reach the API' : 'Error'}
+          </h3>
           <div className="mt-2 text-sm text-red-700">{message}</div>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              data-testid="error-retry"
+              className="mt-3 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-red-800 bg-red-100 hover:bg-red-200"
+            >
+              Retry
+            </button>
+          )}
         </div>
       </div>
     </div>

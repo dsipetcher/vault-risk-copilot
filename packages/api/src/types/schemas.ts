@@ -82,13 +82,15 @@ export const poolFiltersSchema = z.object({
   min_tvl: z.coerce.number().optional(),
   max_tvl: z.coerce.number().optional(),
   sort: z.enum(['tvl', 'risk', 'apy']).optional(),
+  order: z.enum(['asc', 'desc']).optional(),
+  search: z.string().max(200).optional(),
 });
 
 export type PoolFilters = z.infer<typeof poolFiltersSchema>;
 
 export const llmProviderConfigSchema = z.object({
   provider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'mock']),
-  model: z.string().optional(),
+  model: z.string().max(100).optional(),
   baseUrl: z.string().url().optional(),
 });
 

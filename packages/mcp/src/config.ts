@@ -6,7 +6,7 @@ const configSchema = z.object({
   llmProvider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'mock']).optional(),
   llmModel: z.string().optional(),
   httpPort: z.coerce.number().int().min(1).max(65535).default(3001),
-  httpHost: z.string().default('localhost'),
+  httpHost: z.string().default('127.0.0.1'),
   httpAuthToken: z.string().optional(),
   requestTimeoutMs: z.coerce.number().int().min(1000).default(30000),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),

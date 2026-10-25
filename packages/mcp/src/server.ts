@@ -314,7 +314,8 @@ export function createServer(config: Config): Server {
         const pool = await apiClient.getPoolRisk(id);
         return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(pool, null, 2) }] };
       } catch (error) {
-        throw new McpError(ErrorCode.InvalidParams, toolErrorResult(error).content[0].text);
+        const text = toolErrorResult(error).content[0].text.replace(/^MCP error -?\d+:\s*/i, '');
+        throw new McpError(ErrorCode.InvalidParams, text);
       }
     }
 

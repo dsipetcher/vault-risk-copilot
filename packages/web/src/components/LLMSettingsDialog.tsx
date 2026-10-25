@@ -47,10 +47,7 @@ export function LLMSettingsDialog({ isOpen, onClose }: LLMSettingsDialogProps) {
     setTestError('');
 
     try {
-      // Use a known pool ID for testing (we'll use a mock pool)
-      const testPoolId = '00000000-0000-0000-0000-000000000000';
-      
-      await apiClient.explainRisk(testPoolId, {
+      await apiClient.validateLlm({
         provider: settings.provider,
         model: settings.model,
         baseUrl: settings.baseUrl,
@@ -123,7 +120,8 @@ export function LLMSettingsDialog({ isOpen, onClose }: LLMSettingsDialogProps) {
               id="model"
               type="text"
               value={settings.model || ''}
-              onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+              maxLength={100}
+              onChange={(e) => setSettings({ ...settings, model: e.target.value.slice(0, 100) })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               placeholder="e.g., gpt-4o-mini"
               data-testid="model-input"

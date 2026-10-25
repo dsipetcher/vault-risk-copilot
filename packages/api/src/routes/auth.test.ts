@@ -159,7 +159,7 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
-      expect(body.message).toBeUndefined();
+      expect(body.message).toMatch(/Domain mismatch/i);
       expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
@@ -225,7 +225,8 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
-      expect(body.message).toBeUndefined();
+      expect(typeof body.message).toBe('string');
+      expect(body.message.length).toBeGreaterThan(0);
       expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
@@ -476,15 +477,15 @@ describe('SIWE Authentication Tests', () => {
       expect(body.chainId).toBe(1);
     });
 
-    it('should return 401 when not authenticated', async () => {
+    it('should return 200 with authenticated=false when logged out', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/auth/me',
       });
 
-      expect(response.statusCode).toBe(401);
+      expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
-      expect(body.error).toBe('Not authenticated');
+      expect(body.authenticated).toBe(false);
     });
   });
 
@@ -545,7 +546,8 @@ describe('SIWE Authentication Tests', () => {
           'cookie': `vault_session=${sessionCookie!.value}`,
         },
       });
-      expect(meResponse.statusCode).toBe(401);
+      expect(meResponse.statusCode).toBe(200);
+      expect(JSON.parse(meResponse.body).authenticated).toBe(false);
     });
   });
 });

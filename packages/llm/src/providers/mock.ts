@@ -107,13 +107,16 @@ export class MockProvider implements LLMProvider {
     if (input.breakdown.tvl_volatility_score != null) {
       const change = input.pool_metrics.tvl_change_7d_pct;
       const score = input.breakdown.tvl_volatility_score;
+      const changeLabel = change != null ? `${change.toFixed(1)}% 7d change` : 'N/A 7d change';
       factors.push({
         signal: 'TVL Volatility',
-        value: `${score.toFixed(1)}/100 (${change != null ? change.toFixed(1) : 'N/A'}% 7d change)`,
+        value: `${score.toFixed(1)}/100 (${changeLabel})`,
         explanation:
-          score > 50
+          score >= 70
             ? 'Significant capital movements suggest changing user confidence or market conditions.'
-            : 'Stable TVL indicates consistent liquidity and user confidence.',
+            : score >= 40
+              ? 'Moderate TVL movement; liquidity is neither unusually volatile nor fully stable.'
+              : 'Low TVL volatility indicates consistent liquidity and user confidence.',
       });
     }
 

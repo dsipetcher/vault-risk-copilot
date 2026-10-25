@@ -47,10 +47,46 @@ async function collectData() {
     }
 
     logger.info('✅ Data collection cycle completed');
+
+    await triggerRiskRecompute(config, logger);
   } catch (error) {
     logger.error({ error }, '❌ Data collection failed');
   } finally {
     await sql.end();
+  }
+}
+
+async function triggerRiskRecompute(
+  config: ReturnType<typeof loadConfig>,
+  log: typeof logger
+): Promise<void> {
+  if (!config.RISK_SERVICE_URL) {
+    log.info('RISK_SERVICE_URL not set; skipping automatic risk recompute');
+    return;
+  }
+
+  const url = `${config.RISK_SERVICE_URL.replace(/\/$/, '')}/recompute`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (config.RISK_INTERNAL_TOKEN) {
+    headers['X-Internal-Token'] = config.RISK_INTERNAL_TOKEN;
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ pool_ids: null, force: true }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      log.warn({ status: response.status, body }, 'Risk recompute request failed');
+      return;
+    }
+    const result = (await response.json()) as { computed?: number };
+    log.info({ computed: result.computed }, 'Triggered risk score recompute');
+  } catch (error) {
+    log.warn({ error }, 'Could not reach risk service for recompute');
   }
 }
 

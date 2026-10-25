@@ -8,7 +8,7 @@ import {
   deleteSession,
 } from '../lib/siwe.js';
 import { z } from 'zod';
-import { env } from '../config.js';
+import { env, getAllowedSiweChainIds } from '../config.js';
 import { SiweMessage } from 'siwe';
 
 const SESSION_COOKIE_NAME = 'vault_session';
@@ -89,15 +89,16 @@ export async function authRoutes(app: FastifyInstance) {
         if (!cookieNonce || cookieNonce !== siweMessage.nonce) {
           return reply.code(401).send({
             error: 'Authentication failed',
+            message: 'Nonce mismatch or missing nonce cookie. Request a new nonce and try again.',
           });
         }
         
         const domain = env.SIWE_DOMAIN;
         const expectedUri = env.SIWE_URI;
-        const expectedChainId = env.SIWE_CHAIN_ID;
+        const expectedChainIds = getAllowedSiweChainIds();
         
         if (env.NODE_ENV === 'production') {
-          if (!domain || !expectedUri || !expectedChainId) {
+          if (!domain || !expectedUri || expectedChainIds.length === 0) {
             throw new Error('SIWE configuration incomplete in production');
           }
         }
@@ -113,7 +114,7 @@ export async function authRoutes(app: FastifyInstance) {
           pool,
           message,
           signature,
-          { domain, expectedUri, expectedChainId }
+          { domain, expectedUri, expectedChainIds }
         );
         
         const sessionToken = await createSession(
@@ -145,6 +146,7 @@ export async function authRoutes(app: FastifyInstance) {
         
         return reply.code(401).send({
           error: 'Authentication failed',
+          message: error instanceof Error ? error.message : 'Authentication failed',
         });
       }
     }
@@ -170,8 +172,8 @@ export async function authRoutes(app: FastifyInstance) {
     const sessionToken = request.cookies[SESSION_COOKIE_NAME];
     
     if (!sessionToken) {
-      return reply.code(401).send({
-        error: 'Not authenticated',
+      return reply.code(200).send({
+        authenticated: false,
       });
     }
     
@@ -179,8 +181,8 @@ export async function authRoutes(app: FastifyInstance) {
     
     if (!session) {
       reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
-      return reply.code(401).send({
-        error: 'Session expired or invalid',
+      return reply.code(200).send({
+        authenticated: false,
       });
     }
     

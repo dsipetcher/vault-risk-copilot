@@ -189,4 +189,80 @@ describe('Explanations API Tests', () => {
     expect(body).toHaveProperty('explanation');
     expect(body).toHaveProperty('metadata');
   });
+
+  it('returns 404 for a missing pool instead of 500', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/pools/00000000-0000-0000-0000-000000000000/explain',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'mock' }),
+    });
+    expect(response.statusCode).toBe(404);
+    expect(JSON.parse(response.body).error).toMatch(/not found/i);
+  });
+
+  it('returns 400 when a real provider is selected without an API key', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/pools/${poolId}/explain`,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'groq' }),
+    });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).message).toMatch(/API key is required/i);
+  });
+
+  it('returns 400 for a blocked metadata base URL', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/pools/${poolId}/explain`,
+      headers: {
+        'content-type': 'application/json',
+        'x-llm-api-key': 'gsk-test',
+      },
+      body: JSON.stringify({
+        provider: 'groq',
+        baseUrl: 'http://169.254.169.254/latest/meta-data',
+      }),
+    });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).message).toMatch(/Invalid base URL/i);
+  });
+
+  it('rejects a model name longer than 100 characters', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/pools/${poolId}/explain`,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'mock',
+        model: 'm'.repeat(101),
+      }),
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('validates an LLM key without requiring a pool', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/llm/validate',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'mock' }),
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.ok).toBe(true);
+    expect(body.provider).toBe('mock');
+  });
+
+  it('validate returns 400 when groq has no key', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/llm/validate',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'groq' }),
+    });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).message).toMatch(/API key is required/i);
+  });
 });

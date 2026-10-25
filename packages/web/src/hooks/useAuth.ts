@@ -28,15 +28,18 @@ export function useAuth() {
 
       if (response.ok) {
         const data = await response.json();
-        setUser({
-          address: data.address,
-          chainId: data.chainId,
-        });
+        if (data.authenticated && data.address) {
+          setUser({
+            address: data.address,
+            chainId: data.chainId,
+          });
+        } else {
+          setUser(null);
+        }
       } else {
         setUser(null);
       }
-    } catch (err) {
-      console.error('Failed to check auth status:', err);
+    } catch {
       setUser(null);
     }
   }
@@ -84,7 +87,7 @@ export function useAuth() {
 
       if (!verifyResponse.ok) {
         const error = await verifyResponse.json();
-        throw new Error(error.message || 'Authentication failed');
+        throw new Error(error.message || error.error || 'Authentication failed');
       }
 
       const data = await verifyResponse.json();

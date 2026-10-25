@@ -29,6 +29,16 @@ export const explainPoolRiskInputSchema = z.object({
 
 export const getVaultInfoInputSchema = z.object({});
 
+const MCP_ERROR_PREFIX = /^MCP error -?\d+:\s*/i;
+
+export function stripMcpErrorPrefix(message: string): string {
+  let current = message;
+  while (MCP_ERROR_PREFIX.test(current)) {
+    current = current.replace(MCP_ERROR_PREFIX, '');
+  }
+  return current;
+}
+
 /** Safe, client-facing message: no stack traces, URLs, upstream bodies or secrets. */
 export function safeErrorMessage(error: unknown): string {
   if (error instanceof z.ZodError) {
@@ -42,6 +52,10 @@ export function safeErrorMessage(error: unknown): string {
     return `Risk API rejected the request (HTTP ${error.statusCode})`;
   }
   if (error instanceof Error && error.message.startsWith('Unknown tool:')) return error.message;
+  if (error instanceof Error) {
+    const stripped = stripMcpErrorPrefix(error.message);
+    if (stripped && stripped !== error.message) return stripped;
+  }
   return 'Internal error';
 }
 

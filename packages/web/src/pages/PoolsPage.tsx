@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { usePools } from '@/hooks/usePools';
 import { RiskBadge } from '@/components/RiskBadge';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -10,57 +10,29 @@ import type { Pool } from '@/types/api';
 type SortField = 'tvl' | 'apy' | 'risk';
 type SortDirection = 'asc' | 'desc';
 
+const PAGE_SIZE = 50;
+
 export function PoolsPage() {
-  const { data: pools, isLoading, error } = usePools();
   const [sortField, setSortField] = useState<SortField>('tvl');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [submittedSearch, setSubmittedSearch] = useState('');
+  const [page, setPage] = useState(0);
 
-  const filteredAndSortedPools = useMemo(() => {
-    if (!pools) return [];
+  const { data, isLoading, error, refetch } = usePools({
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+    search: submittedSearch || undefined,
+    sort: sortField,
+    order: sortDirection,
+    risk_category: filterCategory,
+  });
 
-    let filtered = [...pools];
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (pool) =>
-          pool.asset_symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          pool.protocol.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (filterCategory !== 'all') {
-      filtered = filtered.filter(
-        (pool) => pool.risk_category === filterCategory
-      );
-    }
-
-    filtered.sort((a, b) => {
-      let aVal: number, bVal: number;
-
-      switch (sortField) {
-        case 'tvl':
-          aVal = a.tvl_usd ?? 0;
-          bVal = b.tvl_usd ?? 0;
-          break;
-        case 'apy':
-          aVal = a.apy ?? 0;
-          bVal = b.apy ?? 0;
-          break;
-        case 'risk':
-          aVal = a.total_risk_score ?? 0;
-          bVal = b.total_risk_score ?? 0;
-          break;
-        default:
-          return 0;
-      }
-
-      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-    });
-
-    return filtered;
-  }, [pools, sortField, sortDirection, filterCategory, searchTerm]);
+  const pools = data?.data ?? [];
+  const total = data?.pagination.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasFilters = Boolean(submittedSearch || filterCategory !== 'all');
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -69,7 +41,22 @@ export function PoolsPage() {
       setSortField(field);
       setSortDirection('desc');
     }
+    setPage(0);
   };
+
+  const applySearch = () => {
+    setSubmittedSearch(searchTerm.trim());
+    setPage(0);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSubmittedSearch('');
+    setFilterCategory('all');
+    setPage(0);
+  };
+
+  const sortedPools = pools;
 
   return (
     <div className="space-y-6">
@@ -82,43 +69,62 @@ export function PoolsPage() {
         </div>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-4" data-testid="pools-filters">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search pools or protocols..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applySearch();
+            }}
+            onBlur={applySearch}
+            data-testid="pools-search"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        </div>
+        <div>
+          <select
+            value={filterCategory}
+            onChange={(e) => {
+              setFilterCategory(e.target.value);
+              setPage(0);
+            }}
+            data-testid="pools-risk-filter"
+            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="all">All Risk Levels</option>
+            <option value="low">Low Risk</option>
+            <option value="medium">Medium Risk</option>
+            <option value="high">High Risk</option>
+            <option value="critical">Critical Risk</option>
+          </select>
+        </div>
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            data-testid="clear-filters"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {isLoading ? (
         <LoadingSpinner />
       ) : error ? (
-        <ErrorMessage message={error.message} />
-      ) : filteredAndSortedPools.length === 0 ? (
+        <ErrorMessage message={error.message} onRetry={() => refetch()} />
+      ) : sortedPools.length === 0 ? (
         <EmptyState
           title="No pools found"
-          description="Try adjusting your filters or search term"
+          description={hasFilters ? 'Try adjusting your filters or search term' : 'No pool snapshots are available yet'}
         />
       ) : (
         <>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Search pools or protocols..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="all">All Risk Levels</option>
-                <option value="low">Low Risk</option>
-                <option value="medium">Medium Risk</option>
-                <option value="high">High Risk</option>
-                <option value="critical">Critical Risk</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+          <div className="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 rounded-lg">
             <table className="min-w-full divide-y divide-gray-300">
               <thead className="bg-gray-50">
                 <tr>
@@ -167,12 +173,41 @@ export function PoolsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {filteredAndSortedPools.map((pool) => (
-                  <PoolRow key={pool.id} pool={pool} />
+                {sortedPools.map((pool) => (
+                  <PoolRow key={pool.pool_id || String(pool.id)} pool={pool} />
                 ))}
               </tbody>
             </table>
           </div>
+
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between text-sm text-gray-700" data-testid="pools-pagination">
+              <span>
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  className="px-3 py-1 border rounded-md disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="px-2 py-1">
+                  Page {page + 1} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={page + 1 >= pageCount}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="px-3 py-1 border rounded-md disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -185,8 +220,8 @@ function PoolRow({ pool }: { pool: Pool }) {
   };
 
   return (
-    <tr 
-      data-testid="pool-row" 
+    <tr
+      data-testid="pool-row"
       className="hover:bg-gray-50 cursor-pointer"
       onClick={handleRowClick}
     >

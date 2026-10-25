@@ -210,7 +210,7 @@ describe('LLMSettingsDialog', () => {
     vi.mocked(llmStorage.providerRequiresApiKey).mockReturnValue(false);
     
       const mockApi = await import('@/lib/api');
-      vi.mocked(mockApi.apiClient.explainRisk).mockRejectedValue(
+      vi.mocked(mockApi.apiClient.validateLlm).mockRejectedValue(
         new Error('Invalid API key')
       );
 

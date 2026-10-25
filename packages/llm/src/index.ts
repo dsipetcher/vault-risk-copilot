@@ -1,4 +1,5 @@
-export { createProvider, getConfigFromEnv, validateBaseUrl, redactApiKey, getDefaultBaseUrl } from './factory.js';
+export { createProvider, getConfigFromEnv, validateBaseUrl, redactApiKey, getDefaultBaseUrl, getDefaultModel } from './factory.js';
+export { DEFAULT_MODELS, MODEL_MAX_LENGTH } from './defaults.js';
 export { MockProvider } from './providers/mock.js';
 export { OpenAIProvider } from './providers/openai.js';
 export type { LLMProvider, LLMConfig } from './types.js';

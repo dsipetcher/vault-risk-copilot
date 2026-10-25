@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatNumber, formatPercentage, formatDate, shortenAddress, getRiskColor } from '@/lib/utils';
+import { formatNumber, formatPercentage, formatDate, shortenAddress, getRiskColor, formatCompactUsd } from '@/lib/utils';
 
 describe('formatNumber', () => {
   it('formats large numbers with B suffix', () => {
@@ -20,6 +20,14 @@ describe('formatNumber', () => {
   it('formats very small numbers without suffix', () => {
     expect(formatNumber(500)).toBe('$500.00');
     expect(formatNumber(12.34)).toBe('$12.34');
+  });
+});
+
+describe('formatCompactUsd', () => {
+  it('does not print $6000M for multi-billion values', () => {
+    expect(formatCompactUsd(6_000_000_000)).toBe('$6.0B');
+    expect(formatCompactUsd(6_000_000)).toBe('$6.0M');
+    expect(formatCompactUsd(600)).toBe('$600');
   });
 });
 

@@ -17,9 +17,29 @@ export const envSchema = z.object({
   SIWE_DOMAIN: z.string().optional(),
   SIWE_URI: z.string().url().optional(),
   SIWE_CHAIN_ID: z.coerce.number().optional(),
+  SIWE_CHAIN_IDS: z.string().optional(),
+  RISK_INTERNAL_TOKEN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+const DEFAULT_SIWE_CHAIN_IDS = [31337, 11155111];
+
+export function parseSiweChainIds(rawIds?: string, singleId?: number): number[] {
+  const fromList = (rawIds ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => Number(s))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  if (fromList.length > 0) {
+    return [...new Set(fromList)];
+  }
+  if (singleId && Number.isInteger(singleId) && singleId > 0) {
+    return [singleId];
+  }
+  return [...DEFAULT_SIWE_CHAIN_IDS];
+}
 
 // Only parse env if not in test mode or if DATABASE_URL is provided
 export const env: Env = process.env.NODE_ENV === 'test' && !process.env.DATABASE_URL
@@ -28,3 +48,9 @@ export const env: Env = process.env.NODE_ENV === 'test' && !process.env.DATABASE
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
     })
   : envSchema.parse(process.env);
+
+export function getAllowedSiweChainIds(
+  values: Pick<Env, 'SIWE_CHAIN_ID' | 'SIWE_CHAIN_IDS'> = env
+): number[] {
+  return parseSiweChainIds(values.SIWE_CHAIN_IDS, values.SIWE_CHAIN_ID);
+}

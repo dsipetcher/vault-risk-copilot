@@ -270,5 +270,8 @@ describe('safeErrorMessage / toolErrorResult', () => {
     expect(toolErrorResult(new ApiError('x', 404))).toEqual({ isError: true, content: [{ type: 'text', text: 'Not found: no pool with that id' }] });
     expect(safeErrorMessage(new ApiError('Network error', 0))).toBe('Risk API is unreachable');
     expect(safeErrorMessage(new Error('secret http://internal/x'))).toBe('Internal error');
+    expect(safeErrorMessage(new Error('MCP error -32602: MCP error -32602: bad input'))).toBe(
+      'bad input'
+    );
   });
 });

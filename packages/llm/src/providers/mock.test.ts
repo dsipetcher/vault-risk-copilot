@@ -160,4 +160,43 @@ describe('MockProvider', () => {
     expect(result.output.disclaimer).toContain('educational purposes');
     expect(result.output.disclaimer).toContain('not constitute financial advice');
   });
+
+  it('does not render N/A% when 7d change is missing', async () => {
+    const input = {
+      pool_id: '123e4567-e89b-12d3-a456-426614174000',
+      pool_name: 'Test Pool',
+      protocol: 'test',
+      chain: 'Ethereum',
+      total_risk_score: 50.0,
+      risk_category: 'medium' as const,
+      breakdown: {
+        tvl_score: null,
+        tvl_volatility_score: 50,
+        apy_volatility_score: null,
+        reward_ratio_score: null,
+        stablecoin_score: null,
+        il_score: null,
+        data_age_score: null,
+        vault_score: null,
+      },
+      pool_metrics: {
+        tvl_usd: 1_000_000,
+        tvl_change_7d_pct: null,
+        apy: 10.0,
+        apy_base: 10.0,
+        apy_reward: 0,
+        apy_sigma: 2.0,
+        il_risk: null,
+        is_stablecoin: false,
+        count: 30,
+      },
+    };
+
+    const result = await provider.generate(input);
+    const factor = result.output.key_factors.find((f) => f.signal === 'TVL Volatility');
+    expect(factor?.value).toContain('N/A 7d change');
+    expect(factor?.value).not.toContain('N/A%');
+    expect(factor?.explanation).not.toMatch(/Stable TVL/i);
+    expect(factor?.explanation).toMatch(/Moderate TVL movement/i);
+  });
 });

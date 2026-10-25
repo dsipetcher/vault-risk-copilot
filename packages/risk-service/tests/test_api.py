@@ -118,3 +118,41 @@ async def test_recompute_valid_request(client):
     assert "elapsed_seconds" in data
     assert isinstance(data["computed"], int)
     assert isinstance(data["elapsed_seconds"], (int, float))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recompute_by_id_path(client):
+    """API client path POST /risk/recompute/{id} must exist (not 404)."""
+    response = await client.post("/risk/recompute/test_pool_1")
+    assert response.status_code != 404
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recompute_requires_internal_token(client, monkeypatch):
+    """When RISK_INTERNAL_TOKEN is set, /recompute is protected."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "risk_internal_token", "secret-token")
+
+    denied = await client.post("/recompute", json={"pool_ids": [], "force": False})
+    assert denied.status_code == 401
+
+    allowed = await client.post(
+        "/recompute",
+        json={"pool_ids": [], "force": False},
+        headers={"X-Internal-Token": "secret-token"},
+    )
+    assert allowed.status_code != 401
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recompute_by_id_requires_internal_token(client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "risk_internal_token", "secret-token")
+
+    denied = await client.post("/risk/recompute/test_pool_1")
+    assert denied.status_code == 401
