@@ -804,7 +804,7 @@ jobs:
           LLM_KEY_ENCRYPTION_KEY="$LLM_KEY_ENCRYPTION_KEY" \
           SIWE_DOMAIN=localhost:5173 \
           SIWE_URI=http://localhost:5173 \
-          SIWE_CHAIN_ID=1 \
+          SIWE_CHAIN_ID=31337 \
           NODE_ENV=test \
           PORT=3000 \
           nohup node dist/index.js > /tmp/api.log 2>&1 &

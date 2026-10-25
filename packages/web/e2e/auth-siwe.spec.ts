@@ -25,7 +25,7 @@ test.describe('SIWE Authentication E2E', () => {
       const ethereum = {
         isMetaMask: true,
         selectedAddress: null as string | null,
-        chainId: '0x1',
+        chainId: '0x7a69', // 31337 (Foundry anvil) in hex
 
         async request({ method, params }: { method: string; params?: unknown[] }) {
           console.log('[Mock Ethereum]', method);
