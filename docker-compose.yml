@@ -124,6 +124,8 @@ services:
       SIWE_URI: ${SIWE_URI:-http://localhost:5173}
       SIWE_CHAIN_ID: ${SIWE_CHAIN_ID:-31337}
       SIWE_CHAIN_IDS: ${SIWE_CHAIN_IDS:-31337,11155111}
+      # Set to 'none' when the web app is on another site (GitHub Pages + tunnel).
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:

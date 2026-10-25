@@ -1,6 +1,6 @@
 import type { Pool, PoolDetail, PoolHistory, VaultState, ExplanationResponse, LLMProvider } from '@/types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_BASE_URL, apiFetch } from './config';
 
 export class ApiRequestError extends Error {
   status?: number;
@@ -48,7 +48,7 @@ class ApiClient {
   private async request<T>(endpoint: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}${endpoint}`, init);
+      response = await apiFetch(`${this.baseUrl}${endpoint}`, init);
     } catch (err) {
       throw new ApiRequestError(friendlyNetworkMessage(err), { retryable: true });
     }

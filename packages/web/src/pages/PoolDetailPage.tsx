@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { isPoolIdUuid, usePoolDetail, usePoolHistory } from '@/hooks/usePools';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
@@ -49,9 +49,9 @@ export function PoolDetailPage() {
   return (
     <div className="space-y-6 min-w-0 overflow-x-hidden">
       <div>
-        <a href="/pools" className="text-primary-600 hover:text-primary-900 text-sm">
+        <Link to="/pools" className="text-primary-600 hover:text-primary-900 text-sm">
           ← Back to pools
-        </a>
+        </Link>
         <h1 className="mt-2 text-3xl font-bold text-gray-900">{pool.asset_symbol}</h1>
         <p className="mt-1 text-sm text-gray-500">
           {pool.protocol} • {pool.chain}

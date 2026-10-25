@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { API_BASE_URL } from '../lib/config';
+import { API_BASE_URL, apiFetch } from '../lib/config';
 
 interface ServerKeySettingsProps {
   onClose: () => void;
@@ -17,7 +17,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   async function loadStored() {
-    const res = await fetch(`${API_BASE_URL}/api/llm-credentials`, { credentials: 'include' });
+    const res = await apiFetch(`${API_BASE_URL}/api/llm-credentials`, { credentials: 'include' });
     if (res.ok) setStored((await res.json()).credentials ?? []);
   }
 
@@ -46,7 +46,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
     setSuccess(false);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/llm-credentials`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/llm-credentials`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -136,7 +136,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
                       setIsLoading(true);
                       setError(null);
                       try {
-                        const response = await fetch(
+                        const response = await apiFetch(
                           `${API_BASE_URL}/api/llm-credentials?provider=${encodeURIComponent(c.provider)}`,
                           { method: 'DELETE', credentials: 'include' }
                         );

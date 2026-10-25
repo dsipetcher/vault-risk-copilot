@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { envSchema, parseSiweChainIds } from './config.js';
+import { envSchema, parseSiweChainIds, isCookieSecure } from './config.js';
 
 describe('Config', () => {
   it('should parse valid environment variables', () => {
@@ -35,6 +35,55 @@ describe('Config', () => {
     };
 
     expect(() => envSchema.parse(env)).toThrow();
+  });
+});
+
+describe('COOKIE_SAMESITE', () => {
+  const base = { DATABASE_URL: 'postgresql://user:pass@localhost:5432/db' };
+
+  it('defaults to lax', () => {
+    expect(envSchema.parse(base).COOKIE_SAMESITE).toBe('lax');
+  });
+
+  it('accepts lax, strict, and none', () => {
+    expect(envSchema.parse({ ...base, COOKIE_SAMESITE: 'lax' }).COOKIE_SAMESITE).toBe('lax');
+    expect(envSchema.parse({ ...base, COOKIE_SAMESITE: 'strict' }).COOKIE_SAMESITE).toBe('strict');
+    expect(envSchema.parse({ ...base, COOKIE_SAMESITE: 'none' }).COOKIE_SAMESITE).toBe('none');
+  });
+
+  it('rejects unknown values', () => {
+    expect(() => envSchema.parse({ ...base, COOKIE_SAMESITE: 'invalid' })).toThrow();
+  });
+
+  it('forces Secure when SameSite is none', () => {
+    expect(isCookieSecure('development', 'none')).toBe(true);
+    expect(isCookieSecure('test', 'none')).toBe(true);
+    expect(isCookieSecure('production', 'lax')).toBe(true);
+    expect(isCookieSecure('development', 'lax')).toBe(false);
+    expect(isCookieSecure('development', 'strict')).toBe(false);
+  });
+});
+
+describe('SIWE_URI comma-separated list', () => {
+  const base = { DATABASE_URL: 'postgresql://user:pass@localhost:5432/db' };
+
+  it('accepts a single URL', () => {
+    const result = envSchema.parse({ ...base, SIWE_URI: 'http://localhost:5173' });
+    expect(result.SIWE_URI).toBe('http://localhost:5173');
+  });
+
+  it('accepts a comma-separated list of URLs', () => {
+    const result = envSchema.parse({
+      ...base,
+      SIWE_URI: 'http://localhost:5173, https://user.github.io/vault-risk-copilot/',
+    });
+    expect(result.SIWE_URI).toBe('http://localhost:5173, https://user.github.io/vault-risk-copilot/');
+  });
+
+  it('rejects a list that contains an invalid URL', () => {
+    expect(() =>
+      envSchema.parse({ ...base, SIWE_URI: 'http://localhost:5173,not-a-url' })
+    ).toThrow(/SIWE_URI/);
   });
 });
 

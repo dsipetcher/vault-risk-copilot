@@ -12,6 +12,11 @@ export interface SiweVerifyOptions {
   expectedUri?: string;
 }
 
+/** Comma-separated config values (e.g. local origin + GitHub Pages origin). */
+export function parseCommaSeparatedList(value?: string): string[] {
+  return (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+}
+
 export async function generateNonce(pool: Pool, requestIp?: string): Promise<string> {
   const nonce = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + NONCE_TTL_MS);
@@ -33,7 +38,8 @@ export async function verifyAndConsumeSiweMessage(
 ): Promise<{ address: string; chainId: number }> {
   const siweMessage = new SiweMessage(message);
   
-  if (siweMessage.domain !== options.domain) {
+  const allowedDomains = parseCommaSeparatedList(options.domain);
+  if (!allowedDomains.includes(siweMessage.domain)) {
     throw new Error(`Domain mismatch: expected ${options.domain}, got ${siweMessage.domain}`);
   }
   
@@ -48,7 +54,8 @@ export async function verifyAndConsumeSiweMessage(
     );
   }
   
-  if (options.expectedUri && siweMessage.uri !== options.expectedUri) {
+  const allowedUris = parseCommaSeparatedList(options.expectedUri);
+  if (allowedUris.length > 0 && !allowedUris.includes(siweMessage.uri)) {
     throw new Error(`URI mismatch: expected ${options.expectedUri}, got ${siweMessage.uri}`);
   }
   

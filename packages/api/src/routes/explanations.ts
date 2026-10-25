@@ -102,8 +102,9 @@ export async function explanationsRoutes(app: FastifyInstance) {
       
       let providerConfig = undefined;
       
-      // No provider/key/session: fall through with providerConfig undefined so the
-      // server-default provider (LLM_PROVIDER env) is used, as in Phase 6.
+      // No provider/key/session: leave providerConfig unset so generateExplanation
+      // uses the mock provider. The API does not read LLM_API_KEY or LLM_PROVIDER
+      // from the environment (BYOK via header or stored wallet credentials only).
       const provider = body.provider || 'openai';
       
       if (user && !apiKey) {

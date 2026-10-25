@@ -42,7 +42,7 @@ function App() {
     <WagmiProvider config={config} reconnectOnMount>
       <QueryClientProvider client={queryClient}>
         <AutoConnect />
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<Navigate to="/pools" replace />} />
