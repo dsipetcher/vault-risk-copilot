@@ -793,6 +793,7 @@ jobs:
           
           cd ../api
           npm ci
+          rm -rf dist  # Ensure clean build
           npm run build
           
           # Generate encryption key for E2E SIWE auth
