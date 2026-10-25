@@ -14,9 +14,7 @@ const testAccount = privateKeyToAccount(TEST_PRIVATE_KEY);
 test.describe('SIWE Authentication E2E', () => {
   test.beforeEach(async ({ page }) => {
     // Inject mock EIP-1193 provider before page loads
-    await page.addInitScript({
-      accountAddress: testAccount.address,
-    }, ({ accountAddress }: { accountAddress: string }) => {
+    await page.addInitScript((accountAddress) => {
       // Mock EIP-1193 provider
       const ethereum = {
         isMetaMask: true,
@@ -76,7 +74,7 @@ test.describe('SIWE Authentication E2E', () => {
       
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).ethereum = ethereum;
-    });
+    }, testAccount.address);
   });
 
   test('complete SIWE auth flow: sign in → save key → explain → sign out', async ({ page }) => {
