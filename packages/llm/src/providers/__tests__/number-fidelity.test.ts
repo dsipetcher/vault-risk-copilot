@@ -502,4 +502,43 @@ describe('Number Fidelity Validation', () => {
     const result = (provider as any).validateNumberFidelity(inputWith75, output);
     expect(result).toBe(false);
   });
+
+  // Groq gpt-oss-120b commonly writes "7-day TVL change" and "Impermanent Loss".
+  // Those used to fail the validator as invented numbers / unknown signals (false positives).
+  it('ACCEPT: Groq/gpt-oss phrasing "7-day" window + Impermanent Loss alias', () => {
+    const output: ExplanationOutput = {
+      summary: 'Over the 7-day window TVL of $520,000 dropped 35.2%.',
+      key_factors: [
+        {
+          signal: 'TVL Volatility',
+          value: '-35.2%',
+          explanation: '7-day TVL change of -35.2% indicates a decline.',
+        },
+        {
+          signal: 'Impermanent Loss',
+          value: '0.05',
+          explanation: 'Impermanent loss risk is 0.05 over the 7-day window.',
+        },
+      ],
+      disclaimer: 'Educational only.',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
+  });
+
+  it('ACCEPT: grouped thousands without a $ prefix (520,000)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL is 520,000 USD.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '95',
+          explanation: 'TVL of 520,000 supports a high score.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    expect(result).toBe(true);
+  });
 });

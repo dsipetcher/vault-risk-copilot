@@ -386,9 +386,16 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
         'stablecoin score': 'stablecoin',
         'il risk': 'il risk',
         'il score': 'il risk',
+        'il': 'il risk',
+        'impermanent loss': 'il risk',
+        'impermanent loss risk': 'il risk',
         'data age': 'data age',
         'data age score': 'data age',
         'vault score': 'vault score',
+        'total value locked': 'tvl score',
+        'tvl level': 'tvl score',
+        'incentive ratio': 'reward ratio',
+        'rewards ratio': 'reward ratio',
       };
       return aliases[normalized] || normalized;
     };
@@ -467,7 +474,12 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
       .replace(/\$(\d+),(\d+)/g, '$1$2');
 
     // Remove duration labels and scale phrases
+    // Include hyphenated forms Groq/gpt-oss uses: "7-day", "30-day window", "24-hour"
     normalized = normalized.replace(/\b\d+\s*d(?:ays?)?\b/gi, '');
+    normalized = normalized.replace(/\b\d+\s*-\s*d(?:ays?)?\b/gi, '');
+    normalized = normalized.replace(/\b\d+\s*-\s*hours?\b/gi, '');
+    // "520,000" / "$1,000,000" — strip grouping commas so we keep one number
+    normalized = normalized.replace(/\$?(\d{1,3}(?:,\d{3})+(?:\.\d+)?)/g, (_, n) => n.replace(/,/g, ''));
     normalized = normalized.replace(/\/100\b/g, '');
     // Strip 'out of 100' / 'of 100' ONLY after a number, keeping the number
     normalized = normalized.replace(/(\d+(?:\.\d+)?)\s*(?:out of|of)\s*100\b/gi, '$1');

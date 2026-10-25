@@ -114,24 +114,26 @@ describe('ApiClient', () => {
       await client.listPools({ chain: 'Ethereum', limit: 10, min_tvl: 100000 });
     });
 
-    it('should sort by tvl', async () => {
-      const pool1 = { ...mockPool, pool_id: '650e8400-e29b-41d4-a716-446655440001', tvl_usd: 500000 };
-      const pool2 = { ...mockPool, pool_id: '650e8400-e29b-41d4-a716-446655440002', tvl_usd: 1000000 };
+    it('should pass sort to the API (server-side)', async () => {
+      const highRisk = { ...mockPool, pool_id: '650e8400-e29b-41d4-a716-446655440001', total_risk_score: 80 };
+      const lowRisk = { ...mockPool, pool_id: '650e8400-e29b-41d4-a716-446655440002', total_risk_score: 10 };
 
       server.use(
-        http.get('http://localhost:3000/api/pools', () => {
+        http.get('http://localhost:3000/api/pools', ({ request }) => {
+          const url = new URL(request.url);
+          expect(url.searchParams.get('sort')).toBe('risk');
           return HttpResponse.json({
-            data: [pool1, pool2],
+            data: [highRisk, lowRisk],
             pagination: { total: 2, limit: 20, offset: 0 },
           });
         })
       );
 
       const client = new ApiClient(mockConfig);
-      const result = await client.listPools({ sort: 'tvl' });
+      const result = await client.listPools({ sort: 'risk' });
 
-      expect(result.data[0].tvl_usd).toBe(1000000);
-      expect(result.data[1].tvl_usd).toBe(500000);
+      expect(result.data[0].total_risk_score).toBe(80);
+      expect(result.data[1].total_risk_score).toBe(10);
     });
 
     it('should enforce max limit of 100', async () => {
@@ -180,7 +182,7 @@ describe('ApiClient', () => {
   });
 
   describe('explainPoolRisk', () => {
-    it('should get explanation with LLM key', async () => {
+    it('should send provider/model in the explain body with the BYOK header', async () => {
       const mockExplanation = {
         explanation: {
           summary: 'Low risk pool',
@@ -205,12 +207,21 @@ describe('ApiClient', () => {
         http.post('http://localhost:3000/api/pools/:id/explain', async ({ request }) => {
           const apiKey = request.headers.get('X-LLM-Api-Key');
           expect(apiKey).toBe('test-key');
+          expect(request.headers.get('Content-Type')).toContain('application/json');
+          expect(await request.json()).toEqual({
+            provider: 'groq',
+            model: 'openai/gpt-oss-120b',
+          });
 
           return HttpResponse.json(mockExplanation);
         })
       );
 
-      const client = new ApiClient(mockConfig);
+      const client = new ApiClient({
+        ...mockConfig,
+        llmProvider: 'groq',
+        llmModel: 'openai/gpt-oss-120b',
+      });
       const result = await client.explainPoolRisk('550e8400-e29b-41d4-a716-446655440000', 'test-key');
 
       expect(result.explanation.summary).toBe('Low risk pool');
@@ -270,6 +281,19 @@ describe('ApiClient', () => {
       server.use(
         http.get('http://localhost:3000/api/vault/state', () => {
           return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+        })
+      );
+
+      const client = new ApiClient(mockConfig);
+      const result = await client.getVaultInfo();
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null for 503 (vault not configured)', async () => {
+      server.use(
+        http.get('http://localhost:3000/api/vault/state', () => {
+          return HttpResponse.json({ error: 'Vault monitoring not configured' }, { status: 503 });
         })
       );
 

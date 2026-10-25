@@ -346,6 +346,10 @@ jobs:
         working-directory: packages/mcp
         run: npm ci
       
+      - name: Lint
+        working-directory: packages/mcp
+        run: npm run lint
+      
       - name: Type check
         working-directory: packages/mcp
         run: npm run typecheck

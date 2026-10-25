@@ -28,10 +28,13 @@ Copy `.env.example` to `.env` and configure:
 # Required: API base URL
 API_BASE_URL=http://localhost:3000
 
-# Optional: LLM API key for explain_pool_risk
+# Optional: BYOK LLM key for explain_pool_risk (requires X_LLM_PROVIDER)
 X_LLM_API_KEY=your-api-key-here
+X_LLM_PROVIDER=groq            # openai | openrouter | groq | ollama | mock
+X_LLM_MODEL=openai/gpt-oss-120b  # optional
 
-# Optional: HTTP transport (only if using --transport http)
+# HTTP transport (only with --transport http). Token is REQUIRED,
+# host must be loopback (localhost / 127.0.0.1 / ::1).
 HTTP_PORT=3001
 HTTP_HOST=localhost
 HTTP_AUTH_TOKEN=your-secret-token
@@ -54,6 +57,10 @@ npm run start:http
 # or
 node dist/index.js --transport http
 ```
+
+Streamable HTTP (stateless) endpoint: `POST http://localhost:3001/mcp` with
+`Authorization: Bearer $HTTP_AUTH_TOKEN`. Requests with a non-loopback `Host`
+or `Origin` header are rejected (DNS-rebinding protection).
 
 ## Tools
 
@@ -220,7 +227,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
       ],
       "env": {
         "API_BASE_URL": "http://localhost:3000",
-        "X_LLM_API_KEY": "your-api-key-here"
+        "X_LLM_API_KEY": "your-api-key-here",
+        "X_LLM_PROVIDER": "groq"
       }
     }
   }

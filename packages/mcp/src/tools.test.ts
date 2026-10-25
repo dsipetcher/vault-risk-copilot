@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import type { ApiClient } from './api-client.js';
 import { ApiError } from './api-client.js';
 import {
@@ -7,8 +6,7 @@ import {
   getPoolRiskTool,
   comparePoolsTool,
   explainPoolRiskTool,
-  getVaultInfoTool,
-} from './tools.js';
+  getVaultInfoTool, safeErrorMessage, toolErrorResult } from './tools.js';
 
 const mockPool = {
   id: 1,
@@ -98,7 +96,7 @@ describe('Tools', () => {
         new ApiError('API error', 500)
       );
 
-      await expect(listPoolsTool(mockApiClient, {})).rejects.toThrow(McpError);
+      await expect(listPoolsTool(mockApiClient, {})).rejects.toThrow(ApiError);
     });
   });
 
@@ -131,7 +129,7 @@ describe('Tools', () => {
         getPoolRiskTool(mockApiClient, {
           pool_id: '550e8400-e29b-41d4-a716-446655440000',
         })
-      ).rejects.toThrow(McpError);
+      ).rejects.toThrow(ApiError);
     });
   });
 
@@ -264,5 +262,13 @@ describe('Tools', () => {
 
       expect(result.content[0].text).toContain('not available');
     });
+  });
+});
+
+describe('safeErrorMessage / toolErrorResult', () => {
+  it('maps errors to safe isError results', () => {
+    expect(toolErrorResult(new ApiError('x', 404))).toEqual({ isError: true, content: [{ type: 'text', text: 'Not found: no pool with that id' }] });
+    expect(safeErrorMessage(new ApiError('Network error', 0))).toBe('Risk API is unreachable');
+    expect(safeErrorMessage(new Error('secret http://internal/x'))).toBe('Internal error');
   });
 });

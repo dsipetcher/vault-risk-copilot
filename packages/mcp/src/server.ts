@@ -5,8 +5,11 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  McpError,
+  ErrorCode,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Config } from './config.js';
 import { ApiClient } from './api-client.js';
@@ -16,7 +19,10 @@ import {
   comparePoolsTool,
   explainPoolRiskTool,
   getVaultInfoTool,
+  toolErrorResult,
 } from './tools.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const METHODOLOGY_CONTENT = `# Vault Risk Copilot - Risk Methodology
 
@@ -234,26 +240,42 @@ export function createServer(config: Config): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    switch (name) {
-      case 'list_pools':
-        return await listPoolsTool(apiClient, (args as Record<string, unknown>) ?? {});
+    try {
+      switch (name) {
+        case 'list_pools':
+          return await listPoolsTool(apiClient, (args as Record<string, unknown>) ?? {});
 
-      case 'get_pool_risk':
-        return await getPoolRiskTool(apiClient, (args as Record<string, unknown>) ?? {});
+        case 'get_pool_risk':
+          return await getPoolRiskTool(apiClient, (args as Record<string, unknown>) ?? {});
 
-      case 'compare_pools':
-        return await comparePoolsTool(apiClient, (args as Record<string, unknown>) ?? {});
+        case 'compare_pools':
+          return await comparePoolsTool(apiClient, (args as Record<string, unknown>) ?? {});
 
-      case 'explain_pool_risk':
-        return await explainPoolRiskTool(apiClient, (args as Record<string, unknown>) ?? {}, config.llmApiKey);
+        case 'explain_pool_risk':
+          return await explainPoolRiskTool(apiClient, (args as Record<string, unknown>) ?? {}, config.llmApiKey);
 
-      case 'get_vault_info':
-        return await getVaultInfoTool(apiClient);
+        case 'get_vault_info':
+          return await getVaultInfoTool(apiClient);
 
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+        default:
+          return toolErrorResult(new Error(`Unknown tool: ${String(name).slice(0, 64)}`));
+      }
+    } catch (error) {
+      // Tool failures must be returned as isError results (MCP spec), not protocol errors.
+      return toolErrorResult(error);
     }
   });
+
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+    resourceTemplates: [
+      {
+        uriTemplate: 'pool://{id}',
+        name: 'Pool risk snapshot',
+        mimeType: 'application/json',
+        description: 'Latest pool data, risk score and signals for a pool UUID',
+      },
+    ],
+  }));
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     return {
@@ -283,7 +305,20 @@ export function createServer(config: Config): Server {
       };
     }
 
-    throw new Error(`Unknown resource: ${uri}`);
+    if (uri.startsWith('pool://')) {
+      const id = uri.slice('pool://'.length);
+      if (!UUID_RE.test(id)) {
+        throw new McpError(ErrorCode.InvalidParams, 'pool:// id must be a UUID');
+      }
+      try {
+        const pool = await apiClient.getPoolRisk(id);
+        return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(pool, null, 2) }] };
+      } catch (error) {
+        throw new McpError(ErrorCode.InvalidParams, toolErrorResult(error).content[0].text);
+      }
+    }
+
+    throw new McpError(ErrorCode.InvalidParams, 'Unknown resource');
   });
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => {

@@ -1,94 +1,115 @@
-import { createServer as createHttpServer } from 'http';
+import { createServer as createHttpServer, type IncomingMessage } from 'http';
+import { timingSafeEqual } from 'crypto';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Config } from './config.js';
 
-export async function runHttpServer(server: Server, config: Config): Promise<void> {
-  const httpServer = createHttpServer(async (req, res) => {
-    if (!config.httpAuthToken) {
-      console.error('[HTTP] WARNING: No auth token configured - server is open!');
-    }
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const MAX_BODY_BYTES = 1_000_000;
 
-    if (config.httpAuthToken) {
-      const authHeader = req.headers.authorization;
-      const expectedToken = `Bearer ${config.httpAuthToken}`;
+function tokenMatches(header: string | undefined, token: string): boolean {
+  if (!header?.startsWith('Bearer ')) return false;
+  const a = Buffer.from(header.slice(7));
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
-      if (authHeader !== expectedToken) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Unauthorized' }));
-        return;
+/** Exact hostname check (rejects e.g. http://localhost.evil.com). */
+function isLoopbackUrl(value: string): boolean {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** DNS-rebinding protection: Host header must be a loopback name. */
+function isLoopbackHostHeader(host: string | undefined): boolean {
+  return !!host && isLoopbackUrl(`http://${host}`);
+}
+
+function readJson(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new Error('Body too large'));
+        req.destroy();
+      } else chunks.push(c);
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch {
+        reject(new Error('Invalid JSON'));
       }
-    }
+    });
+    req.on('error', reject);
+  });
+}
 
+/**
+ * Streamable HTTP transport (stateless: one Server + transport per request).
+ * Requires HTTP_AUTH_TOKEN and a loopback bind.
+ */
+export async function runHttpServer(serverFactory: () => Server, config: Config): Promise<import('http').Server> {
+  const token = config.httpAuthToken;
+  if (!token) {
+    throw new Error('HTTP_AUTH_TOKEN is required for --transport=http');
+  }
+  if (!LOOPBACK_HOSTS.has(config.httpHost)) {
+    throw new Error(`Refusing to bind HTTP transport to non-loopback host "${config.httpHost}"`);
+  }
+
+  const json = (res: import('http').ServerResponse, code: number, body: unknown) => {
+    res.writeHead(code, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+  };
+
+  const httpServer = createHttpServer(async (req, res) => {
+    if (!isLoopbackHostHeader(req.headers.host)) return json(res, 403, { error: 'Forbidden: invalid Host' });
     const origin = req.headers.origin;
-    const allowedOrigins = ['http://localhost', 'http://127.0.0.1'];
-    const isAllowedOrigin = origin && allowedOrigins.some((allowed) => origin.startsWith(allowed));
+    if (origin && !isLoopbackUrl(origin)) return json(res, 403, { error: 'Forbidden: invalid Origin' });
 
-    if (origin && !isAllowedOrigin) {
-      res.writeHead(403, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Forbidden: Invalid origin' }));
-      return;
+    const path = (req.url ?? '/').split('?')[0];
+    if (path === '/health' && req.method === 'GET') return json(res, 200, { status: 'ok' });
+
+    if (!tokenMatches(req.headers.authorization, token)) return json(res, 401, { error: 'Unauthorized' });
+
+    if (path !== '/mcp') return json(res, 404, { error: 'Not found' });
+    if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed (stateless mode)' });
+
+    let body: unknown;
+    try {
+      body = await readJson(req);
+    } catch (e) {
+      return json(res, 400, { error: (e as Error).message });
     }
 
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': origin || 'http://localhost',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400',
-      });
-      res.end();
-      return;
-    }
-
-    if (req.url === '/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok' }));
-      return;
-    }
-
-    if (req.url === '/sse') {
-      const transport = new SSEServerTransport('/messages', res);
+    const server = serverFactory();
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    res.on('close', () => {
+      void transport.close();
+      void server.close();
+    });
+    try {
       await server.connect(transport);
-
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': origin || 'http://localhost',
-      });
-
-      return;
+      await transport.handleRequest(req, res, body);
+    } catch {
+      if (!res.headersSent) json(res, 500, { error: 'Internal error' });
     }
-
-    if (req.url === '/messages' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (chunk) => {
-        body += chunk.toString();
-      });
-
-      req.on('end', async () => {
-        try {
-          const message = JSON.parse(body);
-          const transport = new SSEServerTransport('/messages', res);
-          await transport.handlePostMessage(message, res);
-        } catch (error) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Invalid JSON' }));
-        }
-      });
-
-      return;
-    }
-
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Not found' }));
   });
 
-  httpServer.listen(config.httpPort, config.httpHost, () => {
-    console.error(`[HTTP] MCP server listening on http://${config.httpHost}:${config.httpPort}`);
-    console.error(`[HTTP] Health check: http://${config.httpHost}:${config.httpPort}/health`);
-    console.error(`[HTTP] SSE endpoint: http://${config.httpHost}:${config.httpPort}/sse`);
-    console.error(`[HTTP] Auth: ${config.httpAuthToken ? 'enabled' : 'DISABLED (WARNING)'}`);
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once('error', reject);
+    httpServer.listen(config.httpPort, config.httpHost, () => {
+      httpServer.off('error', reject);
+      console.error(`[HTTP] MCP server listening on http://${config.httpHost}:${config.httpPort}/mcp (auth required)`);
+      resolve();
+    });
   });
+
+  return httpServer;
 }

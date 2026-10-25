@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import { loadConfig } from './config.js';
+import { parseTransport } from './cli.js';
 import { createServer, runStdioServer } from './server.js';
 import { runHttpServer } from './http-transport.js';
 
 async function main() {
   const args = process.argv.slice(2);
-  const transportFlag = args.find((arg) => arg.startsWith('--transport='));
-  const transport = transportFlag ? transportFlag.split('=')[1] : 'stdio';
+  const transport = parseTransport(args);
 
   if (transport !== 'stdio' && transport !== 'http') {
     console.error('Error: --transport must be "stdio" or "http"');
@@ -20,8 +20,7 @@ async function main() {
     if (transport === 'stdio') {
       await runStdioServer(config);
     } else if (transport === 'http') {
-      const server = createServer(config);
-      await runHttpServer(server, config);
+      await runHttpServer(() => createServer(config), config);
     }
   } catch (error) {
     if (error instanceof Error) {

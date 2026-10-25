@@ -1,10 +1,12 @@
 import type { Config } from './config.js';
 import {
   poolWithRiskSchema,
+  poolSnapshotSchema,
   poolDetailsSchema,
   vaultStateSchema,
   explanationSchema,
   type PoolWithRisk,
+  type PoolSnapshot,
   type PoolDetails,
   type VaultState,
   type Explanation,
@@ -44,7 +46,9 @@ export class ApiClient {
         ...options,
         signal: controller.signal,
         headers: {
-          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          // Only declare a JSON body when there is one (Fastify 400s on empty JSON bodies).
+          ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
           ...options.headers,
         },
       });
@@ -77,7 +81,7 @@ export class ApiClient {
         if (error.name === 'AbortError') {
           throw new ApiError('Request timeout', 408);
         }
-        throw new ApiError(`Network error: ${error.message}`);
+        throw new ApiError('Network error', 0);
       }
 
       throw new ApiError('Unknown error occurred');
@@ -99,6 +103,7 @@ export class ApiClient {
     if (params.chain) queryParams.set('chain', params.chain);
     if (params.protocol) queryParams.set('protocol', params.protocol);
     if (params.min_tvl !== undefined) queryParams.set('min_tvl', String(params.min_tvl));
+    if (params.sort) queryParams.set('sort', params.sort);
 
     const result = await this.fetch<{
       data: unknown[];
@@ -107,17 +112,8 @@ export class ApiClient {
 
     const validatedPools = result.data.map((pool) => poolWithRiskSchema.parse(pool));
 
-    let sortedPools = validatedPools;
-    if (params.sort === 'tvl') {
-      sortedPools = validatedPools.sort((a, b) => (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0));
-    } else if (params.sort === 'risk') {
-      sortedPools = validatedPools.sort((a, b) => (b.total_risk_score ?? 0) - (a.total_risk_score ?? 0));
-    } else if (params.sort === 'apy') {
-      sortedPools = validatedPools.sort((a, b) => (b.apy ?? 0) - (a.apy ?? 0));
-    }
-
     return {
-      data: sortedPools,
+      data: validatedPools,
       pagination: result.pagination,
     };
   }
@@ -136,6 +132,10 @@ export class ApiClient {
     const result = await this.fetch<unknown>(`/api/pools/${poolId}/explain`, {
       method: 'POST',
       headers,
+      body: JSON.stringify({
+        ...(this.config.llmProvider ? { provider: this.config.llmProvider } : {}),
+        ...(this.config.llmModel ? { model: this.config.llmModel } : {}),
+      }),
     });
 
     return explanationSchema.parse(result);
@@ -146,15 +146,15 @@ export class ApiClient {
       const result = await this.fetch<{ data: unknown }>('/api/vault/state');
       return vaultStateSchema.parse(result.data);
     } catch (error) {
-      if (error instanceof ApiError && error.statusCode === 404) {
+      if (error instanceof ApiError && (error.statusCode === 404 || error.statusCode === 503)) {
         return null;
       }
       throw error;
     }
   }
 
-  async getPoolHistory(poolId: string, limit: number = 30): Promise<PoolWithRisk[]> {
+  async getPoolHistory(poolId: string, limit: number = 30): Promise<PoolSnapshot[]> {
     const result = await this.fetch<{ data: unknown[] }>(`/api/pools/${poolId}/history?limit=${limit}`);
-    return result.data.map((item) => poolWithRiskSchema.parse(item));
+    return result.data.map((item) => poolSnapshotSchema.parse(item));
   }
 }
