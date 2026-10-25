@@ -22,6 +22,7 @@ const siweMessageSchema = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
+  const cookieSecure = env.NODE_ENV === 'production' || env.COOKIE_SAMESITE === 'none';
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
   
   function checkOrigin(request: FastifyRequest, reply: any) {
@@ -38,8 +39,8 @@ export async function authRoutes(app: FastifyInstance) {
     
     reply.setCookie(NONCE_COOKIE_NAME, nonce, {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: cookieSecure,
+      sameSite: env.COOKIE_SAMESITE,
       maxAge: NONCE_COOKIE_MAX_AGE,
       path: '/',
     });
@@ -124,12 +125,12 @@ export async function authRoutes(app: FastifyInstance) {
           new Date()
         );
         
-        reply.clearCookie(NONCE_COOKIE_NAME, { path: '/' });
+        reply.clearCookie(NONCE_COOKIE_NAME, { path: '/', secure: cookieSecure, sameSite: env.COOKIE_SAMESITE });
         
         reply.setCookie(SESSION_COOKIE_NAME, sessionToken, {
           httpOnly: true,
-          secure: env.NODE_ENV === 'production',
-          sameSite: 'lax',
+          secure: cookieSecure,
+          sameSite: env.COOKIE_SAMESITE,
           maxAge: SESSION_COOKIE_MAX_AGE,
           path: '/',
         });
@@ -163,7 +164,7 @@ export async function authRoutes(app: FastifyInstance) {
       await deleteSession(pool, sessionToken);
     }
     
-    reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+    reply.clearCookie(SESSION_COOKIE_NAME, { path: '/', secure: cookieSecure, sameSite: env.COOKIE_SAMESITE });
     
     return reply.send({ success: true });
   });
@@ -180,7 +181,7 @@ export async function authRoutes(app: FastifyInstance) {
     const session = await getSessionByToken(pool, sessionToken);
     
     if (!session) {
-      reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+      reply.clearCookie(SESSION_COOKIE_NAME, { path: '/', secure: cookieSecure, sameSite: env.COOKIE_SAMESITE });
       return reply.code(200).send({
         authenticated: false,
       });

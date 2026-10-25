@@ -1,7 +1,7 @@
 import { useAccount, useSignMessage, useDisconnect } from 'wagmi';
 import { createSiweMessage } from 'viem/siwe';
 import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../lib/config';
+import { API_BASE_URL, apiFetch } from '../lib/config';
 
 interface AuthUser {
   address: string;
@@ -22,7 +22,7 @@ export function useAuth() {
 
   async function checkAuth() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/auth/me`, {
         credentials: 'include',
       });
 
@@ -54,7 +54,7 @@ export function useAuth() {
     setError(null);
 
     try {
-      const nonceResponse = await fetch(`${API_BASE_URL}/api/auth/nonce`, {
+      const nonceResponse = await apiFetch(`${API_BASE_URL}/api/auth/nonce`, {
         credentials: 'include', // server binds the nonce to an httpOnly cookie
       });
       const { nonce } = await nonceResponse.json();
@@ -73,7 +73,7 @@ export function useAuth() {
       });
       const signature = await signMessageAsync({ message: preparedMessage });
 
-      const verifyResponse = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+      const verifyResponse = await apiFetch(`${API_BASE_URL}/api/auth/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -106,7 +106,7 @@ export function useAuth() {
   async function signOut() {
     setIsLoading(true);
     try {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      await apiFetch(`${API_BASE_URL}/api/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });

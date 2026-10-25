@@ -15,7 +15,16 @@ export const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LLM_KEY_ENCRYPTION_KEY: z.string().optional(),
   SIWE_DOMAIN: z.string().optional(),
-  SIWE_URI: z.string().url().optional(),
+  // Comma-separated list of allowed SIWE URIs (each must be a valid URL).
+  SIWE_URI: z
+    .string()
+    .refine((v) => v.split(',').map((u) => u.trim()).filter(Boolean).every((u) => z.string().url().safeParse(u).success), {
+      message: 'SIWE_URI must be a URL or comma-separated list of URLs',
+    })
+    .optional(),
+  // 'none' is required when the web app is served from a different site than the API
+  // (e.g. GitHub Pages + tunnel). 'none' forces Secure cookies.
+  COOKIE_SAMESITE: z.enum(['lax', 'strict', 'none']).default('lax'),
   SIWE_CHAIN_ID: z.coerce.number().optional(),
   SIWE_CHAIN_IDS: z.string().optional(),
   RISK_INTERNAL_TOKEN: z.string().optional(),

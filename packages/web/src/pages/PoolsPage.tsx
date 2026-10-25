@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { usePools } from '@/hooks/usePools';
 import { RiskBadge } from '@/components/RiskBadge';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -215,8 +216,9 @@ export function PoolsPage() {
 }
 
 function PoolRow({ pool }: { pool: Pool }) {
+  const navigate = useNavigate();
   const handleRowClick = () => {
-    window.location.href = `/pools/${pool.pool_id}`;
+    navigate(`/pools/${pool.pool_id}`);
   };
 
   return (
@@ -246,13 +248,14 @@ function PoolRow({ pool }: { pool: Pool }) {
         )}
       </td>
       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium">
-        <a
-          href={`/pools/${pool.pool_id}`}
+        <Link
+          to={`/pools/${pool.pool_id}`}
           data-testid={`pool-link-${pool.pool_id}`}
           className="text-primary-600 hover:text-primary-900"
+          onClick={(e) => e.stopPropagation()}
         >
           View
-        </a>
+        </Link>
       </td>
     </tr>
   );
