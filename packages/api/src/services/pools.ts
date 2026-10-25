@@ -44,6 +44,14 @@ export async function getLatestPools(
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  // Determine ORDER BY clause based on sort parameter
+  let orderByClause = 'ORDER BY ps.tvl_usd DESC NULLS LAST';
+  if (filters.sort === 'risk') {
+    orderByClause = 'ORDER BY rs.total_risk_score DESC NULLS LAST';
+  } else if (filters.sort === 'apy') {
+    orderByClause = 'ORDER BY ps.apy DESC NULLS LAST';
+  }
+
   // Subquery to get latest snapshots per pool_id
   const latestSnapshotsSubquery = `
     SELECT DISTINCT ON (pool_id) *
@@ -68,7 +76,7 @@ export async function getLatestPools(
     FROM (${latestSnapshotsSubquery}) ps
     LEFT JOIN risk_scores rs ON rs.snapshot_id = ps.id
     ${whereClause}
-    ORDER BY ps.tvl_usd DESC NULLS LAST
+    ${orderByClause}
     LIMIT $${paramIndex++} OFFSET $${paramIndex++}
   `;
 

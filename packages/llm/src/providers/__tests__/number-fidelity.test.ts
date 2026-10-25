@@ -2,6 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { OpenAIProvider } from '../openai.js';
 import type { RiskInput, ExplanationOutput } from '../../schemas.js';
 
+type NumberFidelityFn = (
+  input: RiskInput,
+  output: ExplanationOutput
+) => boolean;
+
+function validateNumberFidelity(
+  p: OpenAIProvider,
+  input: RiskInput,
+  output: ExplanationOutput
+): boolean {
+  const fn = Reflect.get(p, 'validateNumberFidelity') as NumberFidelityFn;
+  return fn.call(p, input, output);
+}
+
 describe('Number Fidelity Validation', () => {
   const provider = new OpenAIProvider({ apiKey: 'test-key' });
 
@@ -53,7 +67,7 @@ describe('Number Fidelity Validation', () => {
   };
 
   it('should accept exact matches', () => {
-    const result = (provider as any).validateNumberFidelity(baseInput, validOutput);
+    const result = validateNumberFidelity(provider, baseInput, validOutput);
     expect(result).toBe(true);
   });
 
@@ -69,7 +83,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -85,7 +99,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -101,7 +115,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -117,7 +131,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -133,7 +147,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -149,7 +163,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -165,7 +179,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -181,7 +195,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -197,7 +211,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -213,7 +227,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -229,7 +243,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -245,7 +259,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -261,7 +275,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -281,7 +295,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    const result = validateNumberFidelity(provider, inputWith75, output);
     expect(result).toBe(false);
   });
 
@@ -301,7 +315,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(inputWith500K, output);
+    const result = validateNumberFidelity(provider, inputWith500K, output);
     expect(result).toBe(false);
   });
 
@@ -319,7 +333,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -335,7 +349,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -351,7 +365,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -367,7 +381,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(false);
   });
 
@@ -383,7 +397,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -403,7 +417,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(inputWith85, output);
+    const result = validateNumberFidelity(provider, inputWith85, output);
     expect(result).toBe(true);
   });
 
@@ -419,7 +433,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(baseInput, output);
+    const result = validateNumberFidelity(provider, baseInput, output);
     expect(result).toBe(true);
   });
 
@@ -439,7 +453,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    const result = validateNumberFidelity(provider, inputWith75, output);
     expect(result).toBe(false);
   });
 
@@ -459,7 +473,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    const result = validateNumberFidelity(provider, inputWith75, output);
     expect(result).toBe(true);
   });
 
@@ -479,7 +493,7 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(inputWith100, output);
+    const result = validateNumberFidelity(provider, inputWith100, output);
     expect(result).toBe(true);
   });
 
@@ -499,7 +513,105 @@ describe('Number Fidelity Validation', () => {
       ],
       disclaimer: 'Test',
     };
-    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    const result = validateNumberFidelity(provider, inputWith75, output);
     expect(result).toBe(false);
+  });
+
+  // Groq gpt-oss-120b commonly writes "7-day TVL change" and "Impermanent Loss".
+  // Those used to fail the validator as invented numbers / unknown signals (false positives).
+  it('ACCEPT: Groq/gpt-oss phrasing "7-day" window + Impermanent Loss alias', () => {
+    const output: ExplanationOutput = {
+      summary: 'Over the 7-day window TVL of $520,000 dropped 35.2%.',
+      key_factors: [
+        {
+          signal: 'TVL Volatility',
+          value: '-35.2%',
+          explanation: '7-day TVL change of -35.2% indicates a decline.',
+        },
+        {
+          signal: 'Impermanent Loss',
+          value: '0.05',
+          explanation: 'Impermanent loss risk is 0.05 over the 7-day window.',
+        },
+      ],
+      disclaimer: 'Educational only.',
+    };
+    const result = validateNumberFidelity(provider, baseInput, output);
+    expect(result).toBe(true);
+  });
+
+  const tvl5M: RiskInput = {
+    ...baseInput,
+    pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 5_000_000 },
+  };
+
+  function tvlOutput(text: string): ExplanationOutput {
+    return {
+      summary: `TVL is ${text}.`,
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: text,
+          explanation: `TVL of ${text} is healthy.`,
+        },
+      ],
+      disclaimer: 'Test',
+    };
+  }
+
+  it('ACCEPT: "$5M" compact unit', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5M'))).toBe(true);
+  });
+
+  it('ACCEPT: "$5 M" with a space (Groq/gpt-oss)', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5 M'))).toBe(true);
+  });
+
+  it('ACCEPT: "$5 million" word scale', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5 million'))).toBe(true);
+  });
+
+  it('ACCEPT: "$1.2 billion" word scale', () => {
+    const input: RiskInput = {
+      ...baseInput,
+      pool_metrics: { ...baseInput.pool_metrics, tvl_usd: 1_200_000_000 },
+    };
+    expect(validateNumberFidelity(provider, input, tvlOutput('$1.2 billion'))).toBe(true);
+  });
+
+  it('REJECT: "$6 M" when true TVL is $5M', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$6 M'))).toBe(false);
+  });
+
+  it('REJECT: "$50 M" when true TVL is $5M', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$50 M'))).toBe(false);
+  });
+
+  it('REJECT: "$5 B" when true TVL is $5M', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5 B'))).toBe(false);
+  });
+
+  it('REJECT: "$5 billion" when true TVL is $5M', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5 billion'))).toBe(false);
+  });
+
+  it('REJECT: "$5 marks" is not read as $5M', () => {
+    expect(validateNumberFidelity(provider, tvl5M, tvlOutput('$5 marks'))).toBe(false);
+  });
+
+  it('ACCEPT: grouped thousands without a $ prefix (520,000)', () => {
+    const output: ExplanationOutput = {
+      summary: 'TVL is 520,000 USD.',
+      key_factors: [
+        {
+          signal: 'TVL Score',
+          value: '95',
+          explanation: 'TVL of 520,000 supports a high score.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = validateNumberFidelity(provider, baseInput, output);
+    expect(result).toBe(true);
   });
 });

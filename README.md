@@ -150,12 +150,13 @@ docker compose exec postgres psql -U vault_user -d vault_risk_copilot \
 **Services running:**
 - **PostgreSQL:** localhost:5432 (auto-applies migrations on first start)
 - **Collector:** Runs every 5 minutes, fetches DeFiLlama pools + on-chain vault state
+- **API:** http://localhost:3000 (Node.js REST API)
+- **Risk Service:** http://localhost:8000 (Python FastAPI)
+- **Frontend:** http://localhost:5173 (React + Vite)
 
-**Future services** (Phase 3-5, currently commented in docker-compose.yml):
-- API (http://localhost:3000)
-- Risk Service (http://localhost:8000)
-- Frontend (http://localhost:5173)
-- MCP Server (http://localhost:3001)
+**MCP Server** (Phase 7, run separately):
+- **Command:** `npx @vault-risk-copilot/mcp` or `node packages/mcp/dist/index.js`
+- **Configuration:** See [packages/mcp/README.md](./packages/mcp/README.md) for Claude Desktop/Cursor setup
 
 ### Running Tests
 
@@ -203,10 +204,10 @@ npm run dev
 |-------|--------|-------------|
 | Phase 0-1 | ✅ Complete | Smart contracts (ERC-4626 vault), tests, CI/CD |
 | Phase 2 | ✅ Complete | PostgreSQL schema, Docker Compose, TypeScript collector |
-| Phase 3 | 🚧 Planned | Python Risk Service (FastAPI, scikit-learn) |
-| Phase 4 | 🚧 Planned | Node.js API + React frontend |
-| Phase 5 | 🚧 Planned | LLM integration + MCP server |
-| Phase 6 | 🚧 Planned | DevOps hardening, Kubernetes |
+| Phase 3 | ✅ Complete | Python Risk Service (FastAPI, scikit-learn) |
+| Phase 4-5 | ✅ Complete | Node.js API + React frontend |
+| Phase 6 | ✅ Complete | LLM integration (BYOK, Groq/OpenAI-compatible) |
+| Phase 7 | ✅ Complete | MCP server (Model Context Protocol for AI assistants) |
 
 **See:** [docs/phases/](./docs/phases/) for detailed phase status and history
 
@@ -271,13 +272,22 @@ The risk scoring system evaluates pools based on:
 - Replay protection and domain validation
 - **See [docs/SIWE_AUTH.md](./docs/SIWE_AUTH.md) for security model and threat analysis**
 
-**MCP Server (Read-Only):**
-- `list_pools` - Get available pools with basic info
-- `get_pool_risk` - Retrieve risk score and factors for a pool
-- `explain_pool` - Get AI explanation of pool risk
-- `get_vault_state` - Query Sepolia vault state (TVL, share price)
+**MCP Server (Read-Only, Phase 7):**
+- `list_pools` - Get available pools with filters (chain, protocol, min TVL)
+- `get_pool_risk` - Retrieve risk score breakdown and 7-day history
+- `compare_pools` - Compare 2-5 pools side-by-side
+- `explain_pool_risk` - Get AI explanation of pool risk (LLM-powered or fallback)
+- `get_vault_info` - Query Sepolia vault state (TVL, share price)
+
+**Resources:**
+- `methodology://risk-signals` - Risk model documentation
+
+**Prompts:**
+- `assess_pool_risk` - Pre-built assessment workflow
 
 **No transaction signing** - MCP server is read-only by design.
+
+**Configuration:** See [packages/mcp/README.md](./packages/mcp/README.md) for Claude Desktop and Cursor integration.
 
 ## Roadmap
 

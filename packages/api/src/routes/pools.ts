@@ -19,6 +19,7 @@ export async function poolsRoutes(app: FastifyInstance) {
             risk_category: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
             min_tvl: { type: 'number' },
             max_tvl: { type: 'number' },
+            sort: { type: 'string', enum: ['tvl', 'risk', 'apy'] },
           },
         },
         response: {

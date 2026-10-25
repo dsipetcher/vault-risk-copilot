@@ -81,6 +81,7 @@ export const poolFiltersSchema = z.object({
   risk_category: z.enum(['low', 'medium', 'high', 'critical']).optional(),
   min_tvl: z.coerce.number().optional(),
   max_tvl: z.coerce.number().optional(),
+  sort: z.enum(['tvl', 'risk', 'apy']).optional(),
 });
 
 export type PoolFilters = z.infer<typeof poolFiltersSchema>;
