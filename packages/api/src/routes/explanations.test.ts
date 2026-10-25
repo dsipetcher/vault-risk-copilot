@@ -12,6 +12,9 @@ const workspaceRoot = resolve(__dirname, '../../../..');
 describe('Explanations API Tests', () => {
   let app: FastifyInstance;
   let poolId: string;
+  let baselineExplanations: number;
+  let baselineRiskScores: number;
+  let baselinePoolSnapshots: number;
 
   beforeAll(async () => {
     process.env.DATABASE_URL =
@@ -31,6 +34,14 @@ describe('Explanations API Tests', () => {
     
     // Create test fixture: insert a pool snapshot and risk score
     const { pool } = await import('../database.js');
+    
+    // Capture baseline counts before creating fixtures
+    const baseExpl = await pool.query('SELECT COUNT(*) FROM explanations');
+    const baseRisk = await pool.query('SELECT COUNT(*) FROM risk_scores');
+    const basePool = await pool.query('SELECT COUNT(*) FROM pool_snapshots');
+    baselineExplanations = parseInt(baseExpl.rows[0].count);
+    baselineRiskScores = parseInt(baseRisk.rows[0].count);
+    baselinePoolSnapshots = parseInt(basePool.rows[0].count);
     
     // Create test fixture: insert a pool snapshot and risk score
     const poolResult = await pool.query(`
@@ -57,25 +68,29 @@ describe('Explanations API Tests', () => {
     // Clean up fixtures
     const { pool } = await import('../database.js');
     
-    // Get counts before cleanup
-    const beforeExplanations = await pool.query('SELECT COUNT(*) FROM explanations WHERE pool_id = $1', [poolId]);
-    const beforeRiskScores = await pool.query('SELECT COUNT(*) FROM risk_scores WHERE pool_id = $1', [poolId]);
-    const beforePoolSnapshots = await pool.query('SELECT COUNT(*) FROM pool_snapshots WHERE pool_id = $1', [poolId]);
-    
     // Delete fixtures
     await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
     await pool.query('DELETE FROM risk_scores WHERE pool_id = $1', [poolId]);
     await pool.query('DELETE FROM pool_snapshots WHERE pool_id = $1', [poolId]);
     
-    // Verify counts return to zero
-    const afterExplanations = await pool.query('SELECT COUNT(*) FROM explanations WHERE pool_id = $1', [poolId]);
-    const afterRiskScores = await pool.query('SELECT COUNT(*) FROM risk_scores WHERE pool_id = $1', [poolId]);
-    const afterPoolSnapshots = await pool.query('SELECT COUNT(*) FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+    // Verify counts return to baseline (not zero, in case of shared DB)
+    const afterExpl = await pool.query('SELECT COUNT(*) FROM explanations');
+    const afterRisk = await pool.query('SELECT COUNT(*) FROM risk_scores');
+    const afterPool = await pool.query('SELECT COUNT(*) FROM pool_snapshots');
     
-    if (afterExplanations.rows[0].count !== '0' || 
-        afterRiskScores.rows[0].count !== '0' || 
-        afterPoolSnapshots.rows[0].count !== '0') {
-      throw new Error(`Fixture cleanup failed: ${beforeExplanations.rows[0].count} explanations, ${beforeRiskScores.rows[0].count} risk_scores, ${beforePoolSnapshots.rows[0].count} pool_snapshots were not deleted`);
+    const finalExplanations = parseInt(afterExpl.rows[0].count);
+    const finalRiskScores = parseInt(afterRisk.rows[0].count);
+    const finalPoolSnapshots = parseInt(afterPool.rows[0].count);
+    
+    if (finalExplanations !== baselineExplanations || 
+        finalRiskScores !== baselineRiskScores || 
+        finalPoolSnapshots !== baselinePoolSnapshots) {
+      throw new Error(
+        `Fixture cleanup failed: counts don't match baseline.\n` +
+        `  explanations: ${finalExplanations} (expected ${baselineExplanations})\n` +
+        `  risk_scores: ${finalRiskScores} (expected ${baselineRiskScores})\n` +
+        `  pool_snapshots: ${finalPoolSnapshots} (expected ${baselinePoolSnapshots})`
+      );
     }
     
     await app.close();

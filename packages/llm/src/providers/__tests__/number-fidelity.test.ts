@@ -423,23 +423,83 @@ describe('Number Fidelity Validation', () => {
     expect(result).toBe(true);
   });
 
-  it('ACCEPT: "score of 100" (strip scale phrases)', () => {
-    const inputWith100 = {
+  it('REJECT: "score of 100" with real 75 (hallucination)', () => {
+    const inputWith75 = {
       ...baseInput,
-      breakdown: { ...baseInput.breakdown, vault_score: 100 },
+      breakdown: { ...baseInput.breakdown, vault_score: 75 },
     };
     const output: ExplanationOutput = {
       summary: 'Vault has a score of 100',
       key_factors: [
         {
           signal: 'Vault Score',
+          value: '75/100',
+          explanation: 'Good.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    expect(result).toBe(false);
+  });
+
+  it('ACCEPT: "75 out of 100" with real 75 (strip scale, keep number)', () => {
+    const inputWith75 = {
+      ...baseInput,
+      breakdown: { ...baseInput.breakdown, vault_score: 75 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Vault has a score',
+      key_factors: [
+        {
+          signal: 'Vault Score',
+          value: '75 out of 100',
+          explanation: 'Vault score is 75.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    expect(result).toBe(true);
+  });
+
+  it('ACCEPT: "100 out of 100" only when real value is 100', () => {
+    const inputWith100 = {
+      ...baseInput,
+      breakdown: { ...baseInput.breakdown, vault_score: 100 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Vault has perfect score',
+      key_factors: [
+        {
+          signal: 'Vault Score',
           value: '100 out of 100',
-          explanation: 'Perfect vault score of 100.',
+          explanation: 'Perfect vault score.',
         },
       ],
       disclaimer: 'Test',
     };
     const result = (provider as any).validateNumberFidelity(inputWith100, output);
     expect(result).toBe(true);
+  });
+
+  it('REJECT: "100 out of 100" when real value is 75', () => {
+    const inputWith75 = {
+      ...baseInput,
+      breakdown: { ...baseInput.breakdown, vault_score: 75 },
+    };
+    const output: ExplanationOutput = {
+      summary: 'Vault has perfect score',
+      key_factors: [
+        {
+          signal: 'Vault Score',
+          value: '100 out of 100',
+          explanation: 'Perfect vault score.',
+        },
+      ],
+      disclaimer: 'Test',
+    };
+    const result = (provider as any).validateNumberFidelity(inputWith75, output);
+    expect(result).toBe(false);
   });
 });

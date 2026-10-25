@@ -469,7 +469,8 @@ Explain this pool's risk in plain language using ONLY the numbers above. Include
     // Remove duration labels and scale phrases
     normalized = normalized.replace(/\b\d+\s*d(?:ays?)?\b/gi, '');
     normalized = normalized.replace(/\/100\b/g, '');
-    normalized = normalized.replace(/\b(out of|of)\s+100\b/gi, '');
+    // Strip 'out of 100' / 'of 100' ONLY after a number, keeping the number
+    normalized = normalized.replace(/(\d+(?:\.\d+)?)\s*(?:out of|of)\s*100\b/gi, '$1');
     normalized = normalized.replace(/-?\d+(?:\.\d+)?%/g, (match) => ` ${match.slice(0, -1)} `);
 
     // Extract numbers
