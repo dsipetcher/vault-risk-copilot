@@ -22,7 +22,6 @@
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.1",
     "recharts": "^2.15.0",
-    "siwe": "^3.0.0",
     "viem": "^2.57.11",
     "wagmi": "^3.7.9"
   },

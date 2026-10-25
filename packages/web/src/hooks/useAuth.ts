@@ -1,5 +1,5 @@
 import { useAccount, useSignMessage, useDisconnect } from 'wagmi';
-import { SiweMessage } from 'siwe';
+import { createSiweMessage } from 'viem/siwe';
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../lib/config';
 
@@ -51,10 +51,14 @@ export function useAuth() {
     setError(null);
 
     try {
-      const nonceResponse = await fetch(`${API_BASE_URL}/api/auth/nonce`);
+      const nonceResponse = await fetch(`${API_BASE_URL}/api/auth/nonce`, {
+        credentials: 'include', // server binds the nonce to an httpOnly cookie
+      });
       const { nonce } = await nonceResponse.json();
 
-      const message = new SiweMessage({
+      // viem's EIP-4361 builder: the `siwe` package needs Node's Buffer and
+      // throws in the browser bundle.
+      const preparedMessage = createSiweMessage({
         domain: window.location.host,
         address,
         statement: 'Sign in to Vault Risk Copilot with Ethereum',
@@ -62,9 +66,8 @@ export function useAuth() {
         version: '1',
         chainId,
         nonce,
+        issuedAt: new Date(),
       });
-
-      const preparedMessage = message.prepareMessage();
       const signature = await signMessageAsync({ message: preparedMessage });
 
       const verifyResponse = await fetch(`${API_BASE_URL}/api/auth/verify`, {

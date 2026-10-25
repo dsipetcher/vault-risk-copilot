@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ServerKeySettings } from './ServerKeySettings';
 import type { LLMProvider, LLMSettings } from '@/types/api';
 import {
   getLLMSettings,
@@ -75,7 +76,7 @@ export function LLMSettingsDialog({ isOpen, onClose }: LLMSettingsDialogProps) {
       data-testid="llm-settings-dialog"
     >
       <div
-        className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+        className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
@@ -212,6 +213,7 @@ export function LLMSettingsDialog({ isOpen, onClose }: LLMSettingsDialogProps) {
               {testError}
             </p>
           )}
+          <ServerKeySettings onClose={onClose} />
         </div>
 
         {/* Footer */}
