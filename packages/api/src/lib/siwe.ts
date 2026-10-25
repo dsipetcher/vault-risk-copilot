@@ -1,6 +1,6 @@
 import { SiweMessage } from 'siwe';
 import type { Pool } from 'pg';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -8,6 +8,7 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export interface SiweVerifyOptions {
   domain: string;
   expectedChainId?: number;
+  expectedUri?: string;
 }
 
 export async function generateNonce(pool: Pool, requestIp?: string): Promise<string> {
@@ -39,6 +40,10 @@ export async function verifyAndConsumeSiweMessage(
     throw new Error(`Chain ID mismatch: expected ${options.expectedChainId}, got ${siweMessage.chainId}`);
   }
   
+  if (options.expectedUri && siweMessage.uri !== options.expectedUri) {
+    throw new Error(`URI mismatch: expected ${options.expectedUri}, got ${siweMessage.uri}`);
+  }
+  
   const now = new Date();
   
   if (siweMessage.expirationTime && new Date(siweMessage.expirationTime) < now) {
@@ -49,32 +54,19 @@ export async function verifyAndConsumeSiweMessage(
     throw new Error('SIWE message not yet valid');
   }
   
-  const nonceResult = await pool.query(
-    `SELECT nonce, used, expires_at FROM nonces 
-     WHERE nonce = $1 FOR UPDATE`,
-    [siweMessage.nonce]
-  );
-  
-  if (nonceResult.rows.length === 0) {
-    throw new Error('Invalid nonce: not found');
-  }
-  
-  const nonceRow = nonceResult.rows[0];
-  
-  if (nonceRow.used) {
-    throw new Error('Nonce already used (replay attack detected)');
-  }
-  
-  if (new Date(nonceRow.expires_at) < now) {
-    throw new Error('Nonce has expired');
-  }
-  
   await siweMessage.verify({ signature });
   
-  await pool.query(
-    `UPDATE nonces SET used = true, used_at = NOW() WHERE nonce = $1`,
+  const result = await pool.query(
+    `UPDATE nonces 
+     SET used = true, used_at = NOW() 
+     WHERE nonce = $1 AND NOT used AND expires_at > NOW()
+     RETURNING nonce`,
     [siweMessage.nonce]
   );
+  
+  if (result.rowCount === 0) {
+    throw new Error('Invalid nonce: already used, expired, or not found');
+  }
   
   return {
     address: siweMessage.address,
@@ -89,12 +81,13 @@ export async function createSession(
   issuedAt: Date
 ): Promise<string> {
   const sessionToken = randomBytes(32).toString('hex');
+  const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   
   await pool.query(
     `INSERT INTO sessions (wallet_address, session_token, expires_at, chain_id, issued_at)
      VALUES ($1, $2, $3, $4, $5)`,
-    [walletAddress.toLowerCase(), sessionToken, expiresAt, chainId, issuedAt]
+    [walletAddress.toLowerCase(), tokenHash, expiresAt, chainId, issuedAt]
   );
   
   return sessionToken;
@@ -104,11 +97,13 @@ export async function getSessionByToken(
   pool: Pool,
   sessionToken: string
 ): Promise<{ walletAddress: string; chainId: number } | null> {
+  const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
+  
   const result = await pool.query(
     `SELECT wallet_address, chain_id, expires_at 
      FROM sessions 
      WHERE session_token = $1`,
-    [sessionToken]
+    [tokenHash]
   );
   
   if (result.rows.length === 0) {
@@ -120,14 +115,14 @@ export async function getSessionByToken(
   if (new Date(session.expires_at) < new Date()) {
     await pool.query(
       `DELETE FROM sessions WHERE session_token = $1`,
-      [sessionToken]
+      [tokenHash]
     );
     return null;
   }
   
   await pool.query(
     `UPDATE sessions SET last_used_at = NOW() WHERE session_token = $1`,
-    [sessionToken]
+    [tokenHash]
   );
   
   return {
@@ -137,7 +132,8 @@ export async function getSessionByToken(
 }
 
 export async function deleteSession(pool: Pool, sessionToken: string): Promise<void> {
-  await pool.query(`DELETE FROM sessions WHERE session_token = $1`, [sessionToken]);
+  const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
+  await pool.query(`DELETE FROM sessions WHERE session_token = $1`, [tokenHash]);
 }
 
 export async function cleanupExpiredNonces(pool: Pool): Promise<number> {

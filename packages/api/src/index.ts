@@ -20,6 +20,9 @@ export async function build() {
   initEncryption(env.LLM_KEY_ENCRYPTION_KEY);
   
   if (!isEncryptionEnabled()) {
+    if (env.NODE_ENV === 'production') {
+      throw new Error('LLM_KEY_ENCRYPTION_KEY is required in production');
+    }
     console.warn('⚠️  LLM_KEY_ENCRYPTION_KEY not set - server-side key storage disabled');
   }
 

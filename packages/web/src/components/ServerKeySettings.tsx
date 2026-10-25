@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE_URL } from '../lib/config';
 
 interface ServerKeySettingsProps {
   onClose: () => void;
@@ -34,7 +35,7 @@ export function ServerKeySettings({ onClose }: ServerKeySettingsProps) {
     setSuccess(false);
 
     try {
-      const response = await fetch('http://localhost:3000/api/llm-credentials', {
+      const response = await fetch(`${API_BASE_URL}/api/llm-credentials`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

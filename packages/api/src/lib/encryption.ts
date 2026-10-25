@@ -110,7 +110,8 @@ export function maskApiKey(apiKey: string): string {
   if (apiKey.length <= 4) {
     return '****';
   }
-  return '****' + apiKey.slice(-4);
+  const last4 = apiKey.slice(-4);
+  return '****' + last4;
 }
 
 export const encryptedDataSchema = z.object({

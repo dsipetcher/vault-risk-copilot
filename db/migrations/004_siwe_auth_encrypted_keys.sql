@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS llm_credentials (
     auth_tag TEXT NOT NULL,              -- 16-byte authentication tag (base64)
     key_version INTEGER NOT NULL DEFAULT 1,
     
+    -- Key hint (last 4 chars for display, never decrypt for display)
+    key_hint VARCHAR(10),
+    
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -83,3 +86,4 @@ COMMENT ON COLUMN llm_credentials.ciphertext IS 'Encrypted API key using AES-256
 COMMENT ON COLUMN llm_credentials.iv IS 'Random 12-byte initialization vector (base64 encoded)';
 COMMENT ON COLUMN llm_credentials.auth_tag IS '16-byte GCM authentication tag (base64 encoded)';
 COMMENT ON COLUMN llm_credentials.key_version IS 'Key version for future rotation support';
+COMMENT ON COLUMN llm_credentials.key_hint IS 'Last 4 characters of API key for display purposes (e.g., ****xyz1)';

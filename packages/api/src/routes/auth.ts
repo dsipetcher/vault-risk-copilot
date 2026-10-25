@@ -8,6 +8,7 @@ import {
   deleteSession,
 } from '../lib/siwe.js';
 import { z } from 'zod';
+import { env } from '../config.js';
 
 const SESSION_COOKIE_NAME = 'vault_session';
 const SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
@@ -18,6 +19,17 @@ const siweMessageSchema = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
+  const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
+  
+  function checkOrigin(request: FastifyRequest, reply: any) {
+    const origin = request.headers.origin;
+    if (origin && !allowedOrigins.includes(origin)) {
+      reply.code(403).send({ error: 'Forbidden: Invalid origin' });
+      return false;
+    }
+    return true;
+  }
+
   app.get('/auth/nonce', async (request, reply) => {
     const nonce = await generateNonce(pool, request.ip);
     
@@ -53,16 +65,28 @@ export async function authRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
+      if (!checkOrigin(request, reply)) {
+        return;
+      }
+      
       try {
         const { message, signature } = siweMessageSchema.parse(request.body);
         
-        const domain = request.hostname;
+        const domain = env.SIWE_DOMAIN || request.hostname;
+        const expectedUri = env.SIWE_URI;
+        const expectedChainId = env.SIWE_CHAIN_ID;
+        
+        if (env.NODE_ENV === 'production') {
+          if (!env.SIWE_DOMAIN || !env.SIWE_URI || !env.SIWE_CHAIN_ID) {
+            throw new Error('SIWE configuration incomplete in production');
+          }
+        }
         
         const { address, chainId } = await verifyAndConsumeSiweMessage(
           pool,
           message,
           signature,
-          { domain }
+          { domain, expectedUri, expectedChainId }
         );
         
         const sessionToken = await createSession(
@@ -74,7 +98,7 @@ export async function authRoutes(app: FastifyInstance) {
         
         reply.setCookie(SESSION_COOKIE_NAME, sessionToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
+          secure: env.NODE_ENV === 'production',
           sameSite: 'lax',
           maxAge: SESSION_COOKIE_MAX_AGE,
           path: '/',
@@ -92,13 +116,16 @@ export async function authRoutes(app: FastifyInstance) {
         
         return reply.code(401).send({
           error: 'Authentication failed',
-          message: error instanceof Error ? error.message : String(error),
         });
       }
     }
   );
 
   app.post('/auth/logout', async (request, reply) => {
+    if (!checkOrigin(request, reply)) {
+      return;
+    }
+    
     const sessionToken = request.cookies[SESSION_COOKIE_NAME];
     
     if (sessionToken) {

@@ -99,11 +99,19 @@ export async function explanationsRoutes(app: FastifyInstance) {
       const user = await getAuthenticatedUser(request);
       
       let providerConfig = undefined;
-      if (body.provider || apiKey || user) {
-        const provider = body.provider || 'openai';
-        
-        if (user && !apiKey) {
-          const storedKey = await getStoredCredential(user.address, provider);
+      
+      if (!body.provider && !apiKey && !user) {
+        return reply.code(400).send({
+          error: 'Missing provider configuration',
+          message: 'Provide either X-LLM-Api-Key header, authenticate and store credentials, or specify provider in request body',
+        });
+      }
+      
+      const provider = body.provider || 'openai';
+      
+      if (user && !apiKey) {
+        try {
+          const storedKey = await getStoredCredential(user.address, provider, body.baseUrl);
           if (storedKey) {
             apiKey = storedKey;
             request.log.info(
@@ -111,8 +119,18 @@ export async function explanationsRoutes(app: FastifyInstance) {
               'Using stored credential for authenticated user'
             );
           }
+        } catch (error) {
+          if ((error as Error).message === 'credential_unavailable') {
+            return reply.code(500).send({
+              error: 'credential_unavailable',
+              message: 'Stored credential could not be decrypted',
+            });
+          }
+          throw error;
         }
-        
+      }
+      
+      if (body.provider || apiKey) {
         try {
           providerConfig = llmProviderConfigSchema.parse({
             provider,

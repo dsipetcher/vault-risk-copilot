@@ -1,6 +1,7 @@
 import { useAccount, useSignMessage, useDisconnect } from 'wagmi';
 import { SiweMessage } from 'siwe';
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../lib/config';
 
 interface AuthUser {
   address: string;
@@ -21,7 +22,7 @@ export function useAuth() {
 
   async function checkAuth() {
     try {
-      const response = await fetch('http://localhost:3000/api/auth/me', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
         credentials: 'include',
       });
 
@@ -50,7 +51,7 @@ export function useAuth() {
     setError(null);
 
     try {
-      const nonceResponse = await fetch('http://localhost:3000/api/auth/nonce');
+      const nonceResponse = await fetch(`${API_BASE_URL}/api/auth/nonce`);
       const { nonce } = await nonceResponse.json();
 
       const message = new SiweMessage({
@@ -66,7 +67,7 @@ export function useAuth() {
       const preparedMessage = message.prepareMessage();
       const signature = await signMessageAsync({ message: preparedMessage });
 
-      const verifyResponse = await fetch('http://localhost:3000/api/auth/verify', {
+      const verifyResponse = await fetch(`${API_BASE_URL}/api/auth/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -99,7 +100,7 @@ export function useAuth() {
   async function signOut() {
     setIsLoading(true);
     try {
-      await fetch('http://localhost:3000/api/auth/logout', {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });

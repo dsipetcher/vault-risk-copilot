@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { injected } from 'wagmi/connectors';
 
 export function AuthButton() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const { connect } = useConnect();
   const { user, isAuthenticated, isLoading, error, signIn, signOut } = useAuth();
 

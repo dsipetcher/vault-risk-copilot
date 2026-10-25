@@ -284,6 +284,28 @@ describe('LLM Credentials Tests', () => {
 
       expect(response.statusCode).toBe(401);
     });
+
+    it('should reject invalid origin on DELETE', async () => {
+      await app.inject({
+        method: 'PUT',
+        url: '/api/llm-credentials',
+        cookies: { vault_session: sessionCookie1 },
+        payload: { provider: 'openai', apiKey: 'test-key' },
+      });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/llm-credentials?provider=openai',
+        headers: {
+          origin: 'https://evil.example',
+        },
+        cookies: { vault_session: sessionCookie1 },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body);
+      expect(body.error).toContain('Invalid origin');
+    });
   });
 
   describe('DELETE /llm-credentials', () => {
@@ -409,6 +431,49 @@ describe('LLM Credentials Tests', () => {
       const body = JSON.parse(explainResponse.body);
       expect(body.explanation).toBeDefined();
       expect(body.metadata.provider).toBe('mock');
+
+      await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
+      await pool.query('DELETE FROM risk_scores WHERE pool_id = $1', [poolId]);
+      await pool.query('DELETE FROM pool_snapshots WHERE pool_id = $1', [poolId]);
+    });
+
+    it('should not use stored groq key with openai baseUrl', async () => {
+      await app.inject({
+        method: 'PUT',
+        url: '/api/llm-credentials',
+        cookies: { vault_session: sessionCookie1 },
+        payload: { provider: 'groq', apiKey: 'gsk-test-groq-key' },
+      });
+
+      const poolResult = await pool.query(`
+        INSERT INTO pool_snapshots (
+          pool_id, pool_name, snapshot_at, protocol, chain, tvl_usd, apy, il_risk, is_stablecoin, count, data_source
+        ) VALUES (
+          gen_random_uuid(), 'Test Pool BaseURL', NOW(), 'test-protocol', 'Ethereum', 1000000, 5.5, 0.05, false, 10, 'defillama'
+        ) RETURNING pool_id
+      `);
+      const poolId = poolResult.rows[0].pool_id;
+
+      await pool.query(`
+        INSERT INTO risk_scores (
+          pool_id, calculated_at, total_risk_score, risk_category,
+          tvl_score, tvl_volatility_score, apy_volatility_score
+        ) VALUES (
+          $1, NOW(), 50, 'medium', 75, 60, 55
+        )
+      `, [poolId]);
+
+      const explainResponse = await app.inject({
+        method: 'POST',
+        url: `/api/pools/${poolId}/explain`,
+        cookies: { vault_session: sessionCookie1 },
+        payload: {
+          provider: 'groq',
+          baseUrl: 'https://api.openai.com/v1',
+        },
+      });
+
+      expect(explainResponse.statusCode).toBe(400);
 
       await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
       await pool.query('DELETE FROM risk_scores WHERE pool_id = $1', [poolId]);

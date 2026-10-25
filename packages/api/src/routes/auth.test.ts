@@ -245,7 +245,127 @@ describe('SIWE Authentication Tests', () => {
 
       expect(secondResponse.statusCode).toBe(401);
       const body = JSON.parse(secondResponse.body);
-      expect(body.message).toContain('already used');
+      expect(body.error).toBe('Authentication failed');
+    });
+
+    it('should reject concurrent nonce reuse (parallel requests)', async () => {
+      const siweMessage = new SiweMessage({
+        domain: 'localhost',
+        address: wallet.address,
+        statement: 'Sign in',
+        uri: 'http://localhost:3000',
+        version: '1',
+        chainId: 1,
+        nonce: validNonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const message = siweMessage.prepareMessage();
+      const signature = await wallet.signMessage(message);
+
+      const requests = Array(8).fill(null).map(() =>
+        app.inject({
+          method: 'POST',
+          url: '/api/auth/verify',
+          payload: { message, signature },
+        })
+      );
+
+      const responses = await Promise.all(requests);
+      const successCount = responses.filter(r => r.statusCode === 200).length;
+      const failCount = responses.filter(r => r.statusCode === 401).length;
+
+      expect(successCount).toBe(1);
+      expect(failCount).toBe(7);
+    });
+
+    it('should reject wrong URI', async () => {
+      const siweMessage = new SiweMessage({
+        domain: 'localhost',
+        address: wallet.address,
+        statement: 'Sign in',
+        uri: 'https://evil.example',
+        version: '1',
+        chainId: 1,
+        nonce: validNonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const message = siweMessage.prepareMessage();
+      const signature = await wallet.signMessage(message);
+
+      process.env.SIWE_URI = 'http://localhost:3000';
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/verify',
+        payload: { message, signature },
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Authentication failed');
+
+      delete process.env.SIWE_URI;
+    });
+
+    it('should reject wrong chainId', async () => {
+      const siweMessage = new SiweMessage({
+        domain: 'localhost',
+        address: wallet.address,
+        statement: 'Sign in',
+        uri: 'http://localhost:3000',
+        version: '1',
+        chainId: 999,
+        nonce: validNonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const message = siweMessage.prepareMessage();
+      const signature = await wallet.signMessage(message);
+
+      process.env.SIWE_CHAIN_ID = '1';
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/verify',
+        payload: { message, signature },
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Authentication failed');
+
+      delete process.env.SIWE_CHAIN_ID;
+    });
+
+    it('should reject invalid origin on verify', async () => {
+      const siweMessage = new SiweMessage({
+        domain: 'localhost',
+        address: wallet.address,
+        statement: 'Sign in',
+        uri: 'http://localhost:3000',
+        version: '1',
+        chainId: 1,
+        nonce: validNonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const message = siweMessage.prepareMessage();
+      const signature = await wallet.signMessage(message);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/verify',
+        headers: {
+          origin: 'https://evil.example',
+        },
+        payload: { message, signature },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body);
+      expect(body.error).toContain('Invalid origin');
     });
   });
 

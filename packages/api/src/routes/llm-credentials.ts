@@ -9,13 +9,32 @@ import {
   type EncryptedData,
 } from '../lib/encryption.js';
 import { z } from 'zod';
+import { env } from '../config.js';
 
 const putCredentialSchema = z.object({
   provider: z.enum(['openai', 'openrouter', 'groq', 'ollama', 'anthropic']),
   apiKey: z.string().min(1),
 });
 
+const PROVIDER_BASE_URLS: Record<string, string> = {
+  openai: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com/v1',
+  groq: 'https://api.groq.com/openai/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+};
+
 export async function llmCredentialsRoutes(app: FastifyInstance) {
+  const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
+  
+  function checkOrigin(request: any, reply: any) {
+    const origin = request.headers.origin;
+    if (origin && !allowedOrigins.includes(origin)) {
+      reply.code(403).send({ error: 'Forbidden: Invalid origin' });
+      return false;
+    }
+    return true;
+  }
+
   app.put<{
     Body: { provider: string; apiKey: string };
   }>(
@@ -45,6 +64,10 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
+      if (!checkOrigin(request, reply)) {
+        return;
+      }
+      
       if (!isEncryptionEnabled()) {
         return reply.code(503).send({
           error: 'Server-side key storage is not available',
@@ -63,17 +86,20 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
         const { provider, apiKey } = putCredentialSchema.parse(request.body);
 
         const encrypted = encryptApiKey(apiKey, user.address, provider);
+        
+        const keyHint = maskApiKey(apiKey);
 
         await pool.query(
           `INSERT INTO llm_credentials 
-           (wallet_address, provider, ciphertext, iv, auth_tag, key_version)
-           VALUES ($1, $2, $3, $4, $5, $6)
+           (wallet_address, provider, ciphertext, iv, auth_tag, key_version, key_hint)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (wallet_address, provider) 
            DO UPDATE SET 
              ciphertext = EXCLUDED.ciphertext,
              iv = EXCLUDED.iv,
              auth_tag = EXCLUDED.auth_tag,
              key_version = EXCLUDED.key_version,
+             key_hint = EXCLUDED.key_hint,
              updated_at = NOW()`,
           [
             user.address.toLowerCase(),
@@ -82,6 +108,7 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
             encrypted.iv,
             encrypted.authTag,
             encrypted.keyVersion,
+            keyHint,
           ]
         );
 
@@ -123,7 +150,7 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
     }
 
     const result = await pool.query(
-      `SELECT provider, ciphertext, created_at, updated_at
+      `SELECT provider, key_hint, created_at, updated_at
        FROM llm_credentials
        WHERE wallet_address = $1
        ORDER BY provider`,
@@ -132,7 +159,7 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
 
     const credentials = result.rows.map((row) => ({
       provider: row.provider,
-      maskedKey: maskApiKey(row.ciphertext.slice(0, 20)),
+      maskedKey: row.key_hint || '****',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -143,6 +170,10 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
   app.delete<{
     Querystring: { provider: string };
   }>('/llm-credentials', async (request, reply) => {
+    if (!checkOrigin(request, reply)) {
+      return;
+    }
+    
     if (!isEncryptionEnabled()) {
       return reply.code(503).send({
         error: 'Server-side key storage is not available',
@@ -186,9 +217,15 @@ export async function llmCredentialsRoutes(app: FastifyInstance) {
 
 export async function getStoredCredential(
   walletAddress: string,
-  provider: string
+  provider: string,
+  requestedBaseUrl?: string
 ): Promise<string | null> {
   if (!isEncryptionEnabled()) {
+    return null;
+  }
+  
+  const defaultBaseUrl = PROVIDER_BASE_URLS[provider];
+  if (requestedBaseUrl && defaultBaseUrl && requestedBaseUrl !== defaultBaseUrl) {
     return null;
   }
 
@@ -211,5 +248,9 @@ export async function getStoredCredential(
     keyVersion: row.key_version,
   };
 
-  return decryptApiKey(encrypted, walletAddress, provider);
+  try {
+    return decryptApiKey(encrypted, walletAddress, provider);
+  } catch (error) {
+    throw new Error('credential_unavailable');
+  }
 }

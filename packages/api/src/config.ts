@@ -14,6 +14,9 @@ export const envSchema = z.object({
   RATE_LIMIT_WINDOW: z.string().default('15m'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LLM_KEY_ENCRYPTION_KEY: z.string().optional(),
+  SIWE_DOMAIN: z.string().optional(),
+  SIWE_URI: z.string().url().optional(),
+  SIWE_CHAIN_ID: z.coerce.number().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
