@@ -802,8 +802,8 @@ jobs:
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/vault_risk \
           LLM_PROVIDER=mock \
           LLM_KEY_ENCRYPTION_KEY="$LLM_KEY_ENCRYPTION_KEY" \
-          SIWE_DOMAIN=localhost \
-          SIWE_URI=http://localhost:3000 \
+          SIWE_DOMAIN=localhost:5173 \
+          SIWE_URI=http://localhost:5173 \
           SIWE_CHAIN_ID=1 \
           NODE_ENV=test \
           PORT=3000 \
