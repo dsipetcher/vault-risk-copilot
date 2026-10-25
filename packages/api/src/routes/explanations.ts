@@ -100,13 +100,8 @@ export async function explanationsRoutes(app: FastifyInstance) {
       
       let providerConfig = undefined;
       
-      if (!body.provider && !apiKey && !user) {
-        return reply.code(400).send({
-          error: 'Missing provider configuration',
-          message: 'Provide either X-LLM-Api-Key header, authenticate and store credentials, or specify provider in request body',
-        });
-      }
-      
+      // No provider/key/session: fall through with providerConfig undefined so the
+      // server-default provider (LLM_PROVIDER env) is used, as in Phase 6.
       const provider = body.provider || 'openai';
       
       if (user && !apiKey) {

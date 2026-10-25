@@ -45,6 +45,7 @@ describe('LLM Credentials Tests', () => {
       url: '/api/auth/nonce',
     });
     const { nonce } = JSON.parse(nonceResponse.body);
+    const nonceCookie = `siwe_nonce=${nonceResponse.cookies.find((c) => c.name === 'siwe_nonce')!.value}`;
 
     const siweMessage = new SiweMessage({
       domain: 'localhost',
@@ -63,6 +64,7 @@ describe('LLM Credentials Tests', () => {
     const authResponse = await app.inject({
       method: 'POST',
       url: '/api/auth/verify',
+      headers: { cookie: nonceCookie },
       payload: { message, signature },
     });
 
@@ -308,15 +310,34 @@ describe('LLM Credentials Tests', () => {
         url: '/api/llm-credentials?provider=openai',
         headers: {
           origin: 'https://evil.example',
-        },
-        headers: {
-          'cookie': `vault_session=${sessionCookie1}`,
+          cookie: `vault_session=${sessionCookie1}`,
         },
       });
 
       expect(response.statusCode).toBe(403);
       const body = JSON.parse(response.body);
       expect(body.error).toContain('Invalid origin');
+      const still = await pool.query('SELECT 1 FROM llm_credentials WHERE wallet_address = $1 AND provider = $2', [wallet1.address.toLowerCase(), 'openai']);
+      expect(still.rows.length).toBe(1);
+    });
+  });
+
+  describe('PUT /llm-credentials origin check', () => {
+    it('should reject invalid origin on PUT and not store the key', async () => {
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/llm-credentials',
+        headers: {
+          origin: 'https://evil.example',
+          cookie: `vault_session=${sessionCookie1}`,
+        },
+        payload: { provider: 'groq', apiKey: 'gsk_attacker_key_0000' },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(JSON.parse(response.body).error).toContain('Invalid origin');
+      const rows = await pool.query('SELECT 1 FROM llm_credentials WHERE wallet_address = $1 AND provider = $2', [wallet1.address.toLowerCase(), 'groq']);
+      expect(rows.rows.length).toBe(0);
     });
   });
 

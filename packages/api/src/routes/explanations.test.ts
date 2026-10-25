@@ -82,6 +82,13 @@ describe('Explanations API Tests', () => {
     await app.close();
   });
 
+  it('anonymous request with no body/key falls back to server default provider (compose smoke)', async () => {
+    await pool.query('DELETE FROM explanations WHERE pool_id = $1', [poolId]);
+    const response = await app.inject({ method: 'POST', url: `/api/pools/${poolId}/explain` });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().explanation).toBeDefined();
+  });
+
   it('should return explanation with all required fields in HTTP response', async () => {
     const response = await app.inject({
       method: 'POST',

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { build } from '../index.js';
 import type { FastifyInstance } from 'fastify';
@@ -9,6 +10,12 @@ describe('SIWE Authentication Tests', () => {
   let app: FastifyInstance;
   let wallet: Wallet;
   let validNonce: string;
+  let nonceCookie: string;
+
+  async function nonceConsumed(n: string): Promise<boolean> {
+    const r = await pool.query('SELECT used FROM nonces WHERE nonce = $1', [n]);
+    return r.rows[0].used;
+  }
 
   beforeAll(async () => {
     process.env.DATABASE_URL =
@@ -39,6 +46,9 @@ describe('SIWE Authentication Tests', () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
     validNonce = body.nonce;
+    const c = response.cookies.find((x) => x.name === 'siwe_nonce');
+    expect(c?.value).toBe(validNonce);
+    nonceCookie = `siwe_nonce=${c!.value}`;
   });
 
   describe('GET /auth/nonce', () => {
@@ -126,7 +136,7 @@ describe('SIWE Authentication Tests', () => {
         domain: 'evil.com',
         address: wallet.address,
         statement: 'Sign in to Vault Risk Copilot',
-        uri: 'http://evil.com',
+        uri: 'http://localhost:3000',
         version: '1',
         chainId: 1,
         nonce: validNonce,
@@ -139,6 +149,7 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: {
           message,
           signature,
@@ -148,7 +159,8 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
-      expect(body.message).toContain('Domain mismatch');
+      expect(body.message).toBeUndefined();
+      expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
     it('should reject message with bad signature', async () => {
@@ -169,6 +181,7 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: {
           message,
           signature: badSignature,
@@ -178,6 +191,7 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
+      expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
     it('should reject expired message', async () => {
@@ -201,6 +215,7 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: {
           message,
           signature,
@@ -210,7 +225,8 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
-      expect(body.message).toContain('expired');
+      expect(body.message).toBeUndefined();
+      expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
     it('should reject nonce reuse', async () => {
@@ -231,6 +247,7 @@ describe('SIWE Authentication Tests', () => {
       const firstResponse = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: {
           message,
           signature,
@@ -241,6 +258,7 @@ describe('SIWE Authentication Tests', () => {
       const secondResponse = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: {
           message,
           signature,
@@ -271,6 +289,7 @@ describe('SIWE Authentication Tests', () => {
         app.inject({
           method: 'POST',
           url: '/api/auth/verify',
+          headers: { cookie: nonceCookie },
           payload: { message, signature },
         })
       );
@@ -281,11 +300,10 @@ describe('SIWE Authentication Tests', () => {
 
       expect(successCount).toBe(1);
       expect(failCount).toBe(7);
+      expect(await nonceConsumed(validNonce)).toBe(true);
     });
 
     it('should reject wrong URI', async () => {
-      const nonce = await (await app.inject({ method: 'GET', url: '/api/auth/nonce' })).json();
-      
       const siweMessage = new SiweMessage({
         domain: 'localhost',
         address: wallet.address,
@@ -293,7 +311,7 @@ describe('SIWE Authentication Tests', () => {
         uri: 'https://evil.example',
         version: '1',
         chainId: 1,
-        nonce: nonce.nonce,
+        nonce: validNonce,
         issuedAt: new Date().toISOString(),
       });
 
@@ -303,17 +321,17 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: { message, signature },
       });
 
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
+      expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
     it('should reject wrong chainId', async () => {
-      const nonce = await (await app.inject({ method: 'GET', url: '/api/auth/nonce' })).json();
-      
       const siweMessage = new SiweMessage({
         domain: 'localhost',
         address: wallet.address,
@@ -321,7 +339,7 @@ describe('SIWE Authentication Tests', () => {
         uri: 'http://localhost:3000',
         version: '1',
         chainId: 999,
-        nonce: nonce.nonce,
+        nonce: validNonce,
         issuedAt: new Date().toISOString(),
       });
 
@@ -331,12 +349,14 @@ describe('SIWE Authentication Tests', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: { message, signature },
       });
 
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
+      expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
     it('should reject invalid origin on verify', async () => {
@@ -359,6 +379,7 @@ describe('SIWE Authentication Tests', () => {
         url: '/api/auth/verify',
         headers: {
           origin: 'https://evil.example',
+          cookie: nonceCookie,
         },
         payload: { message, signature },
       });
@@ -366,6 +387,7 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(403);
       const body = JSON.parse(response.body);
       expect(body.error).toContain('Invalid origin');
+      expect(await nonceConsumed(validNonce)).toBe(false);
     });
 
     it('should reject nonce cookie mismatch', async () => {
@@ -406,6 +428,7 @@ describe('SIWE Authentication Tests', () => {
       expect(response.statusCode).toBe(401);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Authentication failed');
+      expect(await nonceConsumed(differentNonce.nonce)).toBe(false);
     });
   });
 
@@ -428,6 +451,7 @@ describe('SIWE Authentication Tests', () => {
       const authResponse = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: {
           message,
           signature,
@@ -483,6 +507,7 @@ describe('SIWE Authentication Tests', () => {
       const authResponse = await app.inject({
         method: 'POST',
         url: '/api/auth/verify',
+        headers: { cookie: nonceCookie },
         payload: {
           message,
           signature,
@@ -491,6 +516,9 @@ describe('SIWE Authentication Tests', () => {
 
       const cookies = authResponse.cookies;
       const sessionCookie = cookies.find((c) => c.name === 'vault_session');
+
+      const tokenHash = createHash('sha256').update(decodeURIComponent(sessionCookie!.value)).digest('hex');
+      expect((await pool.query('SELECT 1 FROM sessions WHERE session_token = $1', [tokenHash])).rows.length).toBe(1);
 
       const logoutResponse = await app.inject({
         method: 'POST',
@@ -506,7 +534,7 @@ describe('SIWE Authentication Tests', () => {
 
       const sessionResult = await pool.query(
         'SELECT * FROM sessions WHERE session_token = $1',
-        [sessionCookie!.value]
+        [createHash('sha256').update(decodeURIComponent(sessionCookie!.value)).digest('hex')]
       );
       expect(sessionResult.rows.length).toBe(0);
 
