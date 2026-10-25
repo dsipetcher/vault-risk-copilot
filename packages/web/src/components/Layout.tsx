@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { LLMSettingsDialog } from './LLMSettingsDialog';
 import { getLLMSettings } from '@/lib/llm-storage';
+import { AuthButton } from './AuthButton';
 
 export function Layout() {
   const location = useLocation();
@@ -48,6 +49,7 @@ export function Layout() {
               </div>
             </div>
             <div className="flex items-center space-x-3">
+              <AuthButton />
               <span className="px-2 py-1 text-xs font-medium text-blue-800 bg-blue-100 rounded">
                 LLM: {currentProvider}
               </span>

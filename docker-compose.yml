@@ -115,6 +115,10 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_KEY_ENCRYPTION_KEY: ${LLM_KEY_ENCRYPTION_KEY:-}  # required in production; API refuses to start if empty
+      SIWE_DOMAIN: ${SIWE_DOMAIN:-localhost}
+      SIWE_URI: ${SIWE_URI:-http://localhost:3000}
+      SIWE_CHAIN_ID: ${SIWE_CHAIN_ID:-1}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:

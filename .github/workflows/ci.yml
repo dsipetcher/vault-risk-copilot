@@ -184,8 +184,10 @@ jobs:
           pip install -r requirements-dev.txt
       
       - name: Set up database schema
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+        working-directory: .
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
+        run: bash db/run-migrations.sh
       
       - name: Lint with ruff
         working-directory: packages/risk-service
@@ -252,8 +254,10 @@ jobs:
           npm run build
       
       - name: Set up database schema
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d vault_risk -f db/migrations/001_initial_schema.sql
+        working-directory: .
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
+        run: bash db/run-migrations.sh
       
       - name: Install dependencies
         working-directory: packages/api
@@ -267,7 +271,12 @@ jobs:
         working-directory: packages/api
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vault_risk
-        run: npm test
+          SIWE_DOMAIN: localhost
+          SIWE_URI: http://localhost:3000
+          SIWE_CHAIN_ID: '1'
+        run: |
+          export LLM_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)
+          npm test
       
       - name: Build
         working-directory: packages/api
@@ -419,7 +428,19 @@ jobs:
           EOF
       
       - name: Start services
-        run: docker compose up -d --build
+        run: |
+          if [ -z "${{ secrets.LLM_KEY_ENCRYPTION_KEY }}" ]; then
+            echo "LLM_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> $GITHUB_ENV
+          else
+            echo "LLM_KEY_ENCRYPTION_KEY=${{ secrets.LLM_KEY_ENCRYPTION_KEY }}" >> $GITHUB_ENV
+          fi
+          echo "SIWE_DOMAIN=localhost" >> $GITHUB_ENV
+          echo "SIWE_URI=http://localhost:3000" >> $GITHUB_ENV
+          echo "SIWE_CHAIN_ID=1" >> $GITHUB_ENV
+      
+      - name: Docker compose up
+        run: |
+          docker compose up -d --build
       
       - name: Check migrate service logs
         if: always()
@@ -774,9 +795,17 @@ jobs:
           npm ci
           npm run build
           
+          # Generate encryption key for E2E SIWE auth
+          export LLM_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)
+          
           # Start API in background with mock LLM provider
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/vault_risk \
           LLM_PROVIDER=mock \
+          LLM_KEY_ENCRYPTION_KEY="$LLM_KEY_ENCRYPTION_KEY" \
+          SIWE_DOMAIN=localhost:5174 \
+          SIWE_URI=http://localhost:5174 \
+          CORS_ORIGIN=http://localhost:5173,http://localhost:5174 \
+          SIWE_CHAIN_ID=31337 \
           NODE_ENV=test \
           PORT=3000 \
           nohup node dist/index.js > /tmp/api.log 2>&1 &

@@ -79,6 +79,7 @@ class ApiClient {
     const response = await fetch(`${this.baseUrl}/api/pools/${poolId}/explain`, {
       method: 'POST',
       headers,
+      credentials: 'include', // send session cookie so stored keys can be used
       body: JSON.stringify(body),
     });
 

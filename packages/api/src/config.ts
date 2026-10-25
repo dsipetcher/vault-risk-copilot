@@ -10,9 +10,13 @@ export const envSchema = z.object({
   RPC_URL: z.string().url().optional(),
   VAULT_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
-  RATE_LIMIT_MAX: z.coerce.number().default(100),
+  RATE_LIMIT_MAX: z.coerce.number().default(300),  // Higher default for SPA (was 100)
   RATE_LIMIT_WINDOW: z.string().default('15m'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LLM_KEY_ENCRYPTION_KEY: z.string().optional(),
+  SIWE_DOMAIN: z.string().optional(),
+  SIWE_URI: z.string().url().optional(),
+  SIWE_CHAIN_ID: z.coerce.number().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

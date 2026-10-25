@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+// ServerKeySettings uses wagmi hooks (needs WagmiProvider); covered separately.
+vi.mock('../ServerKeySettings', () => ({ ServerKeySettings: () => null }));
 import { LLMSettingsDialog } from '../LLMSettingsDialog';
 import * as llmStorage from '@/lib/llm-storage';
 
