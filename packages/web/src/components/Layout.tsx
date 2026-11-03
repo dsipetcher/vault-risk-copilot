@@ -17,6 +17,7 @@ export function Layout() {
 
   const navItems = [
     { path: '/pools', label: 'Pools' },
+    { path: '/hyperliquid', label: 'Hyperliquid' },
     { path: '/vault', label: 'Vault' },
   ];
 

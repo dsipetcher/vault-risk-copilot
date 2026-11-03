@@ -54,6 +54,32 @@ export const openApiSpec = {
         },
       },
     },
+    '/api/hyperliquid/markets': {
+      get: {
+        summary: 'List Hyperliquid perp markets with funding, open interest, and explainable risk signals',
+        responses: { '200': { description: 'Paginated perp market list from collector snapshots' } },
+      },
+    },
+    '/api/hyperliquid/markets/{coin}': {
+      get: {
+        summary: 'Get one Hyperliquid perp market',
+        parameters: [{ name: 'coin', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Market snapshot and risk signals' },
+          '404': { description: 'No snapshot for that coin' },
+        },
+      },
+    },
+    '/api/hyperliquid/markets/{coin}/funding': {
+      get: {
+        summary: 'Funding history for one Hyperliquid perp (live Info API, short cache)',
+        parameters: [{ name: 'coin', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Funding history points' },
+          '429': { description: 'Upstream Hyperliquid rate limit' },
+        },
+      },
+    },
   },
 };
 
@@ -78,6 +104,9 @@ const DOCS_HTML = `<!DOCTYPE html>
     <li><code>POST /api/pools/:id/explain</code></li>
     <li><code>POST /api/llm/validate</code></li>
     <li><code>GET /api/vault/state</code></li>
+    <li><code>GET /api/hyperliquid/markets</code></li>
+    <li><code>GET /api/hyperliquid/markets/:coin</code></li>
+    <li><code>GET /api/hyperliquid/markets/:coin/funding</code></li>
   </ul>
 </body>
 </html>`;

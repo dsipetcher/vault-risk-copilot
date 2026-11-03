@@ -6,7 +6,11 @@ import {
   getPoolRiskTool,
   comparePoolsTool,
   explainPoolRiskTool,
-  getVaultInfoTool, safeErrorMessage, toolErrorResult } from './tools.js';
+  getVaultInfoTool,
+  getHyperliquidMarketTool,
+  safeErrorMessage,
+  toolErrorResult,
+} from './tools.js';
 
 const mockPool = {
   id: 1,
@@ -65,6 +69,7 @@ describe('Tools', () => {
       explainPoolRisk: vi.fn(),
       getVaultInfo: vi.fn(),
       getPoolHistory: vi.fn(),
+      getHyperliquidMarket: vi.fn(),
     } as unknown as ApiClient;
   });
 
@@ -300,6 +305,68 @@ describe('Tools', () => {
 
       expect(result.content[0].text).toMatch(/not deployed in this public demo/i);
       expect(result.content[0].text).toMatch(/Anvil/);
+    });
+  });
+
+  describe('getHyperliquidMarketTool', () => {
+    it('returns read-only market metrics and signals', async () => {
+      vi.mocked(mockApiClient.getHyperliquidMarket).mockResolvedValue({
+        coin: 'BTC',
+        funding_rate: 0.0000125,
+        open_interest: 40000,
+        mark_px: 77000,
+        oracle_px: 77020,
+        oi_usd: 3_080_000_000,
+        funding_annualized_pct: 10.95,
+        snapshot_at: '2026-11-03T00:00:00Z',
+        risk: {
+          total_risk_score: 12.5,
+          risk_category: 'low',
+          model_version: 'hl-perp-1.0',
+          signals: {
+            funding_extreme: {
+              id: 'funding_extreme',
+              label: 'Extreme annualized funding',
+              score: 8,
+              value: '+10.95% / yr',
+              explanation: 'Hourly funding annualizes to 10.95%.',
+              applicable: true,
+            },
+            funding_volatility: {
+              id: 'funding_volatility',
+              label: 'Funding volatility',
+              score: null,
+              value: 'n/a',
+              explanation: 'Need two snapshots.',
+              applicable: false,
+            },
+            oi_concentration: {
+              id: 'oi_concentration',
+              label: 'OI concentration',
+              score: 10,
+              value: '1.10× 24h volume',
+              explanation: 'Open interest is 1.10× 24h volume.',
+              applicable: true,
+            },
+            mark_oracle_deviation: {
+              id: 'mark_oracle_deviation',
+              label: 'Mark/oracle deviation',
+              score: 0,
+              value: '0.026%',
+              explanation: 'Mark and oracle differ by 0.026%.',
+              applicable: true,
+            },
+          },
+        },
+      });
+
+      const result = await getHyperliquidMarketTool(mockApiClient, { coin: 'BTC' });
+      expect(result.content[0].text).toMatch(/read-only public market data, no trading/i);
+      expect(result.content[0].text).toMatch(/BTC/);
+    });
+
+    it('rejects an invalid coin', async () => {
+      await expect(getHyperliquidMarketTool(mockApiClient, { coin: '../etc' })).rejects.toThrow();
     });
   });
 });

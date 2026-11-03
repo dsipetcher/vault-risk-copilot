@@ -5,11 +5,13 @@ import {
   poolDetailsSchema,
   vaultStateSchema,
   explanationSchema,
+  hyperliquidMarketSchema,
   type PoolWithRisk,
   type PoolSnapshot,
   type PoolDetails,
   type VaultState,
   type Explanation,
+  type HyperliquidMarket,
 } from './types.js';
 
 export class ApiError extends Error {
@@ -189,5 +191,12 @@ export class ApiClient {
   async getPoolHistory(poolId: string, limit: number = 30): Promise<PoolSnapshot[]> {
     const result = await this.fetch<{ data: unknown[] }>(`/api/pools/${poolId}/history?limit=${limit}`);
     return result.data.map((item) => poolSnapshotSchema.parse(item));
+  }
+
+  async getHyperliquidMarket(coin: string): Promise<HyperliquidMarket> {
+    const result = await this.fetch<{ data: unknown }>(
+      `/api/hyperliquid/markets/${encodeURIComponent(coin)}`
+    );
+    return hyperliquidMarketSchema.parse(result.data);
   }
 }

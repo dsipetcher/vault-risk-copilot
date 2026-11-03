@@ -29,6 +29,7 @@ Place SQL files in `db/migrations/` with format: `NNN_description.sql`
 Example:
 - `001_initial_schema.sql`
 - `002_fix_explanation_cache_key.sql`
+- `005_hyperliquid_perp_snapshots.sql`
 
 ### Schema Migrations Table
 

@@ -30,6 +30,8 @@ describe('loadConfig', () => {
     const config = loadConfig();
 
     expect(config.DEFILLAMA_API_URL).toBe('https://yields.llama.fi');
+    expect(config.HYPERLIQUID_API_URL).toBe('https://api.hyperliquid.xyz');
+    expect(config.HYPERLIQUID_TIMEOUT_MS).toBe(15000);
     expect(config.NODE_ENV).toBe('development');
     expect(config.LOG_LEVEL).toBe('info');
   });

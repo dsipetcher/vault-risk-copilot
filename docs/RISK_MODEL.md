@@ -284,6 +284,19 @@ When this signal is not applicable (non-vault pools), its weight (0.16) is redis
 
 ---
 
+## Hyperliquid perp signals
+
+Separate from pool scores. Applied to collector snapshots of Hyperliquid perps (`hl-perp-1.0`). Same 0–100 scale and low/medium/high/critical buckets. **Not a trading model.**
+
+| Signal | What it measures | High score means |
+|--------|------------------|------------------|
+| Extreme annualized funding | `abs(hourly funding × 24 × 365 × 100)%` | Crowded longs or shorts (funding ≥ ~80% annualized → 100) |
+| Funding volatility | Sample stdev of recent hourly funding, annualized | Unstable crowding; N/A until ≥2 snapshots, then weights renormalize |
+| OI concentration | Open interest USD / 24h notional volume | Positions large vs exit liquidity (not “BTC is a big market”) |
+| Mark/oracle deviation | `abs(mark − oracle) / oracle` | Thin book or stressed oracle (≥1.5% → 100) |
+
+Weights: funding 0.35, funding vol 0.25, OI crowding 0.20, mark/oracle 0.20.
+
 ## Aggregate Risk Score
 
 The **total risk score** is a weighted sum of all signals:

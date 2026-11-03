@@ -19,6 +19,7 @@ import {
   comparePoolsTool,
   explainPoolRiskTool,
   getVaultInfoTool,
+  getHyperliquidMarketTool,
   toolErrorResult,
 } from './tools.js';
 
@@ -95,6 +96,7 @@ This system evaluates DeFi pool risk using explainable signals. The risk score i
 ## Data Sources
 
 - DeFiLlama Yields API (pool snapshots)
+- Hyperliquid public Info API (perp funding, open interest, mark/oracle — read-only)
 - On-chain reads (vault state, mainnet via viem)
 - Testnet deployment (Sepolia for vault contract)
 
@@ -233,6 +235,22 @@ export function createServer(config: Config): Server {
             properties: {},
           },
         },
+        {
+          name: 'get_hyperliquid_market',
+          description:
+            'Read-only Hyperliquid perp market snapshot: funding, open interest, mark/oracle, and explainable risk signals. ' +
+            'No trading, no keys. Coin is the perp name from Hyperliquid meta (e.g. "BTC", "ETH").',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              coin: {
+                type: 'string',
+                description: 'Perp coin symbol (e.g. "BTC")',
+              },
+            },
+            required: ['coin'],
+          },
+        },
       ],
     };
   });
@@ -256,6 +274,9 @@ export function createServer(config: Config): Server {
 
         case 'get_vault_info':
           return await getVaultInfoTool(apiClient);
+
+        case 'get_hyperliquid_market':
+          return await getHyperliquidMarketTool(apiClient, (args as Record<string, unknown>) ?? {});
 
         default:
           return toolErrorResult(new Error(`Unknown tool: ${String(name).slice(0, 64)}`));

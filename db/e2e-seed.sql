@@ -3,7 +3,7 @@
 -- NOTE: Run db/run-migrations.sh before this seed script
 
 -- Clear existing data
-TRUNCATE pool_snapshots, risk_scores CASCADE;
+TRUNCATE pool_snapshots, risk_scores, hyperliquid_perp_snapshots CASCADE;
 
 -- Insert test pool snapshots (3 pools with different risk levels)
 
@@ -235,3 +235,13 @@ INSERT INTO risk_scores (
   '1.0',
   NOW()
 );
+
+-- Hyperliquid perp snapshots (read-only public market data)
+INSERT INTO hyperliquid_perp_snapshots (
+  coin, sz_decimals, max_leverage, only_isolated, is_delisted,
+  funding_rate, open_interest, mark_px, oracle_px, mid_px, premium,
+  prev_day_px, day_ntl_vlm, day_base_vlm, snapshot_at
+) VALUES
+  ('BTC', 5, 40, false, false, 0.0000125, 40000, 77000, 77020, 77010, -0.0003, 78000, 2700000000, 35, NOW()),
+  ('ETH', 4, 25, false, false, 0.0000125, 900000, 2200, 2201, 2200.5, -0.0001, 2100, 900000000, 400000, NOW());
+

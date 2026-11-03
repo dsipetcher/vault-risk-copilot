@@ -14,6 +14,8 @@ test.describe('Mobile viewport 390px', () => {
 
     await expect(page.getByTestId('llm-settings-button')).toBeVisible();
     await expect(page.getByTestId('testnet-badge')).toBeVisible();
+    await page.getByTestId('mobile-nav-toggle').click();
+    await expect(page.getByRole('link', { name: 'Hyperliquid' })).toBeVisible();
 
     const table = page.locator('table').first();
     if (await table.count()) {

@@ -97,6 +97,70 @@ export interface ExplanationResponse {
 
 export type LLMProvider = 'mock' | 'openai' | 'openrouter' | 'groq' | 'ollama';
 
+export interface HyperliquidSignal {
+  id: string;
+  label: string;
+  score: number | null;
+  value: string;
+  explanation: string;
+  applicable: boolean;
+}
+
+export interface HyperliquidRisk {
+  total_risk_score: number;
+  risk_category: 'low' | 'medium' | 'high' | 'critical';
+  model_version: string;
+  signals: {
+    funding_extreme: HyperliquidSignal;
+    funding_volatility: HyperliquidSignal;
+    oi_concentration: HyperliquidSignal;
+    mark_oracle_deviation: HyperliquidSignal;
+  };
+}
+
+export interface HyperliquidMarket {
+  coin: string;
+  sz_decimals: number | null;
+  max_leverage: number | null;
+  only_isolated: boolean;
+  is_delisted: boolean;
+  funding_rate: number | null;
+  open_interest: number | null;
+  mark_px: number | null;
+  oracle_px: number | null;
+  mid_px: number | null;
+  premium: number | null;
+  prev_day_px: number | null;
+  day_ntl_vlm: number | null;
+  day_base_vlm: number | null;
+  oi_usd: number | null;
+  funding_annualized_pct: number | null;
+  mark_oracle_deviation_pct: number | null;
+  snapshot_at: string;
+  risk: HyperliquidRisk;
+}
+
+export interface HyperliquidMarketsPage {
+  data: HyperliquidMarket[];
+  pagination: { total: number; limit: number; offset: number };
+  snapshot_at: string | null;
+  source: 'snapshot';
+}
+
+export interface HyperliquidFundingPoint {
+  time: number;
+  funding_rate: number;
+  premium: number | null;
+  annualized_pct: number;
+}
+
+export interface HyperliquidFundingHistory {
+  coin: string;
+  points: HyperliquidFundingPoint[];
+  source: 'live';
+  cached: boolean;
+}
+
 export interface LLMSettings {
   provider: LLMProvider;
   model?: string;

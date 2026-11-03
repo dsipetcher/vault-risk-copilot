@@ -56,6 +56,8 @@ services:
       RPC_URL: ${RPC_URL:-}
       MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://eth.llamarpc.com}
       DEFILLAMA_API_URL: ${DEFILLAMA_API_URL:-https://yields.llama.fi}
+      HYPERLIQUID_API_URL: ${HYPERLIQUID_API_URL:-https://api.hyperliquid.xyz}
+      HYPERLIQUID_TIMEOUT_MS: ${HYPERLIQUID_TIMEOUT_MS:-15000}
       VAULT_ADDRESS: ${VAULT_ADDRESS:-}
       COLLECTION_INTERVAL_MS: ${COLLECTION_INTERVAL_MS:-300000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -126,6 +128,9 @@ services:
       SIWE_CHAIN_IDS: ${SIWE_CHAIN_IDS:-31337,11155111}
       # Set to 'none' when the web app is on another site (GitHub Pages + tunnel).
       COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      HYPERLIQUID_API_URL: ${HYPERLIQUID_API_URL:-https://api.hyperliquid.xyz}
+      HYPERLIQUID_TIMEOUT_MS: ${HYPERLIQUID_TIMEOUT_MS:-15000}
+      HYPERLIQUID_CACHE_TTL_MS: ${HYPERLIQUID_CACHE_TTL_MS:-60000}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:

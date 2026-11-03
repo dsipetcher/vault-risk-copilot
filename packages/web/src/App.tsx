@@ -7,6 +7,7 @@ import { Layout } from './components/Layout';
 import { PoolsPage } from './pages/PoolsPage';
 import { PoolDetailPage } from './pages/PoolDetailPage';
 import { VaultPage } from './pages/VaultPage';
+import { HyperliquidPage } from './pages/HyperliquidPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
@@ -49,6 +50,7 @@ function App() {
               <Route path="pools" element={<PoolsPage />} />
               <Route path="pools/:id" element={<PoolDetailPage />} />
               <Route path="vault" element={<VaultPage />} />
+              <Route path="hyperliquid" element={<HyperliquidPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>

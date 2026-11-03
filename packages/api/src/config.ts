@@ -12,6 +12,9 @@ export const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   RATE_LIMIT_MAX: z.coerce.number().default(300),  // Higher default for SPA (was 100)
   RATE_LIMIT_WINDOW: z.string().default('15m'),
+  HYPERLIQUID_API_URL: z.string().url().default('https://api.hyperliquid.xyz'),
+  HYPERLIQUID_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
+  HYPERLIQUID_CACHE_TTL_MS: z.coerce.number().int().min(1000).max(600000).default(60000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LLM_KEY_ENCRYPTION_KEY: z.string().optional(),
   SIWE_DOMAIN: z.string().optional(),
