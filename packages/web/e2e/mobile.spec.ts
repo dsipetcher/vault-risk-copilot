@@ -14,6 +14,8 @@ test.describe('Mobile viewport 390px', () => {
 
     await expect(page.getByTestId('llm-settings-button')).toBeVisible();
     await expect(page.getByTestId('testnet-badge')).toBeVisible();
+    await page.getByTestId('mobile-nav-toggle').click();
+    await expect(page.getByRole('link', { name: 'Hyperliquid' })).toBeVisible();
 
     const table = page.locator('table').first();
     if (await table.count()) {
@@ -28,5 +30,37 @@ test.describe('Mobile viewport 390px', () => {
       expect(['auto', 'scroll']).toContain(overflow.overflowX);
       expect(overflow.clientWidth).toBeLessThanOrEqual(390);
     }
+  });
+
+  test('selecting a Hyperliquid market keeps the risk heading in view', async ({ page }) => {
+    await page.goto('/hyperliquid');
+    await expect(page.getByTestId('hyperliquid-title')).toBeVisible({ timeout: 15000 });
+    const rows = page.getByTestId('hyperliquid-row');
+    await expect(rows.first()).toBeVisible();
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const lastRow = rows.last();
+    await lastRow.scrollIntoViewIfNeeded();
+    await lastRow.click();
+
+    const heading = page.getByTestId('hyperliquid-detail-heading');
+    await expect(heading).toBeVisible();
+    await expect(heading).toBeInViewport();
+
+    await expect
+      .poll(async () => {
+        return heading.evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          const nav = document.querySelector('nav');
+          const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
+          return (
+            rect.top >= navBottom - 4 &&
+            rect.top < navBottom + 80 &&
+            rect.bottom <= window.innerHeight &&
+            rect.top >= 0
+          );
+        });
+      })
+      .toBe(true);
   });
 });

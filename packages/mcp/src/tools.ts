@@ -29,6 +29,16 @@ export const explainPoolRiskInputSchema = z.object({
 
 export const getVaultInfoInputSchema = z.object({});
 
+export const getHyperliquidMarketInputSchema = z.object({
+  coin: z
+    .string()
+    .trim()
+    .regex(
+      /^[A-Za-z0-9:_-]{1,32}$/,
+      'Coin must be 1-32 characters: letters, numbers, colon, underscore, or hyphen'
+    ),
+});
+
 const MCP_ERROR_PREFIX = /^MCP error -?\d+:\s*/i;
 
 export function stripMcpErrorPrefix(message: string): string {
@@ -48,7 +58,17 @@ export function safeErrorMessage(error: unknown): string {
     return error.message;
   }
   if (error instanceof ApiError) {
-    if (error.statusCode === 404) return 'Not found: no pool with that id';
+    if (error.statusCode === 404) {
+      const details = error.details;
+      if (details && typeof details === 'object') {
+        const record = details as { error?: unknown; message?: unknown };
+        const text = [record.error, record.message].filter((v) => typeof v === 'string').join(' ');
+        if (/hyperliquid|market not found/i.test(text)) {
+          return 'Not found: no Hyperliquid market with that coin';
+        }
+      }
+      return 'Not found: no pool with that id';
+    }
     if (error.statusCode === 408) return 'Request to the risk API timed out';
     if (error.statusCode === 429) {
       const details = error.details;
@@ -261,6 +281,55 @@ export async function explainPoolRiskTool(
             explanation: explanation.explanation,
             metadata: explanation.metadata,
             cached: explanation.cached,
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+export async function getHyperliquidMarketTool(
+  apiClient: ApiClient,
+  args: Record<string, unknown>
+) {
+  const validated = getHyperliquidMarketInputSchema.parse(args);
+  const market = await apiClient.getHyperliquidMarket(validated.coin);
+
+  const summary =
+    `Hyperliquid perp ${market.coin} (read-only public market data, no trading)\n` +
+    `Funding (hourly): ${market.funding_rate ?? 'N/A'} | ` +
+    `Annualized: ${market.funding_annualized_pct != null ? market.funding_annualized_pct.toFixed(2) + '%' : 'N/A'}\n` +
+    `Mark: ${market.mark_px ?? 'N/A'} | Oracle: ${market.oracle_px ?? 'N/A'}\n` +
+    `Open interest (USD): ${market.oi_usd != null ? market.oi_usd.toLocaleString() : 'N/A'}\n` +
+    `Risk: ${market.risk.total_risk_score.toFixed(1)} (${market.risk.risk_category})`;
+
+  const signals = Object.fromEntries(
+    Object.entries(market.risk.signals).map(([key, signal]) => [
+      key,
+      { score: signal.score, value: signal.value, explanation: signal.explanation },
+    ])
+  );
+
+  return {
+    content: [
+      { type: 'text' as const, text: summary },
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            coin: market.coin,
+            funding_rate: market.funding_rate,
+            funding_annualized_pct: market.funding_annualized_pct,
+            mark_px: market.mark_px,
+            oracle_px: market.oracle_px,
+            open_interest: market.open_interest,
+            oi_usd: market.oi_usd,
+            snapshot_at: market.snapshot_at,
+            risk: market.risk.total_risk_score,
+            risk_category: market.risk.risk_category,
+            signals,
           },
           null,
           2

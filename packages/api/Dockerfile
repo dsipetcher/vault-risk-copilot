@@ -12,13 +12,23 @@ COPY llm/src ./src
 # Install dependencies and build llm
 RUN npm ci && npm run build
 
+FROM node:22-alpine AS hyperliquid-builder
+
+WORKDIR /workspace/hyperliquid
+
+COPY hyperliquid/package*.json hyperliquid/tsconfig.json ./
+COPY hyperliquid/src ./src
+
+RUN npm ci && npm run build
+
 # API build stage
 FROM node:22-alpine AS builder
 
 WORKDIR /workspace/app
 
-# Copy llm package from previous stage
+# Copy sibling packages from previous stages
 COPY --from=llm-builder /workspace/llm /workspace/llm
+COPY --from=hyperliquid-builder /workspace/hyperliquid /workspace/hyperliquid
 
 # Copy package files
 COPY api/package*.json api/tsconfig.json ./
@@ -36,8 +46,9 @@ WORKDIR /app
 # Install curl for healthcheck
 RUN apk add --no-cache curl
 
-# Copy llm package
+# Copy sibling packages
 COPY --from=llm-builder /workspace/llm /llm
+COPY --from=hyperliquid-builder /workspace/hyperliquid /hyperliquid
 
 # Copy package files and install only production dependencies
 COPY api/package*.json ./

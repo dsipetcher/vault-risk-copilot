@@ -5,6 +5,8 @@ const envSchema = z.object({
   RPC_URL: z.string().min(1).url().optional().or(z.literal('')).optional(),
   MAINNET_RPC_URL: z.string().url().default('https://eth.llamarpc.com'),
   DEFILLAMA_API_URL: z.string().url().default('https://yields.llama.fi'),
+  HYPERLIQUID_API_URL: z.string().url().default('https://api.hyperliquid.xyz'),
+  HYPERLIQUID_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
   VAULT_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional().or(z.literal('')).optional(),
   COLLECTION_INTERVAL_MS: z.coerce.number().default(300000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

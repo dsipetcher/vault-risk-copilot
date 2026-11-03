@@ -1,4 +1,14 @@
-import type { Pool, PoolDetail, PoolHistory, VaultState, ExplanationResponse, LLMProvider } from '@/types/api';
+import type {
+  Pool,
+  PoolDetail,
+  PoolHistory,
+  VaultState,
+  ExplanationResponse,
+  LLMProvider,
+  HyperliquidMarketsPage,
+  HyperliquidMarket,
+  HyperliquidFundingHistory,
+} from '@/types/api';
 
 import { API_BASE_URL, apiFetch } from './config';
 
@@ -86,6 +96,35 @@ class ApiClient {
   async getPoolHistory(id: string): Promise<PoolHistory[]> {
     const response = await this.request<{ data: PoolHistory[] }>(`/api/pools/${id}/history`);
     return response.data;
+  }
+
+  async getHyperliquidMarkets(query: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    sort?: 'coin' | 'funding' | 'oi' | 'volume' | 'risk' | 'deviation';
+    order?: 'asc' | 'desc';
+  } = {}): Promise<HyperliquidMarketsPage> {
+    const params = new URLSearchParams();
+    params.set('limit', String(query.limit ?? 200));
+    params.set('offset', String(query.offset ?? 0));
+    if (query.search) params.set('search', query.search);
+    if (query.sort) params.set('sort', query.sort);
+    if (query.order) params.set('order', query.order);
+    return this.request<HyperliquidMarketsPage>(`/api/hyperliquid/markets?${params.toString()}`);
+  }
+
+  async getHyperliquidMarket(coin: string): Promise<HyperliquidMarket> {
+    const response = await this.request<{ data: HyperliquidMarket }>(
+      `/api/hyperliquid/markets/${encodeURIComponent(coin)}`
+    );
+    return response.data;
+  }
+
+  async getHyperliquidFunding(coin: string, hours = 24): Promise<HyperliquidFundingHistory> {
+    return this.request<HyperliquidFundingHistory>(
+      `/api/hyperliquid/markets/${encodeURIComponent(coin)}/funding?hours=${hours}`
+    );
   }
 
   async getVaultState(): Promise<VaultState> {

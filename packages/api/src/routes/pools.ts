@@ -1,6 +1,19 @@
-import type { FastifyInstance } from 'fastify';
-import { paginationQuerySchema, poolFiltersSchema } from '../types/schemas.js';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { z } from 'zod';
+import {
+  invalidQueryMessage,
+  paginationQuerySchema,
+  poolFiltersSchema,
+  poolHistoryQuerySchema,
+} from '../types/schemas.js';
 import { getLatestPools, getPoolById, getPoolHistory } from '../services/pools.js';
+
+function sendInvalidQuery(reply: FastifyReply, error: z.ZodError) {
+  return reply.code(400).send({
+    error: 'Invalid query',
+    message: invalidQueryMessage(error),
+  });
+}
 
 export async function poolsRoutes(app: FastifyInstance) {
   // GET /pools - List pools with filters and pagination
@@ -43,17 +56,23 @@ export async function poolsRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const pagination = paginationQuerySchema.parse(request.query);
-      const filters = poolFiltersSchema.parse(request.query);
+      const pagination = paginationQuerySchema.safeParse(request.query);
+      if (!pagination.success) {
+        return sendInvalidQuery(reply, pagination.error);
+      }
+      const filters = poolFiltersSchema.safeParse(request.query);
+      if (!filters.success) {
+        return sendInvalidQuery(reply, filters.error);
+      }
 
-      const { pools, total } = await getLatestPools(filters, pagination);
+      const { pools, total } = await getLatestPools(filters.data, pagination.data);
 
       return reply.send({
         data: pools,
         pagination: {
           total,
-          limit: pagination.limit,
-          offset: pagination.offset,
+          limit: pagination.data.limit,
+          offset: pagination.data.offset,
         },
       });
     }
@@ -107,9 +126,12 @@ export async function poolsRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { id } = request.params;
-      const { limit = 30 } = request.query;
+      const query = poolHistoryQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return sendInvalidQuery(reply, query.error);
+      }
 
-      const history = await getPoolHistory(id, limit);
+      const history = await getPoolHistory(id, query.data.limit);
 
       return reply.send({
         data: history,

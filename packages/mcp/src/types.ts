@@ -93,5 +93,39 @@ export type PoolSnapshot = z.infer<typeof poolSnapshotSchema>;
 export type RiskScore = z.infer<typeof riskScoreSchema>;
 export type PoolWithRisk = z.infer<typeof poolWithRiskSchema>;
 export type PoolDetails = z.infer<typeof poolDetailsSchema>;
+export const hyperliquidSignalSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  score: z.number().nullable(),
+  value: z.string(),
+  explanation: z.string(),
+  applicable: z.boolean(),
+});
+
+export const hyperliquidMarketSchema = z
+  .object({
+    coin: z.string(),
+    funding_rate: z.number().nullable(),
+    open_interest: z.number().nullable(),
+    mark_px: z.number().nullable(),
+    oracle_px: z.number().nullable(),
+    oi_usd: z.number().nullable().optional(),
+    funding_annualized_pct: z.number().nullable().optional(),
+    snapshot_at: z.string(),
+    risk: z.object({
+      total_risk_score: z.number(),
+      risk_category: z.enum(['low', 'medium', 'high', 'critical']),
+      model_version: z.string(),
+      signals: z.object({
+        funding_extreme: hyperliquidSignalSchema,
+        funding_volatility: hyperliquidSignalSchema,
+        oi_concentration: hyperliquidSignalSchema,
+        mark_oracle_deviation: hyperliquidSignalSchema,
+      }),
+    }),
+  })
+  .passthrough();
+
 export type VaultState = z.infer<typeof vaultStateSchema>;
 export type Explanation = z.infer<typeof explanationSchema>;
+export type HyperliquidMarket = z.infer<typeof hyperliquidMarketSchema>;

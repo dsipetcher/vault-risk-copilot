@@ -33,6 +33,12 @@ Node.js + TypeScript API service that aggregates pool data, risk scores, and vau
 
 - `GET /api/health` - Health check (checks database + risk-service)
 
+### Hyperliquid (read-only)
+
+- `GET /api/hyperliquid/markets` - Latest perp snapshots with explainable risk signals
+- `GET /api/hyperliquid/markets/:coin` - One market
+- `GET /api/hyperliquid/markets/:coin/funding` - Funding history (live Info API, short cache)
+
 ## Development
 
 ```bash

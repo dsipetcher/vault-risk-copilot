@@ -67,7 +67,7 @@ Vault Risk Copilot is a **testnet-only educational project**. While it implement
 | **Rate limiting bypass** | Rate limiting middleware (per IP) | ✅ Implemented |
 | **CORS misconfiguration** | Explicit allowlist of origins | ✅ Implemented |
 | **Missing security headers** | Helmet middleware | ✅ Implemented |
-| **SSRF** | No arbitrary URL fetching; only allowlisted APIs (DeFiLlama) | ✅ Implemented |
+| **SSRF** | No arbitrary URL fetching; only allowlisted APIs (DeFiLlama, Hyperliquid Info hosts) | ✅ Implemented |
 | **DoS** | Rate limits, request size limits, timeouts | ✅ Implemented |
 | **Secrets exposure** | Secrets in env vars only; never logged | ✅ Implemented |
 | **Dependency vulnerabilities** | `npm audit` in CI; Dependabot enabled | ✅ Implemented |

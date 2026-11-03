@@ -13,6 +13,7 @@ import { riskRoutes } from './routes/risk.js';
 import { explanationsRoutes } from './routes/explanations.js';
 import { authRoutes } from './routes/auth.js';
 import { llmCredentialsRoutes } from './routes/llm-credentials.js';
+import { hyperliquidRoutes } from './routes/hyperliquid.js';
 import { redactApiKey } from '@vault-risk-copilot/llm';
 import { initEncryption, isEncryptionEnabled } from './lib/encryption.js';
 
@@ -114,6 +115,7 @@ export async function build() {
   await app.register(explanationsRoutes, { prefix: '/api' });
   await app.register(authRoutes, { prefix: '/api' });
   await app.register(llmCredentialsRoutes, { prefix: '/api' });
+  await app.register(hyperliquidRoutes, { prefix: '/api' });
 
   return app;
 }

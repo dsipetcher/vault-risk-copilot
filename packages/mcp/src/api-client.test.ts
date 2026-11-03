@@ -375,6 +375,72 @@ describe('ApiClient', () => {
     });
   });
 
+  describe('getHyperliquidMarket', () => {
+    it('fetches a read-only perp snapshot', async () => {
+      server.use(
+        http.get('http://localhost:3000/api/hyperliquid/markets/:coin', () => {
+          return HttpResponse.json({
+            data: {
+              coin: 'BTC',
+              funding_rate: 0.0000125,
+              open_interest: 40000,
+              mark_px: 77000,
+              oracle_px: 77020,
+              oi_usd: 3080000000,
+              funding_annualized_pct: 10.95,
+              snapshot_at: '2026-11-03T00:00:00Z',
+              risk: {
+                total_risk_score: 12.5,
+                risk_category: 'low',
+                model_version: 'hl-perp-1.0',
+                signals: {
+                  funding_extreme: {
+                    id: 'funding_extreme',
+                    label: 'Extreme annualized funding',
+                    score: 8,
+                    value: '+10.95% / yr',
+                    explanation: 'Hourly funding annualizes to 10.95%.',
+                    applicable: true,
+                  },
+                  funding_volatility: {
+                    id: 'funding_volatility',
+                    label: 'Funding volatility',
+                    score: null,
+                    value: 'n/a',
+                    explanation: 'Need two snapshots.',
+                    applicable: false,
+                  },
+                  oi_concentration: {
+                    id: 'oi_concentration',
+                    label: 'OI concentration',
+                    score: 10,
+                    value: '1.10× 24h volume',
+                    explanation: 'Open interest is 1.10× 24h volume.',
+                    applicable: true,
+                  },
+                  mark_oracle_deviation: {
+                    id: 'mark_oracle_deviation',
+                    label: 'Mark/oracle deviation',
+                    score: 0,
+                    value: '0.026%',
+                    explanation: 'Mark and oracle differ by 0.026%.',
+                    applicable: true,
+                  },
+                },
+              },
+            },
+            source: 'snapshot',
+          });
+        })
+      );
+
+      const client = new ApiClient(mockConfig);
+      const result = await client.getHyperliquidMarket('BTC');
+      expect(result.coin).toBe('BTC');
+      expect(result.risk.risk_category).toBe('low');
+    });
+  });
+
   describe('getPoolHistory', () => {
     it('should get pool history', async () => {
       const historyData = [

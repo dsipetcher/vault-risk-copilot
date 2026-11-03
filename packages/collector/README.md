@@ -3,7 +3,8 @@
 TypeScript-based data collector for Vault Risk Copilot. Collects:
 
 1. **DeFi pool data** from DeFiLlama Yields API
-2. **On-chain vault state** from Sepolia using viem
+2. **Hyperliquid perp markets** from the public Info API (read-only, no key)
+3. **On-chain vault state** from Sepolia using viem
 
 ## Features
 
@@ -19,7 +20,8 @@ See `.env.example` in project root. Required:
 
 - `DATABASE_URL` - PostgreSQL connection string
 - `DEFILLAMA_API_URL` - DeFiLlama API (default: https://yields.llama.fi)
-- `COLLECTION_INTERVAL_MS` - Collection interval in milliseconds (default: 300000 = 5 min)
+- `HYPERLIQUID_API_URL` - Hyperliquid Info API (default: https://api.hyperliquid.xyz, no key)
+- `COLLECTION_INTERVAL_MS` - Collection interval in milliseconds (default: 300000 = 5 min). The API uses the same variable for Hyperliquid funding-volatility copy.
 
 Optional (for vault state collection):
 
@@ -85,7 +87,18 @@ docker run --env-file .env vault-risk-collector
 
 Inserts into:
 - `pool_snapshots` - DeFi pool metrics
+- `hyperliquid_perp_snapshots` - Hyperliquid perp funding / OI / prices
 - `vault_state_snapshots` - On-chain vault state
+
+### Hyperliquid Info API
+
+**Endpoint:** `POST https://api.hyperliquid.xyz/info` (`metaAndAssetCtxs`)
+
+Read-only market data. No authentication, no trading, no signing. 429s are retried with the same Retry-After / exponential backoff used for LLM providers. Optional live smoke (not CI):
+
+```bash
+RUN_HYPERLIQUID_LIVE_SMOKE=1 npm run smoke:hyperliquid
+```
 
 See `db/migrations/001_initial_schema.sql` for schema.
 

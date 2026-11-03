@@ -1,8 +1,14 @@
 import cron from 'node-cron';
 import pino from 'pino';
 import { loadConfig } from './config.js';
-import { createDbClient, insertPoolSnapshot, insertVaultStateSnapshot } from './db.js';
+import {
+  createDbClient,
+  insertHyperliquidPerpSnapshots,
+  insertPoolSnapshot,
+  insertVaultStateSnapshot,
+} from './db.js';
 import { fetchDefiLlamaPools } from './defillama.js';
+import { fetchHyperliquidPerpSnapshots } from './hyperliquid.js';
 import { VaultReader } from './vault-reader.js';
 
 const logger = pino({
@@ -32,6 +38,16 @@ async function collectData() {
       await insertPoolSnapshot(sql, pool);
     }
     logger.info('✅ Pool snapshots inserted');
+
+    try {
+      const perps = await fetchHyperliquidPerpSnapshots(config.HYPERLIQUID_API_URL, logger, {
+        timeoutMs: config.HYPERLIQUID_TIMEOUT_MS,
+      });
+      const inserted = await insertHyperliquidPerpSnapshots(sql, perps);
+      logger.info({ count: inserted }, '✅ Hyperliquid perp snapshots inserted');
+    } catch (error) {
+      logger.error({ error }, 'Hyperliquid collection failed; continuing with the rest of the cycle');
+    }
 
     if (config.VAULT_ADDRESS && config.RPC_URL) {
       const vaultReader = new VaultReader(

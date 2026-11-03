@@ -1,23 +1,36 @@
-FROM node:22-alpine AS base
+# syntax=docker/dockerfile:1.4
 
-WORKDIR /app
+FROM node:22-alpine AS hyperliquid-builder
 
-COPY package*.json ./
+WORKDIR /workspace/hyperliquid
 
-RUN npm ci
+COPY hyperliquid/package*.json hyperliquid/tsconfig.json ./
+COPY hyperliquid/src ./src
 
-COPY . .
+RUN npm ci && npm run build
 
-RUN npm run build
+FROM node:22-alpine AS builder
+
+WORKDIR /workspace/app
+
+COPY --from=hyperliquid-builder /workspace/hyperliquid /workspace/hyperliquid
+
+COPY collector/package*.json collector/tsconfig.json ./
+COPY collector/src ./src
+
+RUN npm ci --only=production=false && \
+    npm run build
 
 FROM node:22-alpine AS production
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --only=production
+COPY --from=hyperliquid-builder /workspace/hyperliquid /hyperliquid
 
-COPY --from=base /app/dist ./dist
+COPY collector/package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+COPY --from=builder /workspace/app/dist ./dist
 
 USER node
 

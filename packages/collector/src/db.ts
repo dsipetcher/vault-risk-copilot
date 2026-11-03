@@ -81,3 +81,33 @@ export async function insertVaultStateSnapshot(
     ON CONFLICT (vault_address, block_number) DO NOTHING
   `;
 }
+
+export interface HyperliquidPerpSnapshotRow {
+  coin: string;
+  sz_decimals: number | null;
+  max_leverage: number | null;
+  only_isolated: boolean;
+  is_delisted: boolean;
+  funding_rate: number | null;
+  open_interest: number | null;
+  mark_px: number | null;
+  oracle_px: number | null;
+  mid_px: number | null;
+  premium: number | null;
+  prev_day_px: number | null;
+  day_ntl_vlm: number | null;
+  day_base_vlm: number | null;
+  snapshot_at: Date;
+}
+
+export async function insertHyperliquidPerpSnapshots(
+  sql: Sql,
+  snapshots: HyperliquidPerpSnapshotRow[]
+): Promise<number> {
+  if (snapshots.length === 0) return 0;
+  await sql`
+    INSERT INTO hyperliquid_perp_snapshots ${sql(snapshots)}
+    ON CONFLICT (coin, snapshot_at) DO NOTHING
+  `;
+  return snapshots.length;
+}

@@ -22,7 +22,7 @@
 
 Vault Risk Copilot is a full-stack DeFi application that:
 
-1. **📊 Analyzes Real DeFi Pools** - Fetches data from live protocols (read-only) and calculates explainable risk signals
+1. **📊 Analyzes Real DeFi Pools** - Fetches data from live protocols (read-only) and calculates explainable risk signals, including Hyperliquid perp funding/OI
 2. **🏦 Custom ERC-4626 Vault** - `MockUSDC` + `SimpleVault` for local Anvil (not deployed publicly)
 3. **🤖 AI-Powered Explanations** - Uses LLMs to explain risk factors in plain language (structured, validated output)
 4. **🔌 MCP Integration** - Exposes read-only tools for AI agents to query pool risk and vault state
@@ -49,6 +49,7 @@ Vault Risk Copilot is a full-stack DeFi application that:
 └──────────────┘              └─────────────────────┘
                                      │
                                      ├─► DeFiLlama Yields API
+                                     ├─► Hyperliquid Info API (read-only)
                                      └─► On-chain (mainnet, read-only)
 ```
 
@@ -295,6 +296,24 @@ The risk scoring system evaluates pools based on:
 - Consider market conditions or regulatory risk
 - Constitute financial advice
 
+### Hyperliquid perps (read-only)
+
+A small public-market integration — **not a trading client**.
+
+- Collector snapshots Hyperliquid perp markets via `POST https://api.hyperliquid.xyz/info` (`metaAndAssetCtxs`): funding, open interest, mark/oracle, premium, 24h volume. No API key.
+- Postgres stores those snapshots (`hyperliquid_perp_snapshots`). Funding history for one coin is fetched live (`fundingHistory`) with a ~60s cache — Hyperliquid already keeps that time series, so we do not duplicate it.
+- API: `GET /api/hyperliquid/markets`, `GET /api/hyperliquid/markets/:coin`, and `GET /api/hyperliquid/markets/:coin/funding`
+- Dashboard: **Hyperliquid perps** (`/hyperliquid`) — sortable table + funding chart. Works on the GitHub Pages build through `VITE_API_URL`.
+- Explainable perp signals (0–100, same categories as pools): extreme annualized funding, funding volatility from collector snapshots (window uses `COLLECTION_INTERVAL_MS`, default 5 min), OI vs 24h volume, mark/oracle deviation.
+- Optional MCP tool: `get_hyperliquid_market`
+
+This does **not** place orders, sign payloads, or store Hyperliquid credentials. Unit tests use recorded fixtures; CI never calls the live API. Optional live check:
+
+```bash
+cd packages/collector
+RUN_HYPERLIQUID_LIVE_SMOKE=1 npm run smoke:hyperliquid
+```
+
 ### 🏦 ERC-4626 Vault
 
 `SimpleVault` implements the full ERC-4626 standard with:
@@ -334,6 +353,7 @@ The risk scoring system evaluates pools based on:
 - `compare_pools` - Compare 2-5 pools side-by-side
 - `explain_pool_risk` - Get AI explanation of pool risk (LLM-powered or fallback)
 - `get_vault_info` - Query local vault state when deployed (TVL, share price); explains the public-demo gap otherwise
+- `get_hyperliquid_market` - Read-only Hyperliquid perp snapshot (funding, OI, explainable signals)
 
 **Resources:**
 - `methodology://risk-signals` - Risk model documentation
@@ -401,6 +421,7 @@ MIT License - see [LICENSE](./LICENSE) for details.
 - **OpenZeppelin** - Secure smart contract library
 - **Foundry** - Ethereum development toolkit
 - **DeFiLlama** - DeFi data aggregation
+- **Hyperliquid** - Public perp Info API (read-only market data)
 - **MCP** - Model Context Protocol by Anthropic
 - **Cursor** - AI-powered development environment
 

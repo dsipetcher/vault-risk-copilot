@@ -164,6 +164,23 @@ If `X_LLM_API_KEY` is not configured, returns a structured fallback explanation 
 
 ---
 
+### `get_hyperliquid_market`
+
+Read-only Hyperliquid perp snapshot (funding, open interest, mark/oracle, explainable signals).
+
+**Input:**
+```json
+{
+  "coin": "BTC"
+}
+```
+
+**Output:**
+- Summary text with funding, OI, and risk category
+- JSON with signal breakdown
+
+No trading and no Hyperliquid keys. Data comes from collector snapshots in Postgres.
+
 ### `get_vault_info`
 
 Get ERC-4626 vault state (if available).

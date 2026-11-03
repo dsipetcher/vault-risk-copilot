@@ -59,9 +59,10 @@ describe('MCP Server Integration Tests', () => {
         'compare_pools',
         'explain_pool_risk',
         'get_vault_info',
+        'get_hyperliquid_market',
       ])
     );
-    expect(tools.tools).toHaveLength(5);
+    expect(tools.tools).toHaveLength(6);
   });
 
   it('should list seeded pools with real TVL/APY values', async () => {
@@ -153,6 +154,15 @@ describe('MCP Server Integration Tests', () => {
     const pool = JSON.parse((r.contents[0] as { text: string }).text);
     expect(pool.pool_id).toBe(SEEDED_HIGH);
     expect(pool.risk_score?.total_risk_score ?? pool.total_risk_score).toBe(72.5);
+  });
+
+  it('get_hyperliquid_market returns the seeded BTC snapshot', async () => {
+    const result = await client.callTool({ name: 'get_hyperliquid_market', arguments: { coin: 'BTC' } });
+    expect(result.isError).toBeFalsy();
+    expect(textBlocks(result)[0].text).toMatch(/BTC/);
+    expect(textBlocks(result)[0].text).toMatch(/read-only/i);
+    const parsed = parseJsonBlock(result) as { coin: string; risk_category: string };
+    expect(parsed.coin).toBe('BTC');
   });
 
   it('get_vault_info distinguishes an unconfigured vault from a generic failure', async () => {

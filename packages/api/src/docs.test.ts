@@ -27,5 +27,8 @@ describe('OpenAPI docs', () => {
     expect(body.openapi).toMatch(/^3\./);
     expect(body.paths['/api/llm/validate']).toBeDefined();
     expect(body.paths['/api/vault/state']).toBeDefined();
+    expect(body.paths['/api/hyperliquid/markets']).toBeDefined();
+    expect(body.paths['/api/hyperliquid/markets/{coin}']).toBeDefined();
+    expect(body.paths['/api/hyperliquid/markets/{coin}/funding']).toBeDefined();
   });
 });

@@ -26,6 +26,9 @@ describe('Config', () => {
     expect(result.PORT).toBe(3000);
     expect(result.NODE_ENV).toBe('development');
     expect(result.LOG_LEVEL).toBe('info');
+    expect(result.HYPERLIQUID_API_URL).toBe('https://api.hyperliquid.xyz');
+    expect(result.HYPERLIQUID_CACHE_TTL_MS).toBe(60000);
+    expect(result.COLLECTION_INTERVAL_MS).toBe(300000);
   });
 
   it('should reject invalid vault address', () => {
