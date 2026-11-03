@@ -4,12 +4,14 @@ import type { FastifyInstance } from 'fastify';
 const listHyperliquidMarkets = vi.fn();
 const getHyperliquidMarket = vi.fn();
 const getHyperliquidFundingHistory = vi.fn();
+const resolveCanonicalCoin = vi.fn();
 
 vi.mock('../services/hyperliquid.js', () => ({
   COIN_PATTERN: /^[A-Za-z0-9:_-]{1,32}$/,
   listHyperliquidMarkets: (...args: unknown[]) => listHyperliquidMarkets(...args),
   getHyperliquidMarket: (...args: unknown[]) => getHyperliquidMarket(...args),
   getHyperliquidFundingHistory: (...args: unknown[]) => getHyperliquidFundingHistory(...args),
+  resolveCanonicalCoin: (...args: unknown[]) => resolveCanonicalCoin(...args),
   resetHyperliquidClientForTests: vi.fn(),
 }));
 
@@ -81,6 +83,7 @@ describe('Hyperliquid routes', () => {
     listHyperliquidMarkets.mockReset();
     getHyperliquidMarket.mockReset();
     getHyperliquidFundingHistory.mockReset();
+    resolveCanonicalCoin.mockReset();
   });
 
   it('lists perp markets with explainable signals', async () => {
@@ -115,6 +118,7 @@ describe('Hyperliquid routes', () => {
   });
 
   it('serves funding history from the service (no live network in this test)', async () => {
+    resolveCanonicalCoin.mockResolvedValue('ETH');
     getHyperliquidFundingHistory.mockResolvedValue({
       coin: 'ETH',
       source: 'live',
@@ -133,7 +137,69 @@ describe('Hyperliquid routes', () => {
     expect(getHyperliquidFundingHistory).toHaveBeenCalledWith('ETH', 24);
   });
 
+  it('resolves a case-insensitive coin from the latest snapshot before calling Hyperliquid', async () => {
+    resolveCanonicalCoin.mockResolvedValue('BTC');
+    getHyperliquidFundingHistory.mockResolvedValue({
+      coin: 'BTC',
+      source: 'live',
+      cached: false,
+      points: [],
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/hyperliquid/markets/btc/funding',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(resolveCanonicalCoin).toHaveBeenCalledWith('btc');
+    expect(getHyperliquidFundingHistory).toHaveBeenCalledWith('BTC', 24);
+  });
+
+  it('returns 404 for an unknown coin without calling Hyperliquid', async () => {
+    resolveCanonicalCoin.mockResolvedValue(null);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/hyperliquid/markets/NOPE/funding',
+    });
+    expect(response.statusCode).toBe(404);
+    const body = JSON.parse(response.body);
+    expect(body.error).toBe('Market not found');
+    expect(getHyperliquidFundingHistory).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for non-integer hours instead of a raw Zod 500', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/hyperliquid/markets/ETH/funding?hours=1.5',
+    });
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.body);
+    expect(body.error).toBe('Invalid query');
+    expect(resolveCanonicalCoin).not.toHaveBeenCalled();
+    expect(getHyperliquidFundingHistory).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for non-integer market limit', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/hyperliquid/markets?limit=1.5',
+    });
+    expect(response.statusCode).toBe(400);
+    expect(listHyperliquidMarkets).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for non-integer pools limit', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/pools?limit=1.5',
+    });
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.body);
+    expect(body.error).toBe('Invalid query');
+  });
+
   it('maps upstream 429 to HTTP 429', async () => {
+    resolveCanonicalCoin.mockResolvedValue('ETH');
     getHyperliquidFundingHistory.mockRejectedValue(new HyperliquidError('Hyperliquid rate limited', 429));
     const response = await app.inject({
       method: 'GET',

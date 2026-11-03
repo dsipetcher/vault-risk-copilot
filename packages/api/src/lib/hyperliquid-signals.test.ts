@@ -25,8 +25,10 @@ describe('hyperliquid perp signals', () => {
     expect(annualizedFundingPct(0.0000125)).toBeCloseTo(10.95, 2);
   });
 
-  it('scores mild funding as low and extreme funding as critical', () => {
-    expect(fundingExtremeSignal(0.0000125).score).toBeLessThan(20);
+  it('does not flag Hyperliquid baseline funding (~10.95%/yr) as extreme', () => {
+    const baseline = fundingExtremeSignal(0.0000125);
+    expect(baseline.score).toBe(0);
+    expect(baseline.explanation).toMatch(/baseline/i);
     const extreme = fundingExtremeSignal(0.0002);
     expect(extreme.score).toBe(100);
     expect(extreme.explanation).toMatch(/crowded/i);
@@ -38,7 +40,8 @@ describe('hyperliquid perp signals', () => {
     const stable = fundingVolatilitySignal([0.0000125, 0.0000126, 0.0000124]);
     const jumpy = fundingVolatilitySignal([0.0000125, 0.00008, -0.00005, 0.00009]);
     expect(stable.score).toBeLessThan(jumpy.score ?? 0);
-    expect(jumpy.explanation).toMatch(/crowding/i);
+    expect(jumpy.explanation).toMatch(/collector snapshots/i);
+    expect(jumpy.explanation).toMatch(/5-minute/i);
   });
 
   it('scores OI vs 24h volume as crowding, not "BTC is large"', () => {

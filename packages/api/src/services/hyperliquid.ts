@@ -2,6 +2,7 @@ import { env } from '../config.js';
 import { pool } from '../database.js';
 import { HyperliquidClient, type FundingHistoryPoint } from '../lib/hyperliquid-client.js';
 import {
+  FUNDING_VOLATILITY_SNAPSHOT_LIMIT,
   oiUsd,
   scorePerpMarket,
   totalOpenInterestUsd,
@@ -144,7 +145,7 @@ async function latestMarketRows(includeDelisted: boolean): Promise<HyperliquidMa
         FROM hyperliquid_perp_snapshots
         WHERE coin = ANY($1)
       ) ranked
-      WHERE rn <= 48
+      WHERE rn <= ${FUNDING_VOLATILITY_SNAPSHOT_LIMIT}
       ORDER BY coin, snapshot_at ASC
     `,
     [coins]
@@ -201,9 +202,89 @@ export async function listHyperliquidMarkets(options: {
   };
 }
 
+export async function resolveCanonicalCoin(coin: string): Promise<string | null> {
+  const result = await pool.query(
+    `
+      SELECT coin
+      FROM hyperliquid_perp_snapshots
+      WHERE lower(coin) = lower($1)
+      ORDER BY snapshot_at DESC
+      LIMIT 1
+    `,
+    [coin]
+  );
+  const found = result.rows[0]?.coin;
+  return found == null ? null : String(found);
+}
+
+async function listedTotalOpenInterestUsd(): Promise<number> {
+  const result = await pool.query(
+    `
+      SELECT open_interest, mark_px
+      FROM (
+        SELECT DISTINCT ON (coin) open_interest, mark_px, is_delisted
+        FROM hyperliquid_perp_snapshots
+        ORDER BY coin, snapshot_at DESC
+      ) latest
+      WHERE is_delisted = false
+    `
+  );
+  return totalOpenInterestUsd(
+    result.rows.map((row) => ({
+      coin: '',
+      funding_rate: null,
+      open_interest: num(row.open_interest),
+      mark_px: num(row.mark_px),
+      oracle_px: null,
+      premium: null,
+      day_ntl_vlm: null,
+    }))
+  );
+}
+
+async function recentFundingRatesForCoin(coin: string): Promise<number[]> {
+  const history = await pool.query(
+    `
+      SELECT funding_rate
+      FROM (
+        SELECT funding_rate, snapshot_at,
+               ROW_NUMBER() OVER (ORDER BY snapshot_at DESC) AS rn
+        FROM hyperliquid_perp_snapshots
+        WHERE coin = $1
+      ) ranked
+      WHERE rn <= $2
+      ORDER BY snapshot_at ASC
+    `,
+    [coin, FUNDING_VOLATILITY_SNAPSHOT_LIMIT]
+  );
+  const rates: number[] = [];
+  for (const row of history.rows) {
+    const rate = num(row.funding_rate);
+    if (rate != null) rates.push(rate);
+  }
+  return rates;
+}
+
 export async function getHyperliquidMarket(coin: string): Promise<HyperliquidMarketRow | null> {
-  const listed = await latestMarketRows(true);
-  return listed.find((row) => row.coin.toUpperCase() === coin.toUpperCase()) ?? null;
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM hyperliquid_perp_snapshots
+      WHERE lower(coin) = lower($1)
+      ORDER BY snapshot_at DESC
+      LIMIT 1
+    `,
+    [coin]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const canonical = String(row.coin);
+  const [recentFunding, totalOi] = await Promise.all([
+    recentFundingRatesForCoin(canonical),
+    listedTotalOpenInterestUsd(),
+  ]);
+  return toMarketRow(mapRow(row as Record<string, unknown>, recentFunding), totalOi);
 }
 
 const fundingCache = new TtlCache<{

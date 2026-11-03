@@ -7,11 +7,21 @@ export function useHyperliquidMarkets(query: {
   search?: string;
   sort?: HyperliquidSort;
   order?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
 } = {}) {
   return useQuery({
     queryKey: ['hyperliquid-markets', query],
     queryFn: () => apiClient.getHyperliquidMarkets(query),
     refetchInterval: 60000,
+  });
+}
+
+export function useHyperliquidMarket(coin: string | null) {
+  return useQuery({
+    queryKey: ['hyperliquid-market', coin],
+    queryFn: () => apiClient.getHyperliquidMarket(coin!),
+    enabled: Boolean(coin),
   });
 }
 

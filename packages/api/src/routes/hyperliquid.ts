@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { HyperliquidError } from '../lib/hyperliquid-client.js';
 import {
@@ -6,8 +6,10 @@ import {
   getHyperliquidFundingHistory,
   getHyperliquidMarket,
   listHyperliquidMarkets,
+  resolveCanonicalCoin,
   type HyperliquidSort,
 } from '../services/hyperliquid.js';
+import { invalidQueryMessage } from '../types/schemas.js';
 
 const coinParamSchema = z.object({
   coin: z
@@ -28,6 +30,20 @@ const listQuerySchema = z.object({
 const fundingQuerySchema = z.object({
   hours: z.coerce.number().int().min(1).max(168).default(24),
 });
+
+function sendInvalidQuery(reply: FastifyReply, error: z.ZodError) {
+  return reply.code(400).send({
+    error: 'Invalid query',
+    message: invalidQueryMessage(error),
+  });
+}
+
+function sendInvalidCoin(reply: FastifyReply) {
+  return reply.code(400).send({
+    error: 'Invalid coin',
+    message: 'Coin must be 1-32 characters: letters, numbers, colon, underscore, or hyphen.',
+  });
+}
 
 export async function hyperliquidRoutes(app: FastifyInstance) {
   app.get(
@@ -51,14 +67,17 @@ export async function hyperliquidRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const query = listQuerySchema.parse(request.query);
+      const query = listQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return sendInvalidQuery(reply, query.error);
+      }
       const result = await listHyperliquidMarkets({
-        limit: query.limit,
-        offset: query.offset,
-        search: query.search,
-        sort: query.sort as HyperliquidSort | undefined,
-        order: query.order,
-        include_delisted: query.include_delisted,
+        limit: query.data.limit,
+        offset: query.data.offset,
+        search: query.data.search,
+        sort: query.data.sort as HyperliquidSort | undefined,
+        order: query.data.order,
+        include_delisted: query.data.include_delisted,
       });
       return reply.send(result);
     }
@@ -84,15 +103,22 @@ export async function hyperliquidRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const params = coinParamSchema.safeParse(request.params);
       if (!params.success) {
-        return reply.code(400).send({
-          error: 'Invalid coin',
-          message: 'Coin must be 1-32 characters: letters, numbers, colon, underscore, or hyphen.',
-        });
+        return sendInvalidCoin(reply);
+      }
+      const hoursQuery = fundingQuerySchema.safeParse(request.query);
+      if (!hoursQuery.success) {
+        return sendInvalidQuery(reply, hoursQuery.error);
       }
       const { coin } = params.data;
-      const { hours } = fundingQuerySchema.parse(request.query);
+      const canonical = await resolveCanonicalCoin(coin);
+      if (!canonical) {
+        return reply.code(404).send({
+          error: 'Market not found',
+          message: `No Hyperliquid perp snapshot for ${coin}. Collector may not have run yet.`,
+        });
+      }
       try {
-        const result = await getHyperliquidFundingHistory(coin, hours);
+        const result = await getHyperliquidFundingHistory(canonical, hoursQuery.data.hours);
         return reply.send(result);
       } catch (error) {
         if (error instanceof HyperliquidError && error.status === 429) {
@@ -127,10 +153,7 @@ export async function hyperliquidRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const params = coinParamSchema.safeParse(request.params);
       if (!params.success) {
-        return reply.code(400).send({
-          error: 'Invalid coin',
-          message: 'Coin must be 1-32 characters: letters, numbers, colon, underscore, or hyphen.',
-        });
+        return sendInvalidCoin(reply);
       }
       const { coin } = params.data;
       const market = await getHyperliquidMarket(coin);

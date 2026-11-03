@@ -302,7 +302,7 @@ A small public-market integration — **not a trading client**.
 
 - Collector snapshots Hyperliquid perp markets via `POST https://api.hyperliquid.xyz/info` (`metaAndAssetCtxs`): funding, open interest, mark/oracle, premium, 24h volume. No API key.
 - Postgres stores those snapshots (`hyperliquid_perp_snapshots`). Funding history for one coin is fetched live (`fundingHistory`) with a ~60s cache — Hyperliquid already keeps that time series, so we do not duplicate it.
-- API: `GET /api/hyperliquid/markets` and `GET /api/hyperliquid/markets/:coin/funding`
+- API: `GET /api/hyperliquid/markets`, `GET /api/hyperliquid/markets/:coin`, and `GET /api/hyperliquid/markets/:coin/funding`
 - Dashboard: **Hyperliquid perps** (`/hyperliquid`) — sortable table + funding chart. Works on the GitHub Pages build through `VITE_API_URL`.
 - Explainable perp signals (0–100, same categories as pools): extreme annualized funding, funding volatility (from our snapshots), OI vs 24h volume, mark/oracle deviation.
 - Optional MCP tool: `get_hyperliquid_market`

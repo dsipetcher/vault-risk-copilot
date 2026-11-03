@@ -76,6 +76,8 @@ export const openApiSpec = {
         parameters: [{ name: 'coin', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           '200': { description: 'Funding history points' },
+          '400': { description: 'Invalid coin or query' },
+          '404': { description: 'No snapshot for that coin' },
           '429': { description: 'Upstream Hyperliquid rate limit' },
         },
       },

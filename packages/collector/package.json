@@ -16,6 +16,7 @@
     "smoke:hyperliquid": "tsx scripts/hyperliquid-live-smoke.ts"
   },
   "dependencies": {
+    "@vault-risk-copilot/hyperliquid": "file:../hyperliquid",
     "viem": "^2.57.11",
     "postgres": "^3.4.5",
     "zod": "^4.6.7",

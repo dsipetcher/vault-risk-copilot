@@ -1,5 +1,11 @@
-export const HYPERLIQUID_SIGNAL_MODEL_VERSION = 'hl-perp-1.0';
+export const HYPERLIQUID_SIGNAL_MODEL_VERSION = 'hl-perp-1.1';
 export const HOURS_PER_YEAR = 24 * 365;
+
+/** Hyperliquid's typical 1h funding of 0.0000125 annualizes to ~10.95%. Score only the excess. */
+export const FUNDING_BASELINE_ANN_PCT = 12;
+export const FUNDING_EXTREME_ANN_PCT = 80;
+export const FUNDING_VOLATILITY_SNAPSHOT_LIMIT = 48;
+export const COLLECTOR_INTERVAL_MINUTES = 5;
 
 export type RiskCategory = 'low' | 'medium' | 'high' | 'critical';
 
@@ -93,7 +99,7 @@ export function fundingExtremeSignal(fundingRate: number | null): PerpSignal {
   }
 
   const ann = annualizedFundingPct(fundingRate);
-  const score = round2(linearScore(Math.abs(ann), 5, 80));
+  const score = round2(linearScore(Math.abs(ann), FUNDING_BASELINE_ANN_PCT, FUNDING_EXTREME_ANN_PCT));
   const side = fundingRate >= 0 ? 'longs pay shorts' : 'shorts pay longs';
   return {
     id: 'funding_extreme',
@@ -102,6 +108,7 @@ export function fundingExtremeSignal(fundingRate: number | null): PerpSignal {
     value: `${ann >= 0 ? '+' : ''}${ann.toFixed(2)}% / yr`,
     explanation:
       `Hourly funding annualizes to ${ann.toFixed(2)}% (${side}). ` +
+      `Score starts above Hyperliquid's typical ~${FUNDING_BASELINE_ANN_PCT - 1}–${FUNDING_BASELINE_ANN_PCT}%/yr baseline. ` +
       'Very high absolute funding usually means one side of the trade is crowded.',
     applicable: true,
   };
@@ -123,13 +130,17 @@ export function fundingVolatilitySignal(recentFundingRates?: number[]): PerpSign
 
   const annVolPct = Math.abs(stdev) * HOURS_PER_YEAR * 100;
   const score = round2(linearScore(annVolPct, 2, 40));
+  const snapshotCount = recentFundingRates?.length ?? 0;
+  const windowHours = (snapshotCount * COLLECTOR_INTERVAL_MINUTES) / 60;
   return {
     id: 'funding_volatility',
     label: 'Funding volatility',
     score,
     value: `${annVolPct.toFixed(2)} pp / yr`,
     explanation:
-      `Sample stdev of recent hourly funding annualizes to ${annVolPct.toFixed(2)} percentage points. ` +
+      `Sample stdev of the last ${snapshotCount} collector snapshots ` +
+      `(~${COLLECTOR_INTERVAL_MINUTES}-minute interval, about ${windowHours.toFixed(1)} hours) ` +
+      `annualizes to ${annVolPct.toFixed(2)} percentage points. ` +
       'Unstable funding often tracks rapidly changing crowding.',
     applicable: true,
   };

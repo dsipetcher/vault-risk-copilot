@@ -46,8 +46,8 @@ services:
   # Collector service (TypeScript)
   collector:
     build:
-      context: ./packages/collector
-      dockerfile: Dockerfile
+      context: ./packages
+      dockerfile: collector/Dockerfile
       target: production
     container_name: vault-risk-collector
     environment:

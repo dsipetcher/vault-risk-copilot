@@ -107,4 +107,26 @@ describe('HyperliquidClient (API)', () => {
     });
     await expect(client.fetchFundingHistory('ETH', 1)).rejects.toBeInstanceOf(HyperliquidError);
   });
+
+  it('times out while reading the response body', async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () =>
+          new Promise((_resolve, reject) => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            init?.signal?.addEventListener('abort', () => reject(err), { once: true });
+          }),
+      } as unknown as Response;
+    });
+    const client = new HyperliquidClient({
+      apiUrl: 'http://127.0.0.1:9',
+      timeoutMs: 20,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(client.fetchPerpSnapshots()).rejects.toThrow(/timed out/);
+  });
 });

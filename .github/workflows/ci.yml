@@ -127,7 +127,16 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: packages/collector/package-lock.json
+          cache-dependency-path: |
+            packages/hyperliquid/package-lock.json
+            packages/collector/package-lock.json
+      
+      - name: Build hyperliquid package
+        working-directory: packages/hyperliquid
+        run: |
+          npm ci
+          npm test
+          npm run build
       
       - name: Install dependencies
         working-directory: packages/collector
@@ -245,10 +254,17 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             packages/llm/package-lock.json
+            packages/hyperliquid/package-lock.json
             packages/api/package-lock.json
       
       - name: Build llm package
         working-directory: packages/llm
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build hyperliquid package
+        working-directory: packages/hyperliquid
         run: |
           npm ci
           npm run build
@@ -310,11 +326,18 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             packages/llm/package-lock.json
+            packages/hyperliquid/package-lock.json
             packages/api/package-lock.json
             packages/mcp/package-lock.json
       
       - name: Build llm package
         working-directory: packages/llm
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build hyperliquid package
+        working-directory: packages/hyperliquid
         run: |
           npm ci
           npm run build
@@ -459,7 +482,8 @@ jobs:
       - name: Build collector image
         uses: docker/build-push-action@v5
         with:
-          context: ./packages/collector
+          context: ./packages
+          file: ./packages/collector/Dockerfile
           push: false
           tags: vault-risk-collector:latest
           cache-from: type=gha,scope=collector
@@ -926,6 +950,10 @@ jobs:
       - name: Build and start API service
         run: |
           cd packages/llm
+          npm ci
+          npm run build
+
+          cd ../hyperliquid
           npm ci
           npm run build
           

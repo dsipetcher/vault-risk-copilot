@@ -67,13 +67,24 @@ const btc: HyperliquidMarket = {
   },
 };
 
+const extraMarkets: HyperliquidMarket[] = Array.from({ length: 26 }, (_, i) => ({
+  ...btc,
+  coin: i === 0 ? 'BTC' : `M${i}`,
+}));
+
 vi.mock('@/hooks/useHyperliquid', () => ({
   useHyperliquidMarkets: () => ({
-    data: { data: [btc], pagination: { total: 1, limit: 200, offset: 0 }, snapshot_at: btc.snapshot_at, source: 'snapshot' },
+    data: {
+      data: extraMarkets.slice(0, 25),
+      pagination: { total: 26, limit: 25, offset: 0 },
+      snapshot_at: btc.snapshot_at,
+      source: 'snapshot',
+    },
     isLoading: false,
     error: null,
     refetch,
   }),
+  useHyperliquidMarket: () => ({ data: btc, isLoading: false, error: null }),
   useHyperliquidFunding: () => ({
     data: {
       coin: 'BTC',
@@ -112,6 +123,11 @@ describe('HyperliquidPage', () => {
     expect(screen.getByText('BTC')).toBeInTheDocument();
     expect(screen.getByTestId('hyperliquid-signals')).toHaveTextContent('Extreme annualized funding');
     expect(screen.getByTestId('hyperliquid-funding-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('hyperliquid-pagination')).toHaveTextContent('of 26');
+
+    const detail = screen.getByTestId('hyperliquid-detail');
+    const table = screen.getByTestId('hyperliquid-table');
+    expect(detail.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     await userEvent.click(screen.getByTestId('hyperliquid-sort-funding'));
     expect(screen.getByTestId('hyperliquid-sort-funding')).toHaveTextContent(/Funding/);
