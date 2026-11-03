@@ -8,7 +8,8 @@
 */.env.local
 */tsconfig.tsbuildinfo
 
-# Ignore everything except api and llm
-collector
+# Ignore packages not needed by the api/collector Dockerfiles
+# (context is ./packages for both; they COPY llm, hyperliquid, api, collector)
+mcp
 risk-service
 web
