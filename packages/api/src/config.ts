@@ -15,6 +15,7 @@ export const envSchema = z.object({
   HYPERLIQUID_API_URL: z.string().url().default('https://api.hyperliquid.xyz'),
   HYPERLIQUID_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
   HYPERLIQUID_CACHE_TTL_MS: z.coerce.number().int().min(1000).max(600000).default(60000),
+  COLLECTION_INTERVAL_MS: z.coerce.number().int().min(1000).max(86_400_000).default(300000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LLM_KEY_ENCRYPTION_KEY: z.string().optional(),
   SIWE_DOMAIN: z.string().optional(),

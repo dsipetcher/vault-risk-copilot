@@ -42,7 +42,7 @@ export function HyperliquidPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
   const [page, setPage] = useState(0);
-  const detailRef = useRef<HTMLDivElement>(null);
+  const detailHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const selectedCoin = searchParams.get('coin');
 
@@ -90,18 +90,32 @@ export function HyperliquidPage() {
   const selectCoin = (coin: string) => {
     setSearchParams({ coin });
     requestAnimationFrame(() => {
-      detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      requestAnimationFrame(() => {
+        const heading = detailHeadingRef.current;
+        if (!heading) return;
+        const nav = document.querySelector('nav');
+        const navStyle = nav ? getComputedStyle(nav) : null;
+        const pinned = navStyle?.position === 'sticky' || navStyle?.position === 'fixed';
+        const margin = pinned && nav ? Math.round(nav.getBoundingClientRect().height + 8) : 8;
+        heading.style.scrollMarginTop = `${margin}px`;
+        heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     });
   };
 
   const detailPanel = selected ? (
     <div
-      ref={detailRef}
       className="space-y-6 lg:sticky lg:top-4"
       data-testid="hyperliquid-detail"
     >
       <div className="bg-white shadow rounded-lg p-6 min-w-0">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">{selected.coin} risk signals</h2>
+        <h2
+          ref={detailHeadingRef}
+          data-testid="hyperliquid-detail-heading"
+          className="text-lg font-semibold text-gray-900 mb-4 scroll-mt-2"
+        >
+          {selected.coin} risk signals
+        </h2>
         <div className="mb-3">
           <RiskBadge category={selected.risk.risk_category} score={selected.risk.total_risk_score} />
         </div>

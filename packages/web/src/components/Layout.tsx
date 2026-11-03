@@ -23,7 +23,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <nav className="bg-white shadow">
+      <nav className="sticky top-0 z-20 bg-white shadow" data-testid="app-header">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-2 py-3 sm:h-16 sm:py-0">
             <div className="flex items-center min-w-0">

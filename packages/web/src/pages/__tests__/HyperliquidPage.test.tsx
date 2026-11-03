@@ -103,6 +103,7 @@ vi.mock('@/hooks/useHyperliquid', () => ({
 describe('HyperliquidPage', () => {
   beforeEach(() => {
     refetch.mockClear();
+    Element.prototype.scrollIntoView = vi.fn();
     global.ResizeObserver = class {
       observe() {}
       unobserve() {}

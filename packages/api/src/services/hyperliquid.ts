@@ -80,7 +80,7 @@ function mapRow(row: Record<string, unknown>, recentFunding: number[]): PerpMark
 }
 
 function toMarketRow(input: ReturnType<typeof mapRow>, totalOi: number): HyperliquidMarketRow {
-  const risk = scorePerpMarket(input, totalOi);
+  const risk = scorePerpMarket(input, totalOi, env.COLLECTION_INTERVAL_MS);
   const notional = oiUsd(input.open_interest, input.mark_px);
   const deviation =
     input.mark_px != null && input.oracle_px != null && input.oracle_px !== 0

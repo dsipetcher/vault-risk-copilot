@@ -42,6 +42,13 @@ describe('hyperliquid perp signals', () => {
     expect(stable.score).toBeLessThan(jumpy.score ?? 0);
     expect(jumpy.explanation).toMatch(/collector snapshots/i);
     expect(jumpy.explanation).toMatch(/5-minute/i);
+    const everyMinute = fundingVolatilitySignal(
+      [0.0000125, 0.00008, -0.00005, 0.00009],
+      60_000
+    );
+    expect(everyMinute.explanation).toMatch(/1-minute interval/);
+    expect(everyMinute.explanation).not.toMatch(/5-minute/);
+    expect(everyMinute.explanation).toMatch(/about 0\.1 hours/);
   });
 
   it('scores OI vs 24h volume as crowding, not "BTC is large"', () => {

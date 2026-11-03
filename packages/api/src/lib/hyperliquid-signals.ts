@@ -5,7 +5,23 @@ export const HOURS_PER_YEAR = 24 * 365;
 export const FUNDING_BASELINE_ANN_PCT = 12;
 export const FUNDING_EXTREME_ANN_PCT = 80;
 export const FUNDING_VOLATILITY_SNAPSHOT_LIMIT = 48;
-export const COLLECTOR_INTERVAL_MINUTES = 5;
+export const DEFAULT_COLLECTION_INTERVAL_MS = 300_000;
+
+export function collectionIntervalMinutes(
+  intervalMs: number = DEFAULT_COLLECTION_INTERVAL_MS
+): number {
+  const minutes = intervalMs / 60_000;
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return DEFAULT_COLLECTION_INTERVAL_MS / 60_000;
+  }
+  return Math.round(minutes * 10) / 10;
+}
+
+export function collectionIntervalLabel(intervalMs: number = DEFAULT_COLLECTION_INTERVAL_MS): string {
+  const minutes = collectionIntervalMinutes(intervalMs);
+  const text = Number.isInteger(minutes) ? String(minutes) : minutes.toFixed(1);
+  return `${text}-minute`;
+}
 
 export type RiskCategory = 'low' | 'medium' | 'high' | 'critical';
 
@@ -114,7 +130,10 @@ export function fundingExtremeSignal(fundingRate: number | null): PerpSignal {
   };
 }
 
-export function fundingVolatilitySignal(recentFundingRates?: number[]): PerpSignal {
+export function fundingVolatilitySignal(
+  recentFundingRates?: number[],
+  collectionIntervalMs: number = DEFAULT_COLLECTION_INTERVAL_MS
+): PerpSignal {
   const stdev = recentFundingRates ? sampleStdev(recentFundingRates) : null;
   if (stdev == null) {
     return {
@@ -131,7 +150,8 @@ export function fundingVolatilitySignal(recentFundingRates?: number[]): PerpSign
   const annVolPct = Math.abs(stdev) * HOURS_PER_YEAR * 100;
   const score = round2(linearScore(annVolPct, 2, 40));
   const snapshotCount = recentFundingRates?.length ?? 0;
-  const windowHours = (snapshotCount * COLLECTOR_INTERVAL_MINUTES) / 60;
+  const intervalMinutes = collectionIntervalMinutes(collectionIntervalMs);
+  const windowHours = (snapshotCount * intervalMinutes) / 60;
   return {
     id: 'funding_volatility',
     label: 'Funding volatility',
@@ -139,7 +159,7 @@ export function fundingVolatilitySignal(recentFundingRates?: number[]): PerpSign
     value: `${annVolPct.toFixed(2)} pp / yr`,
     explanation:
       `Sample stdev of the last ${snapshotCount} collector snapshots ` +
-      `(~${COLLECTOR_INTERVAL_MINUTES}-minute interval, about ${windowHours.toFixed(1)} hours) ` +
+      `(~${collectionIntervalLabel(collectionIntervalMs)} interval, about ${windowHours.toFixed(1)} hours) ` +
       `annualizes to ${annVolPct.toFixed(2)} percentage points. ` +
       'Unstable funding often tracks rapidly changing crowding.',
     applicable: true,
@@ -204,10 +224,14 @@ export function markOracleDeviationSignal(input: PerpMarketInput): PerpSignal {
   };
 }
 
-export function scorePerpMarket(input: PerpMarketInput, totalOiUsd: number): PerpRiskBreakdown {
+export function scorePerpMarket(
+  input: PerpMarketInput,
+  totalOiUsd: number,
+  collectionIntervalMs: number = DEFAULT_COLLECTION_INTERVAL_MS
+): PerpRiskBreakdown {
   const signals = {
     funding_extreme: fundingExtremeSignal(input.funding_rate),
-    funding_volatility: fundingVolatilitySignal(input.recent_funding_rates),
+    funding_volatility: fundingVolatilitySignal(input.recent_funding_rates, collectionIntervalMs),
     oi_concentration: oiConcentrationSignal(input, totalOiUsd),
     mark_oracle_deviation: markOracleDeviationSignal(input),
   };

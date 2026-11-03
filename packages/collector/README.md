@@ -21,7 +21,7 @@ See `.env.example` in project root. Required:
 - `DATABASE_URL` - PostgreSQL connection string
 - `DEFILLAMA_API_URL` - DeFiLlama API (default: https://yields.llama.fi)
 - `HYPERLIQUID_API_URL` - Hyperliquid Info API (default: https://api.hyperliquid.xyz, no key)
-- `COLLECTION_INTERVAL_MS` - Collection interval in milliseconds (default: 300000 = 5 min)
+- `COLLECTION_INTERVAL_MS` - Collection interval in milliseconds (default: 300000 = 5 min). The API uses the same variable for Hyperliquid funding-volatility copy.
 
 Optional (for vault state collection):
 
