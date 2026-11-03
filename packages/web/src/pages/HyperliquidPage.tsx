@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   CartesianGrid,
@@ -89,19 +89,14 @@ export function HyperliquidPage() {
 
   const selectCoin = (coin: string) => {
     setSearchParams({ coin });
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const heading = detailHeadingRef.current;
-        if (!heading) return;
-        const nav = document.querySelector('nav');
-        const navStyle = nav ? getComputedStyle(nav) : null;
-        const pinned = navStyle?.position === 'sticky' || navStyle?.position === 'fixed';
-        const margin = pinned && nav ? Math.round(nav.getBoundingClientRect().height + 8) : 8;
-        heading.style.scrollMarginTop = `${margin}px`;
-        heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
   };
+
+  useEffect(() => {
+    if (!selectedCoin) return;
+    const heading = detailHeadingRef.current;
+    if (!heading) return;
+    heading.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }, [selectedCoin]);
 
   const detailPanel = selected ? (
     <div
@@ -112,7 +107,7 @@ export function HyperliquidPage() {
         <h2
           ref={detailHeadingRef}
           data-testid="hyperliquid-detail-heading"
-          className="text-lg font-semibold text-gray-900 mb-4 scroll-mt-2"
+          className="text-lg font-semibold text-gray-900 mb-4 scroll-mt-44 lg:scroll-mt-20"
         >
           {selected.coin} risk signals
         </h2>

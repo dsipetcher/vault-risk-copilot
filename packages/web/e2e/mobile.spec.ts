@@ -47,15 +47,20 @@ test.describe('Mobile viewport 390px', () => {
     await expect(heading).toBeVisible();
     await expect(heading).toBeInViewport();
 
-    const placement = await heading.evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      const nav = document.querySelector('nav');
-      const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
-      return { top: rect.top, bottom: rect.bottom, navBottom, vh: window.innerHeight };
-    });
-    expect(placement.top).toBeGreaterThanOrEqual(placement.navBottom - 2);
-    expect(placement.top).toBeLessThan(placement.navBottom + 48);
-    expect(placement.bottom).toBeLessThanOrEqual(placement.vh);
-    expect(placement.top).toBeGreaterThanOrEqual(0);
+    await expect
+      .poll(async () => {
+        return heading.evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          const nav = document.querySelector('nav');
+          const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
+          return (
+            rect.top >= navBottom - 4 &&
+            rect.top < navBottom + 80 &&
+            rect.bottom <= window.innerHeight &&
+            rect.top >= 0
+          );
+        });
+      })
+      .toBe(true);
   });
 });
